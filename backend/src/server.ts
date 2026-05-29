@@ -14,11 +14,7 @@ import {
   applySecurityMiddleware,
   generalRateLimiter,
 } from "./middleware/security";
-import {
-  getListenHost,
-  isProduction,
-  logProductionWarnings,
-} from "./config/production";
+import { logProductionWarnings } from "./config/production";
 
 const app = express();
 
@@ -78,16 +74,11 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const PORT = Number(process.env.PORT) || 4000;
-const host = getListenHost();
 
 logProductionWarnings();
 
-const server = app.listen(PORT, host, () => {
-  if (isProduction()) {
-    console.log(`SchoolFinder API listening on port ${PORT} (production)`);
-  } else {
-    console.log(`Server running on http://localhost:${PORT}`);
-  }
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 server.on("error", (error) => {

@@ -500,7 +500,7 @@ export default async function SchoolDetailPage({
                     </svg>
                   </div>
                   <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors truncate">
-                    Website Visit Karein
+                    Visit Website 
                   </span>
                 </a>
               )}

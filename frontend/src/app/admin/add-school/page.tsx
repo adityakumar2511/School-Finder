@@ -23,23 +23,23 @@ import {
 // ── Zod Schema ──────────────────────────────────────────────────────────────
 const addSchoolSchema = z.object({
   // Owner
-  ownerEmail: z.string().email("Valid email daalo"),
-  ownerName: z.string().min(2, "Naam kam se kam 2 characters ka hona chahiye"),
+  ownerEmail: z.string().email("Enter a valid email address"),
+  ownerName: z.string().min(2, "Name must be at least 2 characters"),
   ownerPassword: z
     .string()
-    .min(6, "Password kam se kam 6 characters ka hona chahiye")
+    .min(6, "Password must be at least 6 characters")
     .optional()
     .or(z.literal("")),
 
   // School Info
-  name: z.string().min(3, "School naam zaroori hai"),
-  city: z.string().min(2, "City zaroori hai"),
-  state: z.string().min(2, "State zaroori hai"),
-  address: z.string().min(5, "Address zaroori hai"),
-  pincode: z.string().regex(/^\d{6}$/, "Valid 6-digit pincode daalo").optional().or(z.literal("")),
-  phone: z.string().min(10, "Valid phone number daalo"),
-  email: z.string().email("Valid email daalo").optional().or(z.literal("")),
-  website: z.string().url("Valid URL daalo").optional().or(z.literal("")),
+  name: z.string().min(3, "School name is required"),
+  city: z.string().min(2, "City is required"),
+  state: z.string().min(2, "State is required"),
+  address: z.string().min(5, "Address is required"),
+  pincode: z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional().or(z.literal("")),
+  phone: z.string().min(10, "Enter a valid phone number"),
+  email: z.string().email("Enter a valid email address").optional().or(z.literal("")),
+  website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
 
   // Academic
   board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]),
@@ -167,13 +167,13 @@ export default function AdminAddSchoolPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "School add nahi ho saka");
+        throw new Error(err.message || "Unable to add school");
       }
 
       setSuccess(true);
     } catch (err: unknown) {
       setSubmitError(
-        err instanceof Error ? err.message : "Kuch gadbad ho gayi, dobara try karo"
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
       );
     } finally {
       setSubmitting(false);
@@ -189,17 +189,17 @@ export default function AdminAddSchoolPage() {
             <CheckCircle className="w-8 h-8 text-success-text" />
           </div>
           <h2 className="font-heading text-h2 font-bold text-blue-800 mb-2">
-            School Add Ho Gayi!
+            School added successfully
           </h2>
           <p className="text-gray-400 font-body text-body mb-6">
-            School seedha approved status mein add ho gayi hai aur ab live hai.
+            The school was added with approved status and is now live.
           </p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => router.push("/admin/schools")}
               className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors"
             >
-              Schools List Dekho
+              View schools list
             </button>
             <button
               onClick={() => {
@@ -210,7 +210,7 @@ export default function AdminAddSchoolPage() {
               }}
               className="px-5 py-2.5 border border-gray-100 text-gray-800 rounded-xl font-heading text-btn hover:bg-gray-50 transition-colors"
             >
-              Aur Add Karo
+              Add another
             </button>
           </div>
         </div>
@@ -233,10 +233,10 @@ export default function AdminAddSchoolPage() {
             Admin Dashboard
           </button>
           <h1 className="font-heading text-h1 font-bold text-blue-800">
-            School Add Karo
+            Add school
           </h1>
           <p className="text-gray-400 font-body text-body mt-1">
-            School seedha approved status mein add hogi — admin review nahi lagega
+            The school will be added with approved status — no admin review required
           </p>
         </div>
 
@@ -301,7 +301,7 @@ export default function AdminAddSchoolPage() {
                   <input
                     {...register("ownerName")}
                     type="text"
-                    placeholder="Principal / Owner ka naam"
+                    placeholder="Principal / Owner name"
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.ownerName && (
@@ -312,7 +312,7 @@ export default function AdminAddSchoolPage() {
                 <div>
                   <label className="block font-body text-label text-gray-800 mb-1.5">
                     Owner Password{" "}
-                    <span className="text-gray-400">(optional — agar naya account banana ho)</span>
+                    <span className="text-gray-400">(optional — to create a new account)</span>
                   </label>
                   <input
                     {...register("ownerPassword")}
@@ -324,7 +324,7 @@ export default function AdminAddSchoolPage() {
                     <p className="text-danger-text font-body text-meta mt-1">{errors.ownerPassword.message}</p>
                   )}
                   <p className="text-gray-400 font-body text-meta mt-1">
-                    Agar email already registered hai toh existing account use hoga
+                    If the email is already registered, the existing account will be used
                   </p>
                 </div>
               </div>
@@ -344,7 +344,7 @@ export default function AdminAddSchoolPage() {
                   <input
                     {...register("name")}
                     type="text"
-                    placeholder="School ka poora naam"
+                    placeholder="Full school name"
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.name && (
@@ -390,7 +390,7 @@ export default function AdminAddSchoolPage() {
                   <input
                     {...register("address")}
                     type="text"
-                    placeholder="Gali, mohalla, landmark..."
+                    placeholder="Street, area, landmark..."
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.address && (
@@ -466,7 +466,7 @@ export default function AdminAddSchoolPage() {
                     )}
                     <label className="flex items-center gap-2 px-4 py-2 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors font-body text-body text-gray-800">
                       <Upload className="w-4 h-4 text-blue-600" />
-                      Logo Upload Karo
+                      Upload logo
                       <input
                         type="file"
                         accept="image/*"
@@ -483,7 +483,7 @@ export default function AdminAddSchoolPage() {
                   <textarea
                     {...register("description")}
                     rows={3}
-                    placeholder="School ke baare mein kuch likho..."
+                    placeholder="Write a short description of the school..."
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition resize-none"
                   />
                 </div>
@@ -640,7 +640,7 @@ export default function AdminAddSchoolPage() {
                 <div className="flex items-center gap-3 p-4 bg-info-bg rounded-xl">
                   <CheckCircle className="w-5 h-5 text-info-text flex-shrink-0" />
                   <p className="font-body text-label text-info-text">
-                    Yeh school seedha <strong>Approved</strong> status mein add hogi — koi review pending nahi rahega
+                    This school will be added with <strong>Approved</strong> status — no review pending
                   </p>
                 </div>
               </div>
@@ -654,7 +654,7 @@ export default function AdminAddSchoolPage() {
                   onClick={() => setStep((s) => s - 1)}
                   className="px-5 py-2.5 border border-gray-100 text-gray-800 rounded-xl font-heading text-btn hover:bg-gray-50 transition-colors"
                 >
-                  ← Peeche
+                  ← Back
                 </button>
               ) : (
                 <div />
@@ -666,7 +666,7 @@ export default function AdminAddSchoolPage() {
                   onClick={handleNext}
                   className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors shadow-btn"
                 >
-                  Aage →
+                  Next →
                 </button>
               ) : (
                 <button
@@ -677,12 +677,12 @@ export default function AdminAddSchoolPage() {
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Add Ho Raha Hai...
+                      Adding...
                     </>
                   ) : (
                     <>
                       <CheckCircle className="w-4 h-4" />
-                      School Add Karo
+                      Add school
                     </>
                   )}
                 </button>
@@ -694,7 +694,7 @@ export default function AdminAddSchoolPage() {
         {/* Location icon decoration */}
         <div className="flex items-center justify-center gap-2 mt-6 text-gray-400 font-body text-meta">
           <MapPin className="w-3.5 h-3.5" />
-          Yeh school seedha approved list mein appear karegi
+          This school will appear on the approved list immediately
         </div>
       </div>
     </div>

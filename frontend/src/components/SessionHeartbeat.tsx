@@ -19,8 +19,10 @@ export default function SessionHeartbeat() {
     }
 
     const ping = () => {
-      void fetch("/api/auth/session").catch(() => {});
+      void fetch("/api/auth/session", { cache: "no-store" }).catch(() => {});
     };
+
+    ping();
 
     const intervalId = window.setInterval(ping, HEARTBEAT_INTERVAL_MS);
 
