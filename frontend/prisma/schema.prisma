@@ -1,0 +1,201 @@
+// frontend/prisma/schema.prisma
+// SchoolFinder — Tier-2 & Tier-3 India School Discovery Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  PARENT
+  SCHOOL_ADMIN
+  ADMIN
+}
+
+enum SchoolStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BoardType {
+  CBSE
+  ICSE
+  UP_BOARD
+  OTHER
+}
+
+enum SchoolType {
+  BOYS
+  GIRLS
+  CO_ED
+}
+
+enum MediumType {
+  HINDI
+  ENGLISH
+  BOTH
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+// ─── NextAuth Models ──────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  password      String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  role          Role      @default(PARENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  ownedSchools School[]   @relation("SchoolOwner")
+  inquiries    Inquiry[]  @relation("ParentInquiries")
+  favourites   Favourite[]
+}
+
+model School {
+  id                String       @id @default(cuid())
+  name              String
+  slug              String       @unique
+  description       String?      @db.Text
+  address           String
+  city              String
+  state             String
+  pincode           String?
+  board             BoardType
+  schoolType        SchoolType
+  medium            MediumType
+  classesFrom       Int
+  classesTo         Int
+  totalStudents     Int?
+  establishedYear   Int?
+  phone             String
+  email             String?
+  website           String?
+  logoUrl           String?
+  rejectionReason   String?      @db.Text
+  status            SchoolStatus @default(PENDING)
+  admissionFee      Float?
+  tuitionFeeMonthly Float?
+  totalAnnualFee    Float?
+  transportFee      Float?
+  hostelFee         Float?
+  ownerId           String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  owner      User            @relation("SchoolOwner", fields: [ownerId], references: [id])
+  images     SchoolImage[]
+  facilities SchoolFacility[]
+  inquiries  Inquiry[]
+  favourites Favourite[]
+}
+
+model SchoolImage {
+  id        String   @id @default(cuid())
+  schoolId  String
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+model Facility {
+  id      String @id @default(cuid())
+  name    String @unique
+  icon    String?
+
+  schools SchoolFacility[]
+}
+
+model SchoolFacility {
+  schoolId   String
+  facilityId String
+
+  school   School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, facilityId])
+}
+
+model Inquiry {
+  id        String        @id @default(cuid())
+  schoolId  String
+  parentId  String
+  message   String        @db.Text
+  status    InquiryStatus @default(NEW)
+  createdAt DateTime      @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parent User   @relation("ParentInquiries", fields: [parentId], references: [id])
+}
+
+model Favourite {
+  id        String   @id @default(cuid())
+  parentId  String
+  schoolId  String
+  createdAt DateTime @default(now())
+
+  parent User   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, schoolId])
+}
