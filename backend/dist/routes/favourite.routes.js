@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const favourite_controller_1 = require("../controllers/favourite.controller");
+const auth_1 = require("../middleware/auth");
+const roleCheck_1 = require("../middleware/roleCheck");
+const asyncHandler_1 = require("../utils/asyncHandler");
+const router = (0, express_1.Router)();
+router.use(auth_1.auth, (0, roleCheck_1.requireRole)("PARENT"));
+router.get("/", (0, asyncHandler_1.asyncHandler)(favourite_controller_1.getFavourites));
+router.post("/", (0, asyncHandler_1.asyncHandler)(favourite_controller_1.addFavourite));
+router.delete("/", (0, asyncHandler_1.asyncHandler)(favourite_controller_1.removeFavourite));
+exports.default = router;

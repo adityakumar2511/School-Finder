@@ -1,0 +1,18 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_controller_1 = require("../controllers/auth.controller");
+const auth_1 = require("../middleware/auth");
+const validate_1 = require("../middleware/validate");
+const auth_validator_1 = require("../validators/auth.validator");
+const asyncHandler_1 = require("../utils/asyncHandler");
+const security_1 = require("../middleware/security");
+const bruteForce_1 = require("../middleware/bruteForce");
+const router = (0, express_1.Router)();
+router.post("/register-parent", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.registerParentSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.registerParent));
+router.post("/register-school", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.registerSchoolSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.registerSchool));
+router.post("/login", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.loginSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.login));
+router.post("/forgot-password", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.forgotPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.forgotPassword));
+router.post("/reset-password", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.resetPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.resetPassword));
+router.get("/me", auth_1.auth, (0, asyncHandler_1.asyncHandler)(auth_controller_1.getMe));
+exports.default = router;

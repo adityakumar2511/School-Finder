@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const inquiry_controller_1 = require("../controllers/inquiry.controller");
+const auth_1 = require("../middleware/auth");
+const roleCheck_1 = require("../middleware/roleCheck");
+const asyncHandler_1 = require("../utils/asyncHandler");
+const router = (0, express_1.Router)();
+router.post("/", auth_1.auth, (0, roleCheck_1.requireRole)("PARENT"), (0, asyncHandler_1.asyncHandler)(inquiry_controller_1.createInquiry));
+router.get("/my", auth_1.auth, (0, roleCheck_1.requireRole)("PARENT"), (0, asyncHandler_1.asyncHandler)(inquiry_controller_1.getMyInquiries));
+router.get("/school/:schoolId", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN", "ADMIN"), (0, asyncHandler_1.asyncHandler)(inquiry_controller_1.getSchoolInquiries));
+router.patch("/:id/status", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN", "ADMIN"), (0, asyncHandler_1.asyncHandler)(inquiry_controller_1.updateInquiryStatus));
+exports.default = router;

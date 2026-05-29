@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const schools_controller_1 = require("../controllers/schools.controller");
+const auth_1 = require("../middleware/auth");
+const roleCheck_1 = require("../middleware/roleCheck");
+const validate_1 = require("../middleware/validate");
+const school_validator_1 = require("../validators/school.validator");
+const asyncHandler_1 = require("../utils/asyncHandler");
+const router = (0, express_1.Router)();
+router.get("/", (0, asyncHandler_1.asyncHandler)(schools_controller_1.getSchools));
+router.get("/my-school", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN"), (0, asyncHandler_1.asyncHandler)(schools_controller_1.getMySchool));
+router.get("/:slug", (0, asyncHandler_1.asyncHandler)(schools_controller_1.getSchool));
+router.post("/", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN"), (0, validate_1.validate)(school_validator_1.createSchoolBodySchema), (0, asyncHandler_1.asyncHandler)(schools_controller_1.createSchool));
+router.patch("/:id", auth_1.auth, (0, validate_1.validate)(school_validator_1.updateSchoolBodySchema), (0, asyncHandler_1.asyncHandler)(schools_controller_1.updateSchool));
+router.delete("/:id", auth_1.auth, (0, roleCheck_1.requireRole)("ADMIN"), (0, asyncHandler_1.asyncHandler)(schools_controller_1.deleteSchool));
+exports.default = router;
