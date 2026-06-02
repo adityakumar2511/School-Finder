@@ -14,10 +14,8 @@ type Props = {
 
 export default async function ParentFavouritesPage({ searchParams }: Props) {
   const session = await auth();
-  const userId = session!.user!.id;
-
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
-  const { schools, total, totalPages } = await getParentFavourites(userId, page, PAGE_SIZE);
+  const { schools, total, totalPages } = await getParentFavourites(page, PAGE_SIZE);
   const currentPage = Math.min(page, totalPages);
 
   return (

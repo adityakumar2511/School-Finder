@@ -4,6 +4,8 @@ import {
 
   getSchools,
 
+  searchSchools,
+
   getSchool,
 
   createSchool,
@@ -13,6 +15,10 @@ import {
   deleteSchool,
 
   getMySchool,
+
+  addSchoolImage,
+
+  deleteSchoolImage,
 
 } from "../controllers/schools.controller";
 
@@ -39,6 +45,22 @@ const router = Router();
 
 
 router.get("/", asyncHandler(getSchools));
+
+router.get("/search", asyncHandler(searchSchools));
+
+router.post(
+  "/my-school/images",
+  auth,
+  requireRole("SCHOOL_ADMIN"),
+  asyncHandler(addSchoolImage)
+);
+
+router.delete(
+  "/images/:id",
+  auth,
+  requireRole("SCHOOL_ADMIN"),
+  asyncHandler(deleteSchoolImage)
+);
 
 
 

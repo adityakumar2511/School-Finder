@@ -158,16 +158,20 @@ export default function AdminAddSchoolPage() {
         }
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const res = await fetch(`${apiUrl}/api/admin/add-school`, {
+      const res = await fetch("/api/admin/add-school", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ ...data, logoUrl }),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Unable to add school");
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Session expired. Please log in again as admin.");
+        }
+        throw new Error(err.message || `Request failed with status ${res.status}`);
       }
 
       setSuccess(true);

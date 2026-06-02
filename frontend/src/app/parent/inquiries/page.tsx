@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
 import { encode } from "@auth/core/jwt";
-import type { InquiryStatus } from "@prisma/client";
+import type { InquiryStatus } from "@/lib/types/database";
 import { ChevronLeft, ChevronRight, MessageSquare, BookOpen, ArrowRight } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getAdminApiBase } from "@/lib/admin-auth";

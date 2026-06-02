@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
-    "prestart": "npm run build",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
     "seed:admin": "ts-node src/scripts/seed-admin.ts"
   },
   "keywords": [],
@@ -30,6 +31,7 @@
     "nodemailer": "^8.0.10",
     "pg": "^8.21.0",
     "prisma": "^5.22.0",
+    "resend": "^6.12.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

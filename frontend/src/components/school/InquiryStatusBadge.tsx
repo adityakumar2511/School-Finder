@@ -1,4 +1,4 @@
-import type { InquiryStatus } from "@prisma/client";
+import type { InquiryStatus } from "@/lib/types/database";
 import { Badge } from "@/components/ui/badge";
 
 const STATUS_VARIANT: Record<

@@ -1,31 +1,17 @@
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma";
-import type { Role } from "@prisma/client";
-import { mintBackendJwt } from "@/lib/backend-jwt";
+import type { Role } from "@/lib/types/database";
 import {
   AUTH_CONTEXT_ROLE,
   AUTH_ROUTES,
   type AuthContext,
   UNAUTHORIZED_ACCOUNT_MESSAGE,
 } from "@/lib/auth-config";
+import { getAdminApiBase } from "@/lib/admin-auth";
 
-/**
- * Parent and school flows use this NextAuth config (Google + credentials).
- * Admin sign-in at /admin-login uses POST /api/auth/login with expectedRole ADMIN,
- * stores the backend JWT cookie, then syncs session via credentials (authContext admin).
- *
- * JWT includes `id` and `role` for middleware (`getToken` in frontend/middleware.ts).
- * Parent JWT also includes `backendAccessToken` for Express API calls from the client.
- *
- * Logout: use `performLogout(role)` from `@/lib/logout` (Navbar). It calls `signOut()`,
- * clears the admin HTTP-only cookie when needed, and hard-redirects via ROLE_LOGOUT_REDIRECT.
- */
+const apiBase = () => getAdminApiBase().replace(/\/$/, "");
 
-/** Used by middleware and NextAuth — prefer AUTH_SECRET in production */
 export const authSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 
 type AuthUserWithBackendToken = {
@@ -37,55 +23,90 @@ type AuthUserWithBackendToken = {
   backendToken?: string;
 };
 
-async function attachParentBackendToken(
-  token: { id?: string; role?: Role; backendAccessToken?: string },
-  user?: AuthUserWithBackendToken | null
-): Promise<void> {
-  if (token.role !== "PARENT") return;
+type BackendLoginResponse = {
+  token?: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+    role: Role;
+  };
+  message?: string;
+};
 
-  if (user?.backendToken) {
-    token.backendAccessToken = user.backendToken;
-    return;
-  }
-
-  const userId = (user?.id ?? token.id) as string | undefined;
-  const email = user?.email;
-
-  if (userId && email) {
-    const minted = await mintBackendJwt({
-      id: userId,
-      role: "PARENT",
-      email,
-    });
-    if (minted) {
-      token.backendAccessToken = minted;
-    }
-    return;
-  }
-
-  if (!token.id || token.backendAccessToken) return;
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: token.id as string },
-    select: { id: true, email: true, role: true },
+async function loginViaBackend(
+  email: string,
+  password: string,
+  expectedRole: Role
+): Promise<AuthUserWithBackendToken> {
+  const response = await fetch(`${apiBase()}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, expectedRole }),
   });
 
-  if (dbUser?.role === "PARENT" && dbUser.email) {
-    const minted = await mintBackendJwt({
-      id: dbUser.id,
-      role: dbUser.role,
-      email: dbUser.email,
-    });
-    if (minted) {
-      token.backendAccessToken = minted;
-    }
+  const body = (await response.json().catch(() => ({}))) as BackendLoginResponse;
+
+  if (!response.ok || !body.user || !body.token) {
+    throw new Error(body.message ?? "Invalid email or password.");
   }
+
+  return {
+    id: body.user.id,
+    email: body.user.email,
+    name: body.user.name,
+    image: body.user.image,
+    role: body.user.role,
+    backendToken: body.token,
+  };
+}
+
+async function syncGoogleViaBackend(profile: {
+  email: string;
+  name?: string | null;
+  image?: string | null;
+}): Promise<AuthUserWithBackendToken | null> {
+  const response = await fetch(`${apiBase()}/api/auth/google-sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as BackendLoginResponse;
+
+  if (!response.ok || !body.user || !body.token) {
+    return null;
+  }
+
+  return {
+    id: body.user.id,
+    email: body.user.email,
+    name: body.user.name,
+    image: body.user.image,
+    role: body.user.role,
+    backendToken: body.token,
+  };
+}
+
+async function refreshUserFromBackend(
+  token: string
+): Promise<{ id: string; role: Role; email: string } | null> {
+  const response = await fetch(`${apiBase()}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as { id: string; role: Role; email: string };
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: authSecret,
   trustHost: true,
-  adapter: PrismaAdapter(prisma),
 
   providers: [
     GoogleProvider({
@@ -108,69 +129,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const context = (credentials.authContext as AuthContext) || "parent";
         const expectedRole = AUTH_CONTEXT_ROLE[context];
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
-        });
+        try {
+          const authUser = await loginViaBackend(
+            credentials.email as string,
+            credentials.password as string,
+            expectedRole
+          );
 
-        if (!user || !user.password) {
-          throw new Error("Invalid email or password.");
-        }
-
-        if (user.phone === "__DISABLED__") {
-          throw new Error("This account has been disabled.");
-        }
-
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.password
-        );
-
-        if (!isValid) {
-          throw new Error("Invalid email or password.");
-        }
-
-        if (user.role !== expectedRole) {
-          throw new Error(UNAUTHORIZED_ACCOUNT_MESSAGE);
-        }
-
-        const authUser: AuthUserWithBackendToken = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          role: user.role,
-        };
-
-        if (context === "parent" && user.role === "PARENT") {
-          const apiBase =
-            process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-            "http://localhost:4000";
-
-          try {
-            const loginResponse = await fetch(`${apiBase}/api/auth/login`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: credentials.email,
-                password: credentials.password,
-                expectedRole: "PARENT",
-              }),
-            });
-
-            if (loginResponse.ok) {
-              const loginBody = (await loginResponse.json()) as {
-                token?: string;
-              };
-              if (loginBody.token) {
-                authUser.backendToken = loginBody.token;
-              }
-            }
-          } catch {
-            // NextAuth sign-in continues; client may still store token from login page.
+          if (authUser.role !== expectedRole) {
+            throw new Error(UNAUTHORIZED_ACCOUNT_MESSAGE);
           }
-        }
 
-        return authUser;
+          return authUser;
+        } catch (error) {
+          throw new Error(
+            error instanceof Error ? error.message : "Invalid email or password."
+          );
+        }
       },
     }),
   ],
@@ -189,44 +164,65 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ account, profile }) {
       if (account?.provider === "google") {
-        const email = user.email?.trim().toLowerCase();
+        const email = profile?.email?.trim().toLowerCase();
         if (!email) return false;
 
-        const existing = await prisma.user.findUnique({ where: { email } });
-        if (existing && existing.role !== "PARENT") {
-          return false;
-        }
+        const synced = await syncGoogleViaBackend({
+          email,
+          name: typeof profile?.name === "string" ? profile.name : null,
+          image: typeof profile?.picture === "string" ? profile.picture : null,
+        });
+
+        return synced?.role === "PARENT";
       }
+
       return true;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
+      if (account?.provider === "google" && profile?.email) {
+        const synced = await syncGoogleViaBackend({
+          email: profile.email.trim().toLowerCase(),
+          name: typeof profile.name === "string" ? profile.name : null,
+          image: typeof profile.picture === "string" ? profile.picture : null,
+        });
+
+        if (!synced) {
+          return { ...token, id: undefined, role: undefined, backendAccessToken: undefined };
+        }
+
+        token.id = synced.id;
+        token.role = synced.role;
+        token.backendAccessToken = synced.backendToken;
+        return token;
+      }
+
       if (user) {
         token.id = user.id;
         token.role = (user as AuthUserWithBackendToken).role ?? "PARENT";
 
-        if (token.role === "PARENT") {
-          await attachParentBackendToken(token, user as AuthUserWithBackendToken);
+        if ((user as AuthUserWithBackendToken).backendToken) {
+          token.backendAccessToken = (user as AuthUserWithBackendToken).backendToken;
         }
       }
 
-      if (token.id) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: { role: true },
-        });
-        if (!dbUser) {
+      const accessToken =
+        typeof token.backendAccessToken === "string" ? token.backendAccessToken : null;
+
+      if (accessToken) {
+        const refreshed = await refreshUserFromBackend(accessToken);
+        if (!refreshed) {
           return { ...token, id: undefined, role: undefined, backendAccessToken: undefined };
         }
-        token.role = dbUser.role;
 
-        if (dbUser.role === "PARENT") {
-          await attachParentBackendToken(token);
-        } else {
-          token.backendAccessToken = undefined;
-        }
+        token.id = refreshed.id;
+        token.role = refreshed.role;
+      }
+
+      if (token.role !== "PARENT") {
+        token.backendAccessToken = undefined;
       }
 
       return token;

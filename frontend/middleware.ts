@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { authSecret } from "@/lib/auth";
 import {
   isProtectedDashboard,

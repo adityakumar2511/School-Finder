@@ -100,13 +100,20 @@ export const forgotPasswordSchema = z.object({
   ),
 });
 
+export const verifyOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+});
+
 export const resetPasswordSchema = z.object({
   token: z.string().min(1, "Reset token is required"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  newPassword: z.string().min(8),
+  confirmPassword: z.string().min(8).optional(),
 });
 
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterSchoolInput = z.infer<typeof registerSchoolSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

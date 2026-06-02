@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 export default async function ParentProfilePage() {
   const session = await auth();
-  const user = await getParentProfile(session!.user!.id);
+  const user = await getParentProfile();
 
   if (!user) {
     redirect("/login?callbackUrl=/parent/profile");

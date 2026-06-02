@@ -1,5 +1,5 @@
-import type { InquiryStatus, SchoolStatus } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import type { InquiryStatus, SchoolStatus } from "@/lib/types/database";
+import { backendFetch } from "@/lib/api/server";
 
 export type SchoolDashboardSchool = {
   id: string;
@@ -28,14 +28,16 @@ export type SchoolDashboardSchool = {
   hostelFee: number | null;
   logoUrl: string | null;
   establishedYear: number | null;
-  createdAt: Date;
+  createdAt: string;
+  images?: Array<{ id: string; url: string; caption: string | null }>;
+  facilities?: Array<{ facility: { id: string; name: string; icon: string | null } }>;
 };
 
 export type SchoolInquiryRow = {
   id: string;
   message: string;
   status: InquiryStatus;
-  createdAt: Date;
+  createdAt: string;
   parent: {
     name: string | null;
     email: string;
@@ -50,83 +52,39 @@ export type InquiryStats = {
   CLOSED: number;
 };
 
-const schoolSelect = {
-  id: true,
-  name: true,
-  slug: true,
-  city: true,
-  state: true,
-  address: true,
-  pincode: true,
-  board: true,
-  schoolType: true,
-  medium: true,
-  classesFrom: true,
-  classesTo: true,
-  phone: true,
-  email: true,
-  website: true,
-  description: true,
-  status: true,
-  rejectionReason: true,
-  totalStudents: true,
-  tuitionFeeMonthly: true,
-  admissionFee: true,
-  totalAnnualFee: true,
-  transportFee: true,
-  hostelFee: true,
-  logoUrl: true,
-  establishedYear: true,
-  createdAt: true,
-} as const;
+export async function getOwnedSchool(): Promise<SchoolDashboardSchool | null> {
+  const { ok, data } = await backendFetch<{ data?: SchoolDashboardSchool }>(
+    "/api/schools/my-school"
+  );
 
-export async function getOwnedSchool(
-  ownerId: string
-): Promise<SchoolDashboardSchool | null> {
-  return prisma.school.findFirst({
-    where: { ownerId },
-    select: schoolSelect,
-  });
+  if (!ok || !data?.data) {
+    return null;
+  }
+
+  return data.data;
 }
 
 export async function getInquiryStats(schoolId: string): Promise<InquiryStats> {
-  const grouped = await prisma.inquiry.groupBy({
-    by: ["status"],
-    where: { schoolId },
-    _count: { status: true },
-  });
+  const { ok, data } = await backendFetch<{
+    stats?: InquiryStats;
+  }>(`/api/inquiries/school/${schoolId}?page=1&limit=1`);
 
-  const stats: InquiryStats = {
-    total: 0,
-    NEW: 0,
-    CONTACTED: 0,
-    CLOSED: 0,
-  };
-
-  for (const row of grouped) {
-    stats[row.status] = row._count.status;
-    stats.total += row._count.status;
+  if (!ok || !data?.stats) {
+    return { total: 0, NEW: 0, CONTACTED: 0, CLOSED: 0 };
   }
 
-  return stats;
+  return data.stats;
 }
 
 export async function getRecentInquiries(
   schoolId: string,
   limit = 5
 ): Promise<SchoolInquiryRow[]> {
-  return prisma.inquiry.findMany({
-    where: { schoolId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      message: true,
-      status: true,
-      createdAt: true,
-      parent: { select: { name: true, email: true, phone: true } },
-    },
-  });
+  const { ok, data } = await backendFetch<{
+    inquiries?: SchoolInquiryRow[];
+  }>(`/api/inquiries/school/${schoolId}?page=1&limit=${limit}`);
+
+  return ok && data?.inquiries ? data.inquiries : [];
 }
 
 export type InquiryListResult = {
@@ -148,69 +106,35 @@ export async function getSchoolInquiriesList(
 ): Promise<InquiryListResult> {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
-  const skip = (page - 1) * limit;
-
-  const where: {
-    schoolId: string;
-    status?: InquiryStatus;
-    OR?: Array<{
-      parent: {
-        name?: { contains: string; mode: "insensitive" };
-        email?: { contains: string; mode: "insensitive" };
-      };
-    }>;
-  } = { schoolId };
-
-  if (options.status) {
-    where.status = options.status;
-  }
-
-  const term = options.search?.trim();
-  if (term) {
-    where.OR = [
-      { parent: { name: { contains: term, mode: "insensitive" } } },
-      { parent: { email: { contains: term, mode: "insensitive" } } },
-    ];
-  }
-
-  const [inquiries, total] = await Promise.all([
-    prisma.inquiry.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        message: true,
-        status: true,
-        createdAt: true,
-        parent: { select: { name: true, email: true, phone: true } },
-      },
-    }),
-    prisma.inquiry.count({ where }),
-  ]);
-
-  return {
-    inquiries,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit) || 1,
-  };
-}
-
-export async function assertInquiryOwnedBySchool(
-  inquiryId: string,
-  ownerId: string
-) {
-  const inquiry = await prisma.inquiry.findUnique({
-    where: { id: inquiryId },
-    include: { school: { select: { ownerId: true } } },
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
   });
 
-  if (!inquiry || inquiry.school.ownerId !== ownerId) {
-    return null;
+  if (options.status) params.set("status", options.status);
+  if (options.search?.trim()) params.set("search", options.search.trim());
+
+  const { ok, data } = await backendFetch<{
+    inquiries?: SchoolInquiryRow[];
+    pagination?: { total: number; page: number; limit: number; totalPages: number };
+  }>(`/api/inquiries/school/${schoolId}?${params.toString()}`);
+
+  if (!ok || !data) {
+    return { inquiries: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  return inquiry;
+  const pagination = data.pagination ?? {
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
+
+  return {
+    inquiries: data.inquiries ?? [],
+    total: pagination.total,
+    page: pagination.page,
+    limit: pagination.limit,
+    totalPages: pagination.totalPages,
+  };
 }

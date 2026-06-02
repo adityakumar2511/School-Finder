@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 const ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"] as const;
 
@@ -23,6 +24,10 @@ export const helmetMiddleware = helmet({
   },
   crossOriginEmbedderPolicy: { policy: "credentialless" },
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+  },
   xXssProtection: true,
   frameguard: { action: "deny" },
   hidePoweredBy: true,
@@ -104,6 +109,28 @@ export const authRateLimiter = rateLimit({
   message: {
     success: false,
     message: "Too many requests. Please try again later.",
+  },
+});
+
+export const forgotPasswordRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many password reset requests. Please try again in an hour.",
+  },
+});
+
+export const resetPasswordRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many reset attempts. Please try again in an hour.",
   },
 });
 

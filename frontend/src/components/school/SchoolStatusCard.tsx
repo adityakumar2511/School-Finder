@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CheckCircle, Clock, XCircle, ArrowRight } from "lucide-react";
-import type { SchoolStatus } from "@prisma/client";
+import type { SchoolStatus } from "@/lib/types/database";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 

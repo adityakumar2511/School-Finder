@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 
 /** Auth entry points — admin login is not linked in public UI */
 export const AUTH_ROUTES = {

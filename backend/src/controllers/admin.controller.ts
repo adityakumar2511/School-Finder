@@ -14,6 +14,12 @@ import {
   parseLimit,
   parsePage,
 } from "../lib/pagination";
+import {
+  buildCacheKey,
+  CACHE_TTL,
+  invalidateSchoolCache,
+  withCache,
+} from "../lib/cache";
 import { adminSchoolListSelect } from "../lib/queries/schools";
 
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"] as const;
@@ -44,32 +50,36 @@ const generateSlug = async (name: string): Promise<string> => {
 
 // GET /api/admin/stats
 export const getStats = async (_req: AuthRequest, res: Response) => {
-  const [
-    totalSchools,
-    pendingSchools,
-    approvedSchools,
-    rejectedSchools,
-    totalInquiries,
-    totalUsers,
-  ] = await Promise.all([
-    prisma.school.count(),
-    prisma.school.count({ where: { status: "PENDING" } }),
-    prisma.school.count({ where: { status: "APPROVED" } }),
-    prisma.school.count({ where: { status: "REJECTED" } }),
-    prisma.inquiry.count(),
-    prisma.user.count(),
-  ]);
+  const cacheKey = buildCacheKey("admin:stats", {});
 
-  res.json({
-    stats: {
+  const stats = await withCache(cacheKey, CACHE_TTL.ADMIN_STATS, async () => {
+    const [
       totalSchools,
       pendingSchools,
       approvedSchools,
       rejectedSchools,
       totalInquiries,
       totalUsers,
-    },
+    ] = await Promise.all([
+      prisma.school.count(),
+      prisma.school.count({ where: { status: "PENDING" } }),
+      prisma.school.count({ where: { status: "APPROVED" } }),
+      prisma.school.count({ where: { status: "REJECTED" } }),
+      prisma.inquiry.count(),
+      prisma.user.count(),
+    ]);
+
+    return {
+      totalSchools,
+      pendingSchools,
+      approvedSchools,
+      rejectedSchools,
+      totalInquiries,
+      totalUsers,
+    };
   });
+
+  res.json({ stats });
 };
 
 // GET /api/admin/schools
@@ -122,6 +132,8 @@ export const approveSchoolById = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  invalidateSchoolCache();
+
   res.json({ message: "School approved successfully", school });
 };
 
@@ -140,6 +152,8 @@ export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
           : "Rejected by administrator",
     },
   });
+
+  invalidateSchoolCache();
 
   res.json({ message: "School rejected successfully", school });
 };
@@ -365,6 +379,10 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
 
 // POST /api/admin/add-school
 export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
+  if (!req.user?.id) {
+    throw new AppError(401, "Authentication required");
+  }
+
   const {
     ownerEmail,
     ownerName,
@@ -416,26 +434,32 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     });
   }
 
-  const slug = await generateSlug(name);
+  const slug =
+    name
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "") +
+    "-" +
+    Math.random().toString(36).slice(2, 7);
 
   const school = await prisma.school.create({
     data: {
       name,
       slug,
-      description,
+      description: description ?? null,
       address,
       city,
       state,
-      pincode,
+      pincode: pincode ?? null,
       board,
       schoolType,
       medium,
       classesFrom: parseInt(classesFrom, 10),
       classesTo: parseInt(classesTo, 10),
       phone,
-      email,
-      website,
-      logoUrl,
+      email: email ?? null,
+      website: website ?? null,
+      logoUrl: logoUrl ?? null,
       admissionFee: admissionFee ? parseFloat(admissionFee) : null,
       tuitionFeeMonthly: tuitionFeeMonthly ? parseFloat(tuitionFeeMonthly) : null,
       totalAnnualFee: totalAnnualFee ? parseFloat(totalAnnualFee) : null,

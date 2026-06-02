@@ -92,7 +92,7 @@ function SchoolCardComponent({
                 alt=""
                 width={64}
                 height={64}
-                sizes="64px"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 loading="lazy"
                 placeholder="blur"
                 blurDataURL={IMAGE_BLUR_DATA_URL}

@@ -5,18 +5,27 @@ import { AppError } from "../utils/AppError";
 import type { CreateSchoolInput, UpdateSchoolInput } from "../validators/school.validator";
 import {
   buildPaginationMeta,
+  cursorPaginatedResponse,
   DEFAULT_SCHOOL_PAGE_LIMIT,
   paginatedResponse,
   parseLimit,
   parsePage,
 } from "../lib/pagination";
-import { buildCacheKey, withCache } from "../lib/cache";
+import { buildCacheKey, CACHE_TTL, invalidateSchoolCache, withCache } from "../lib/cache";
 import {
+  buildSchoolCursorWhere,
+  buildSchoolListWhere,
   buildSchoolSearchWhere,
+  decodeSchoolCursor,
+  encodeSchoolCursor,
   mapSchoolListItem,
   schoolDetailSelect,
+  schoolListOrderBy,
   schoolListSelect,
+  schoolListSelectWithCreatedAt,
+  schoolSearchSelect,
 } from "../lib/queries/schools";
+import { sanitizeSchoolData } from "../lib/sanitize";
 
 const slugify = (name: string): string =>
   name
@@ -44,7 +53,7 @@ const generateSlug = async (name: string): Promise<string> => {
   return slug;
 };
 
-// GET /api/schools — public listing
+// GET /api/schools — public listing (offset or cursor pagination)
 export const getSchools = async (req: Request, res: Response) => {
   const {
     search,
@@ -55,25 +64,76 @@ export const getSchools = async (req: Request, res: Response) => {
     page: pageQuery,
     limit: limitQuery,
     status,
+    cursor,
+    pagination,
   } = req.query;
 
-  const page = parsePage(pageQuery);
   const limit = parseLimit(limitQuery, DEFAULT_SCHOOL_PAGE_LIMIT);
-  const skip = (page - 1) * limit;
+  const useCursorPagination = pagination === "cursor";
 
-  const where: Record<string, unknown> = {
-    status: status || "APPROVED",
-  };
+  const where = buildSchoolListWhere({
+    status: status as string | undefined,
+    search: search as string | undefined,
+    city: city as string | undefined,
+    board: board as string | undefined,
+    schoolType: schoolType as string | undefined,
+    medium: medium as string | undefined,
+  });
 
-  const searchWhere = buildSchoolSearchWhere(search as string | undefined);
-  if (searchWhere?.OR) {
-    where.OR = searchWhere.OR;
+  if (useCursorPagination) {
+    const cursorValue = typeof cursor === "string" ? cursor.trim() : "";
+    const decodedCursor = cursorValue ? decodeSchoolCursor(cursorValue) : null;
+
+    if (cursorValue && !decodedCursor) {
+      throw new AppError(400, "Invalid pagination cursor");
+    }
+
+    const cacheKey = buildCacheKey("schools:list:cursor", {
+      limit,
+      cursor: cursorValue,
+      status: String(where.status),
+      search: search as string,
+      city: city as string,
+      board: board as string,
+      schoolType: schoolType as string,
+      medium: medium as string,
+    });
+
+    const result = await withCache(
+      cacheKey,
+      CACHE_TTL.SCHOOL_LIST,
+      async () => {
+        const rows = await prisma.school.findMany({
+          where: decodedCursor
+            ? { AND: [where, buildSchoolCursorWhere(decodedCursor)] }
+            : where,
+          take: limit + 1,
+          orderBy: schoolListOrderBy,
+          select: schoolListSelectWithCreatedAt,
+        });
+
+        const hasMore = rows.length > limit;
+        const pageRows = hasMore ? rows.slice(0, limit) : rows;
+        const lastRow = pageRows[pageRows.length - 1];
+
+        return {
+          data: pageRows.map(mapSchoolListItem),
+          pagination: {
+            limit,
+            hasMore,
+            nextCursor:
+              hasMore && lastRow ? encodeSchoolCursor(lastRow) : null,
+          },
+        };
+      }
+    );
+
+    res.json(cursorPaginatedResponse(result.data, result.pagination, "schools"));
+    return;
   }
 
-  if (city) where.city = { contains: city as string, mode: "insensitive" };
-  if (board) where.board = board;
-  if (schoolType) where.schoolType = schoolType;
-  if (medium) where.medium = medium;
+  const page = parsePage(pageQuery);
+  const skip = (page - 1) * limit;
 
   const cacheKey = buildCacheKey("schools:list", {
     page,
@@ -88,13 +148,14 @@ export const getSchools = async (req: Request, res: Response) => {
 
   const result = await withCache(
     cacheKey,
+    CACHE_TTL.SCHOOL_LIST,
     async () => {
       const [rows, total] = await Promise.all([
         prisma.school.findMany({
           where,
           skip,
           take: limit,
-          orderBy: { createdAt: "desc" },
+          orderBy: schoolListOrderBy,
           select: schoolListSelect,
         }),
         prisma.school.count({ where }),
@@ -104,11 +165,43 @@ export const getSchools = async (req: Request, res: Response) => {
         data: rows.map(mapSchoolListItem),
         pagination: buildPaginationMeta(total, page, limit),
       };
-    },
-    { ttlSeconds: 60, namespace: "schools" }
+    }
   );
 
   res.json(paginatedResponse(result.data, result.pagination, "schools"));
+};
+
+// GET /api/schools/search — lightweight autocomplete
+export const searchSchools = async (req: Request, res: Response) => {
+  const query = String(req.query.q ?? req.query.search ?? "").trim();
+  const limit = parseLimit(req.query.limit, 10, 20);
+
+  if (query.length < 2) {
+    res.json({ data: [] });
+    return;
+  }
+
+  const searchWhere = buildSchoolSearchWhere(query);
+  const where = {
+    status: "APPROVED" as const,
+    ...(searchWhere ?? {}),
+  };
+
+  const cacheKey = buildCacheKey("schools:search", { query, limit });
+
+  const schools = await withCache(
+    cacheKey,
+    CACHE_TTL.SCHOOL_LIST,
+    () =>
+      prisma.school.findMany({
+        where,
+        take: limit,
+        orderBy: [{ name: "asc" }, { city: "asc" }],
+        select: schoolSearchSelect,
+      })
+  );
+
+  res.json({ data: schools });
 };
 
 // GET /api/schools/my-school — owner dashboard
@@ -140,12 +233,12 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
 
   const school = await withCache(
     cacheKey,
+    CACHE_TTL.SCHOOL_DETAIL,
     () =>
       prisma.school.findUnique({
         where: { slug },
         select: schoolDetailSelect,
-      }),
-    { ttlSeconds: 120, namespace: "schools" }
+      })
   );
 
   if (!school) {
@@ -166,7 +259,7 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
 
 // POST /api/schools — create school
 export const createSchool = async (req: AuthRequest, res: Response) => {
-  const data = req.body as CreateSchoolInput;
+  const data = sanitizeSchoolData(req.body as CreateSchoolInput);
   const slug = await generateSlug(data.name);
 
   const school = await prisma.school.create({
@@ -205,7 +298,7 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
 // PATCH /api/schools/:id — update school
 export const updateSchool = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
-  const data = req.body as UpdateSchoolInput;
+  const data = sanitizeSchoolData(req.body as UpdateSchoolInput);
 
   if (!id) {
     throw new AppError(400, "Invalid school identifier");
@@ -232,6 +325,8 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     data: { ...data, ...statusReset },
   });
 
+  invalidateSchoolCache();
+
   res.json({ data: updated });
 };
 
@@ -246,4 +341,51 @@ export const deleteSchool = async (req: AuthRequest, res: Response) => {
   await prisma.school.delete({ where: { id } });
 
   res.json({ message: "School deleted successfully" });
+};
+
+// POST /api/schools/my-school/images
+export const addSchoolImage = async (req: AuthRequest, res: Response) => {
+  const { url, caption } = req.body as { url?: string; caption?: string | null };
+
+  if (!url?.trim()) {
+    throw new AppError(400, "Image URL is required");
+  }
+
+  const school = await prisma.school.findFirst({
+    where: { ownerId: req.user!.id },
+    select: { id: true },
+  });
+
+  if (!school) {
+    throw new AppError(404, "School not found");
+  }
+
+  const image = await prisma.schoolImage.create({
+    data: {
+      schoolId: school.id,
+      url: url.trim(),
+      caption: caption?.trim() || null,
+    },
+  });
+
+  invalidateSchoolCache();
+  res.status(201).json({ data: image });
+};
+
+// DELETE /api/schools/images/:id
+export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
+  const imageId = String(req.params.id).trim();
+
+  const image = await prisma.schoolImage.findUnique({
+    where: { id: imageId },
+    include: { school: { select: { ownerId: true } } },
+  });
+
+  if (!image || image.school.ownerId !== req.user!.id) {
+    throw new AppError(404, "Image not found");
+  }
+
+  await prisma.schoolImage.delete({ where: { id: imageId } });
+  invalidateSchoolCache();
+  res.json({ message: "Image deleted successfully" });
 };

@@ -16,9 +16,7 @@ import { Button } from "@/components/ui/button";
 
 export default async function ParentDashboardPage() {
   const session = await auth();
-  const userId = session!.user!.id;
-
-  const { user, favouritesCount, recentSaved } = await getParentDashboardData(userId);
+  const { user, favouritesCount, recentSaved } = await getParentDashboardData();
   const firstName = user?.name?.split(" ")[0] ?? "there";
 
   return (

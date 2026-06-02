@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SchoolStatusBadge from "@/components/admin/SchoolStatusBadge";
 import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
 
-function formatDate(date: Date) {
+function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",

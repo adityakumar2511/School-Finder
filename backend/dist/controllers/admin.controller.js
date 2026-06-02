@@ -303,6 +303,9 @@ const updateUserStatus = async (req, res) => {
 exports.updateUserStatus = updateUserStatus;
 // POST /api/admin/add-school
 const addSchoolDirect = async (req, res) => {
+    if (!req.user?.id) {
+        throw new AppError_1.AppError(401, "Authentication required");
+    }
     const { ownerEmail, ownerName, name, city, state, address, pincode, board, schoolType, medium, classesFrom, classesTo, phone, email, website, logoUrl, admissionFee, tuitionFeeMonthly, totalAnnualFee, transportFee, hostelFee, description, totalStudents, establishedYear, } = req.body;
     if (!ownerEmail || !name) {
         throw new AppError_1.AppError(400, "ownerEmail and school name are required");
@@ -321,25 +324,30 @@ const addSchoolDirect = async (req, res) => {
             },
         });
     }
-    const slug = await generateSlug(name);
+    const slug = name
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "") +
+        "-" +
+        Math.random().toString(36).slice(2, 7);
     const school = await prisma_1.default.school.create({
         data: {
             name,
             slug,
-            description,
+            description: description ?? null,
             address,
             city,
             state,
-            pincode,
+            pincode: pincode ?? null,
             board,
             schoolType,
             medium,
             classesFrom: parseInt(classesFrom, 10),
             classesTo: parseInt(classesTo, 10),
             phone,
-            email,
-            website,
-            logoUrl,
+            email: email ?? null,
+            website: website ?? null,
+            logoUrl: logoUrl ?? null,
             admissionFee: admissionFee ? parseFloat(admissionFee) : null,
             tuitionFeeMonthly: tuitionFeeMonthly ? parseFloat(tuitionFeeMonthly) : null,
             totalAnnualFee: totalAnnualFee ? parseFloat(totalAnnualFee) : null,

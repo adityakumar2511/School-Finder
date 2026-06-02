@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { InquiryStatus } from "@prisma/client";
+import type { InquiryStatus } from "@/lib/types/database";
 import {
   Select,
   SelectContent,

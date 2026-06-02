@@ -1,6 +1,21 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import { AppError } from "../utils/AppError";
+
+export const JWT_ISSUER = "schoolfinder-api";
+const JWT_ALGORITHM = "HS256" as const;
+
+const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ?? "7d") as SignOptions["expiresIn"];
+
+const tokenBlacklist = new Set<string>();
+
+export function blacklistToken(token: string): void {
+  tokenBlacklist.add(token);
+}
+
+function isTokenBlacklisted(token: string): boolean {
+  return tokenBlacklist.has(token);
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -16,6 +31,18 @@ function getJwtSecret(): string {
     throw new AppError(500, "Server authentication is not configured");
   }
   return secret;
+}
+
+export function signAccessToken(payload: {
+  id: string;
+  role: string;
+  email: string;
+}): string {
+  return jwt.sign(payload, getJwtSecret(), {
+    expiresIn: jwtExpiresIn,
+    algorithm: JWT_ALGORITHM,
+    issuer: JWT_ISSUER,
+  });
 }
 
 export const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -43,8 +70,16 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction): void 
     return;
   }
 
+  if (isTokenBlacklisted(token)) {
+    next(new AppError(401, "Authentication token has been revoked"));
+    return;
+  }
+
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as {
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      algorithms: [JWT_ALGORITHM],
+      issuer: JWT_ISSUER,
+    }) as {
       id: string;
       role: string;
       email: string;

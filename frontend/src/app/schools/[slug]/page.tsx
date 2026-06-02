@@ -9,12 +9,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { backendFetch } from "@/lib/api/server";
 import { fetchSchoolBySlug } from "@/lib/data/schools-public";
 import { IMAGE_BLUR_DATA_URL } from "@/lib/image-placeholder";
 import JsonLd from "@/components/seo/JsonLd";
 import InquiryModal from "@/components/schools/InquiryModal";
 import FavouriteButton from "@/components/schools/FavouriteButton";
-import prisma from "@/lib/prisma";
 
 const TrackSchoolView = dynamic(
   () => import("@/components/parent/TrackSchoolView"),
@@ -155,20 +155,17 @@ export default async function SchoolDetailPage({
   if (school.status !== "APPROVED") notFound();
 
   const isParent = session?.user?.role === "PARENT";
-  const initialFavourited =
-    isParent && session?.user?.id
-      ? Boolean(
-          await prisma.favourite.findUnique({
-            where: {
-              parentId_schoolId: {
-                parentId: session.user.id,
-                schoolId: school.id,
-              },
-            },
-            select: { id: true },
-          })
-        )
-      : false;
+  let initialFavourited = false;
+
+  if (isParent) {
+    const { ok, data } = await backendFetch<{
+      schools?: Array<{ id: string }>;
+    }>("/api/parent/favourites?page=1&limit=1000");
+
+    initialFavourited = Boolean(
+      ok && data?.schools?.some((item) => item.id === school.id)
+    );
+  }
   const hasFees =
     school.admissionFee ||
     school.tuitionFeeMonthly ||

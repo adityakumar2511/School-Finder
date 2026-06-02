@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { AUTH_ROUTES, ROLE_LOGOUT_REDIRECT } from "@/lib/auth-config";
 import { clearParentBackendToken } from "@/lib/parent-token";
 

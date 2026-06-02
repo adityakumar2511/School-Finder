@@ -10,9 +10,17 @@ import {
 
   forgotPassword,
 
+  verifyOtp,
+
   resetPassword,
 
+  logout,
+
   getMe,
+
+  updateMe,
+
+  syncGoogleUser,
 
 } from "../controllers/auth.controller";
 
@@ -30,12 +38,18 @@ import {
 
   forgotPasswordSchema,
 
+  verifyOtpSchema,
+
   resetPasswordSchema,
 
 } from "../validators/auth.validator";
 
 import { asyncHandler } from "../utils/asyncHandler";
-import { authRateLimiter } from "../middleware/security";
+import {
+  authRateLimiter,
+  forgotPasswordRateLimiter,
+  resetPasswordRateLimiter,
+} from "../middleware/security";
 import { bruteForceGuard } from "../middleware/bruteForce";
 
 const router = Router();
@@ -66,19 +80,32 @@ router.post(
 
 router.post(
   "/forgot-password",
-  authRateLimiter,
+  forgotPasswordRateLimiter,
   validate(forgotPasswordSchema),
   asyncHandler(forgotPassword)
 );
 
 router.post(
-  "/reset-password",
+  "/verify-otp",
   authRateLimiter,
+  validate(verifyOtpSchema),
+  asyncHandler(verifyOtp)
+);
+
+router.post(
+  "/reset-password",
+  resetPasswordRateLimiter,
   validate(resetPasswordSchema),
   asyncHandler(resetPassword)
 );
 
+router.post("/logout", auth, asyncHandler(logout));
+
 router.get("/me", auth, asyncHandler(getMe));
+
+router.patch("/me", auth, asyncHandler(updateMe));
+
+router.post("/google-sync", authRateLimiter, asyncHandler(syncGoogleUser));
 
 
 

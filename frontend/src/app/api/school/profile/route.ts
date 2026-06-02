@@ -1,83 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
+import { proxyToBackend } from "@/lib/api/proxy";
+import { getAdminApiBase } from "@/lib/admin-auth";
+import { mintBackendJwt } from "@/lib/backend-jwt";
 import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+
+async function getSchoolAdminToken(): Promise<string | null> {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) return null;
+
+  if (typeof session.backendAccessToken === "string" && session.backendAccessToken.length > 0) {
+    return session.backendAccessToken;
+  }
+
+  return mintBackendJwt({
+    id: session.user.id,
+    role: session.user.role,
+    email: session.user.email,
+  });
+}
 
 export async function PATCH(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id || session.user.role !== "SCHOOL_ADMIN") {
+  const token = await getSchoolAdminToken();
+  if (!token) {
     return NextResponse.json(
       { success: false, message: "Authentication required" },
       { status: 401 }
     );
   }
 
-  const school = await prisma.school.findFirst({
-    where: { ownerId: session.user.id },
-    select: { id: true },
+  const apiBase = getAdminApiBase();
+  const schoolResponse = await fetch(`${apiBase}/api/schools/my-school`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
 
-  if (!school) {
+  const schoolJson = await schoolResponse.json().catch(() => ({}));
+  if (!schoolResponse.ok || !schoolJson?.data?.id) {
     return NextResponse.json(
       { success: false, message: "School not found" },
       { status: 404 }
     );
   }
 
-  const body = await request.json().catch(() => ({}));
-
-  const allowedFields = [
-    "name",
-    "description",
-    "address",
-    "city",
-    "state",
-    "pincode",
-    "board",
-    "schoolType",
-    "medium",
-    "classesFrom",
-    "classesTo",
-    "phone",
-    "email",
-    "website",
-    "logoUrl",
-    "admissionFee",
-    "tuitionFeeMonthly",
-    "totalAnnualFee",
-    "transportFee",
-    "hostelFee",
-    "totalStudents",
-    "establishedYear",
-  ] as const;
-
-  const data: Record<string, unknown> = {};
-
-  for (const key of allowedFields) {
-    if (body[key] !== undefined) {
-      data[key] = body[key];
-    }
-  }
-
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json(
-      { success: false, message: "No valid fields to update" },
-      { status: 400 }
-    );
-  }
-
-  const updated = await prisma.school.update({
-    where: { id: school.id },
-    data: {
-      ...data,
-      status: "PENDING",
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-    school: updated,
-    message:
-      "School profile updated. Your listing is pending admin re-approval.",
+  const body = await request.text();
+  return proxyToBackend(`/api/schools/${schoolJson.data.id}`, {
+    method: "PATCH",
+    body,
   });
 }

@@ -6,20 +6,68 @@ export function getListenHost(): string {
   return isProduction() ? "0.0.0.0" : "localhost";
 }
 
-export function logProductionWarnings(): void {
-  if (!isProduction()) return;
+function getEnvValue(key: string): string {
+  return process.env[key]?.trim() ?? "";
+}
 
-  const required = ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL"] as const;
-  for (const key of required) {
-    if (!process.env[key]?.trim()) {
-      console.warn(`[Config] Missing required production variable: ${key}`);
+function isEnvMissing(key: string): boolean {
+  return getEnvValue(key) === "";
+}
+
+export function validateStartupEnv(): void {
+  const production = isProduction();
+  const missing: string[] = [];
+
+  const alwaysRequired = [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
+  ] as const;
+
+  const productionRequired = ["FRONTEND_URL"] as const;
+
+  for (const key of alwaysRequired) {
+    if (isEnvMissing(key)) {
+      missing.push(key);
     }
   }
 
-  const frontend = process.env.FRONTEND_URL?.trim() ?? "";
-  if (frontend.startsWith("http://") && !frontend.includes("localhost")) {
-    console.warn(
-      "[Config] FRONTEND_URL should use HTTPS in production for secure cookies and CORS."
-    );
+  if (production) {
+    for (const key of productionRequired) {
+      if (isEnvMissing(key)) {
+        missing.push(key);
+      }
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      missing.push("NODE_ENV (must be 'production')");
+    }
+  }
+
+  if (missing.length > 0) {
+    const message = `[Config] Missing required environment variable(s): ${missing.join(", ")}`;
+
+    if (production) {
+      console.error(message);
+      process.exit(1);
+    }
+
+    console.warn(message);
+  }
+
+  if (production) {
+    const frontend = getEnvValue("FRONTEND_URL");
+    if (frontend.startsWith("http://") && !frontend.includes("localhost")) {
+      console.warn(
+        "[Config] FRONTEND_URL should use HTTPS in production for secure cookies and CORS."
+      );
+    }
   }
 }

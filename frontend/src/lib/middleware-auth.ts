@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { AUTH_ROUTES, ROLE_HOME } from "@/lib/auth-config";
 
 export type MiddlewareToken = {

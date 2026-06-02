@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { preprocessOptionalString, preprocessTrim } from "../lib/sanitize";
+import { preprocessIndianPhone, preprocessOptionalString, preprocessTrim } from "../lib/sanitize";
 
 const boardSchema = z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]);
 const schoolTypeSchema = z.enum(["BOYS", "GIRLS", "CO_ED"]);
@@ -30,8 +30,8 @@ const schoolBodyFields = {
   classesFrom: z.coerce.number().int().min(1).max(12),
   classesTo: z.coerce.number().int().min(1).max(12),
   phone: z.preprocess(
-    preprocessTrim,
-    z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number")
+    preprocessIndianPhone,
+    z.string().regex(/^\d{10}$/, "Enter a valid phone number (+91XXXXXXXXXX or 10 digits)")
   ),
   email: z.preprocess(
     preprocessOptionalString,

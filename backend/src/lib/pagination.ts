@@ -59,3 +59,26 @@ export function paginatedResponse<T>(
 
   return body;
 }
+
+export type CursorPaginationMeta = {
+  limit: number;
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export function cursorPaginatedResponse<T>(
+  data: T[],
+  pagination: CursorPaginationMeta,
+  alias?: string
+) {
+  const body: Record<string, unknown> = {
+    data,
+    pagination,
+  };
+
+  if (alias) {
+    body[alias] = data;
+  }
+
+  return body;
+}

@@ -3,12 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMe = exports.resetPassword = exports.forgotPassword = exports.login = exports.registerSchool = exports.registerParent = void 0;
-const crypto_1 = __importDefault(require("crypto"));
+exports.getMe = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.login = exports.registerSchool = exports.registerParent = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
+const mailer_1 = require("../lib/mailer");
 const AppError_1 = require("../utils/AppError");
 const bruteForce_1 = require("../middleware/bruteForce");
 const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ?? "7d");
@@ -176,94 +175,97 @@ const login = async (req, res) => {
     });
 };
 exports.login = login;
-const getFrontendUrl = () => (process.env.FRONTEND_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const sendPasswordResetEmail = async (to, resetLink) => {
-    const transporter = nodemailer_1.default.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT ?? 587),
-        secure: false,
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    });
-    const from = process.env.SMTP_FROM ?? process.env.SMTP_USER;
-    await transporter.sendMail({
-        from,
-        to,
-        subject: "Reset your SchoolFinder password",
-        text: `You requested a password reset.
-Click the link below to reset your password.
-This link expires in 1 hour.
-${resetLink}
-If you did not request this, ignore this email.`,
-    });
+const getBcryptRounds = () => parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
+const clearOtpFields = {
+    otpCode: null,
+    otpExpiry: null,
+    otpVerified: false,
 };
 // POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
     const { email } = req.body;
     const user = await prisma_1.default.user.findUnique({ where: { email } });
-    if (user) {
-        const plainToken = crypto_1.default.randomBytes(32).toString("hex");
-        const hashedToken = await bcryptjs_1.default.hash(plainToken, parseInt(process.env.BCRYPT_ROUNDS || "12"));
-        const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
-        await prisma_1.default.user.update({
-            where: { id: user.id },
-            data: {
-                resetToken: hashedToken,
-                resetTokenExpiry,
-            },
+    if (!user) {
+        res.status(200).json({
+            success: true,
+            message: "If this email is registered, an OTP has been sent.",
         });
-        const resetLink = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(plainToken)}`;
-        try {
-            await sendPasswordResetEmail(user.email, resetLink);
-        }
-        catch {
-            // Do not reveal whether the email exists or whether sending failed
-        }
+        return;
     }
+    const plainOtp = (0, mailer_1.generateOtp)();
+    const hashedOtp = await bcryptjs_1.default.hash(plainOtp, getBcryptRounds());
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await prisma_1.default.user.update({
+        where: { id: user.id },
+        data: {
+            otpCode: hashedOtp,
+            otpExpiry,
+            otpVerified: false,
+        },
+    });
+    await (0, mailer_1.sendOtpEmail)(user.email, plainOtp, user.name ?? undefined);
     res.status(200).json({
-        message: "If this email exists, a reset link has been sent.",
+        success: true,
+        message: "OTP sent to your email.",
     });
 };
 exports.forgotPassword = forgotPassword;
+// POST /api/auth/verify-otp
+const verifyOtp = async (req, res) => {
+    const { email, otp } = req.body;
+    const user = await prisma_1.default.user.findUnique({ where: { email } });
+    if (!user || !user.otpCode) {
+        throw new AppError_1.AppError(400, "Invalid or expired OTP.");
+    }
+    if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
+        await prisma_1.default.user.update({
+            where: { id: user.id },
+            data: clearOtpFields,
+        });
+        throw new AppError_1.AppError(400, "OTP has expired.");
+    }
+    const isValid = await bcryptjs_1.default.compare(otp, user.otpCode);
+    if (!isValid) {
+        throw new AppError_1.AppError(400, "Invalid OTP.");
+    }
+    await prisma_1.default.user.update({
+        where: { id: user.id },
+        data: { otpVerified: true },
+    });
+    res.status(200).json({
+        success: true,
+        message: "OTP verified.",
+    });
+};
+exports.verifyOtp = verifyOtp;
 // POST /api/auth/reset-password
 const resetPassword = async (req, res) => {
-    const { token, newPassword } = req.body;
-    const candidates = await prisma_1.default.user.findMany({
-        where: {
-            resetToken: { not: null },
-            resetTokenExpiry: { gt: new Date() },
-        },
-        select: {
-            id: true,
-            resetToken: true,
-        },
-    });
-    let matchedUserId = null;
-    for (const candidate of candidates) {
-        if (!candidate.resetToken)
-            continue;
-        const isMatch = await bcryptjs_1.default.compare(token, candidate.resetToken);
-        if (isMatch) {
-            matchedUserId = candidate.id;
-            break;
-        }
+    const { email, newPassword, confirmPassword } = req.body;
+    const user = await prisma_1.default.user.findUnique({ where: { email } });
+    if (!user || !user.otpVerified) {
+        throw new AppError_1.AppError(403, "Please verify OTP first.");
     }
-    if (!matchedUserId) {
-        res.status(400).json({ message: "Invalid or expired reset token." });
-        return;
+    if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
+        throw new AppError_1.AppError(400, "Session expired. Request a new OTP.");
     }
-    const hashedPassword = await bcryptjs_1.default.hash(newPassword, parseInt(process.env.BCRYPT_ROUNDS || "12"));
+    if (newPassword !== confirmPassword) {
+        throw new AppError_1.AppError(400, "Passwords do not match.");
+    }
+    if (newPassword.length < 8) {
+        throw new AppError_1.AppError(400, "Password must be at least 8 characters.");
+    }
+    const hashedPassword = await bcryptjs_1.default.hash(newPassword, getBcryptRounds());
     await prisma_1.default.user.update({
-        where: { id: matchedUserId },
+        where: { id: user.id },
         data: {
             password: hashedPassword,
-            resetToken: null,
-            resetTokenExpiry: null,
+            ...clearOtpFields,
         },
     });
-    res.json({ message: "Password reset successful." });
+    res.status(200).json({
+        success: true,
+        message: "Password reset successfully.",
+    });
 };
 exports.resetPassword = resetPassword;
 // GET /api/auth/me

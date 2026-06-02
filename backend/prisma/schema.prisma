@@ -1,5 +1,5 @@
-// SchoolFinder — backend Prisma client (schema owner: frontend/prisma/schema.prisma)
-// Run `npx prisma db push` only from the frontend folder.
+// SchoolFinder — single source of truth for database schema
+// Run migrations from backend/: npx prisma migrate dev | npx prisma migrate deploy
 
 generator client {
   provider        = "prisma-client-js"
@@ -86,23 +86,26 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  phone         String?
-  password      String?
+  id               String    @id @default(cuid())
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  image            String?
+  phone            String?
+  password         String?
+  otpCode          String?
+  otpExpiry        DateTime?
+  otpVerified      Boolean   @default(false)
   resetToken       String?
   resetTokenExpiry DateTime?
-  role          Role      @default(PARENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  role             Role      @default(PARENT)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   accounts     Account[]
   sessions     Session[]
-  ownedSchools School[]   @relation("SchoolOwner")
-  inquiries    Inquiry[]  @relation("ParentInquiries")
+  ownedSchools School[]    @relation("SchoolOwner")
+  inquiries    Inquiry[]   @relation("ParentInquiries")
   favourites   Favourite[]
 }
 
@@ -142,6 +145,11 @@ model School {
   facilities SchoolFacility[]
   inquiries  Inquiry[]
   favourites Favourite[]
+
+  @@index([status, createdAt])
+  @@index([city, status])
+  @@index([board, status])
+  @@index([ownerId])
 }
 
 model SchoolImage {
@@ -182,6 +190,9 @@ model Inquiry {
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   parent User   @relation("ParentInquiries", fields: [parentId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([parentId])
 }
 
 model Favourite {
@@ -194,4 +205,5 @@ model Favourite {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([parentId, schoolId])
+  @@index([parentId])
 }

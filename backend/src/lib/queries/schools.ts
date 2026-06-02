@@ -1,6 +1,6 @@
 import type { Prisma } from "../../../generated/prisma";
 
-/** Fields required for public school listing cards */
+/** Fields shown on SchoolCard — no extras */
 export const schoolListSelect = {
   id: true,
   name: true,
@@ -19,14 +19,125 @@ export const schoolListSelect = {
   },
 } satisfies Prisma.SchoolSelect;
 
+/** Cursor pagination needs createdAt without exposing it in card payloads */
+export const schoolListSelectWithCreatedAt = {
+  ...schoolListSelect,
+  createdAt: true,
+} satisfies Prisma.SchoolSelect;
+
 export type SchoolListRecord = Prisma.SchoolGetPayload<{
   select: typeof schoolListSelect;
 }>;
 
-export function mapSchoolListItem(school: SchoolListRecord) {
-  const { _count, ...rest } = school;
+export type SchoolListRecordWithCreatedAt = Prisma.SchoolGetPayload<{
+  select: typeof schoolListSelectWithCreatedAt;
+}>;
+
+/** Minimal fields for autocomplete / search suggestions */
+export const schoolSearchSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  city: true,
+  board: true,
+  logoUrl: true,
+} satisfies Prisma.SchoolSelect;
+
+export type SchoolSearchRecord = Prisma.SchoolGetPayload<{
+  select: typeof schoolSearchSelect;
+}>;
+
+export const schoolListOrderBy = [
+  { createdAt: "desc" as const },
+  { id: "desc" as const },
+];
+
+export type SchoolCursorPayload = {
+  id: string;
+  createdAt: string;
+};
+
+export function encodeSchoolCursor(school: {
+  id: string;
+  createdAt: Date;
+}): string {
+  return Buffer.from(
+    JSON.stringify({
+      id: school.id,
+      createdAt: school.createdAt.toISOString(),
+    })
+  ).toString("base64url");
+}
+
+export function decodeSchoolCursor(cursor: string): SchoolCursorPayload | null {
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8")
+    ) as SchoolCursorPayload;
+
+    if (!parsed.id || !parsed.createdAt) {
+      return null;
+    }
+
+    const createdAt = new Date(parsed.createdAt);
+    if (Number.isNaN(createdAt.getTime())) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function buildSchoolCursorWhere(
+  cursor: SchoolCursorPayload
+): Prisma.SchoolWhereInput {
+  const createdAt = new Date(cursor.createdAt);
+
   return {
-    ...rest,
+    OR: [
+      { createdAt: { lt: createdAt } },
+      {
+        createdAt,
+        id: { lt: cursor.id },
+      },
+    ],
+  };
+}
+
+export function mapSchoolListItem(
+  school: SchoolListRecord | SchoolListRecordWithCreatedAt
+) {
+  const {
+    _count,
+    id,
+    name,
+    slug,
+    city,
+    state,
+    board,
+    schoolType,
+    medium,
+    classesFrom,
+    classesTo,
+    tuitionFeeMonthly,
+    logoUrl,
+  } = school;
+
+  return {
+    id,
+    name,
+    slug,
+    city,
+    state,
+    board,
+    schoolType,
+    medium,
+    classesFrom,
+    classesTo,
+    tuitionFeeMonthly,
+    logoUrl,
     facilitiesCount: _count.facilities,
   };
 }
@@ -44,6 +155,42 @@ export function buildSchoolSearchWhere(
       { state: { contains: term, mode: "insensitive" } },
     ],
   };
+}
+
+export function buildSchoolListWhere(filters: {
+  status?: unknown;
+  search?: string;
+  city?: string;
+  board?: string;
+  schoolType?: string;
+  medium?: string;
+}): Prisma.SchoolWhereInput {
+  const where: Prisma.SchoolWhereInput = {
+    status: (filters.status as Prisma.EnumSchoolStatusFilter["equals"]) || "APPROVED",
+  };
+
+  const searchWhere = buildSchoolSearchWhere(filters.search);
+  if (searchWhere?.OR) {
+    where.OR = searchWhere.OR;
+  }
+
+  if (filters.city) {
+    where.city = { contains: filters.city, mode: "insensitive" };
+  }
+
+  if (filters.board) {
+    where.board = filters.board as Prisma.EnumBoardTypeFilter["equals"];
+  }
+
+  if (filters.schoolType) {
+    where.schoolType = filters.schoolType as Prisma.EnumSchoolTypeFilter["equals"];
+  }
+
+  if (filters.medium) {
+    where.medium = filters.medium as Prisma.EnumMediumTypeFilter["equals"];
+  }
+
+  return where;
 }
 
 /** Public school detail — necessary relations only */

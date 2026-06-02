@@ -1,15 +1,7 @@
-import prisma from "@/lib/prisma";
+import { getOwnedSchool } from "@/lib/school/data";
 
 export async function getSchoolGalleryImages(ownerId: string) {
-  const school = await prisma.school.findFirst({
-    where: { ownerId },
-    select: {
-      images: {
-        orderBy: { createdAt: "desc" },
-        select: { id: true, url: true, caption: true },
-      },
-    },
-  });
-
+  void ownerId;
+  const school = await getOwnedSchool();
   return school?.images ?? [];
 }

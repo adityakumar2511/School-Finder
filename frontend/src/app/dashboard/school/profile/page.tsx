@@ -13,7 +13,7 @@ export default async function SchoolProfilePage() {
   const ownerId = session!.user!.id;
 
   const [school, galleryImages] = await Promise.all([
-    getOwnedSchool(ownerId),
+    getOwnedSchool(),
     getSchoolGalleryImages(ownerId),
   ]);
 

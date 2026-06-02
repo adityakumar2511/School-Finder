@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { Badge } from "@/components/ui/badge";
 
 const VARIANT: Record<Role, "default" | "secondary" | "outline"> = {

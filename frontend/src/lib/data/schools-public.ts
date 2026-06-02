@@ -29,7 +29,10 @@ export async function fetchSchoolList(
 
   try {
     const res = await fetch(`${API_BASE}/api/schools?${query.toString()}`, {
-      next: { revalidate: options.revalidate ?? 60 },
+      next: {
+        revalidate: options.revalidate ?? 60,
+        tags: ["schools"],
+      },
     });
 
     if (!res.ok) {
@@ -69,7 +72,10 @@ export async function fetchSchoolBySlug(slug: string) {
 
   try {
     const res = await fetch(`${API_BASE}/api/schools/${slug}`, {
-      next: { revalidate: 120 },
+      next: {
+        revalidate: 3600,
+        tags: ["schools"],
+      },
     });
 
     if (!res.ok) return null;

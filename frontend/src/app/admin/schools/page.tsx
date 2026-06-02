@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import type { SchoolStatus } from "@prisma/client";
+import type { SchoolStatus } from "@/lib/types/database";
 import { getAdminSchoolsList } from "@/lib/admin/data";
 import AdminSearchBar from "@/components/admin/AdminSearchBar";
 import AdminPagination from "@/components/admin/AdminPagination";
@@ -33,7 +33,7 @@ type SearchParams = Promise<{
   page?: string;
 }>;
 
-function formatDate(date: Date) {
+function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",

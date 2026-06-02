@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-function formatDate(date: Date) {
+function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -35,9 +35,7 @@ function formatDate(date: Date) {
 
 export default async function SchoolDashboardPage() {
   const session = await auth();
-  const ownerId = session!.user!.id;
-
-  const school = await getOwnedSchool(ownerId);
+  const school = await getOwnedSchool();
 
   if (!school) {
     return (

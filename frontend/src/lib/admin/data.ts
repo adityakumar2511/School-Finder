@@ -1,5 +1,5 @@
-import type { InquiryStatus, Role, SchoolStatus } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import type { InquiryStatus, Role, SchoolStatus } from "@/lib/types/database";
+import { adminFetch } from "@/lib/api/server";
 import { ACCOUNT_DISABLED_PHONE } from "./constants";
 
 export type AdminStats = {
@@ -12,75 +12,88 @@ export type AdminStats = {
 };
 
 export async function getAdminStats(): Promise<AdminStats> {
-  const [
-    totalSchools,
-    pendingSchools,
-    approvedSchools,
-    rejectedSchools,
-    totalUsers,
-    totalInquiries,
-  ] = await Promise.all([
-    prisma.school.count(),
-    prisma.school.count({ where: { status: "PENDING" } }),
-    prisma.school.count({ where: { status: "APPROVED" } }),
-    prisma.school.count({ where: { status: "REJECTED" } }),
-    prisma.user.count(),
-    prisma.inquiry.count(),
-  ]);
+  const { ok, data } = await adminFetch<{ stats?: AdminStats }>("/api/admin/stats");
 
-  return {
-    totalSchools,
-    pendingSchools,
-    approvedSchools,
-    rejectedSchools,
-    totalUsers,
-    totalInquiries,
-  };
+  if (!ok || !data?.stats) {
+    return {
+      totalSchools: 0,
+      pendingSchools: 0,
+      approvedSchools: 0,
+      rejectedSchools: 0,
+      totalUsers: 0,
+      totalInquiries: 0,
+    };
+  }
+
+  return data.stats;
 }
 
 export async function getRecentSchoolRegistrations(limit = 5) {
-  return prisma.school.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      name: true,
-      city: true,
-      status: true,
-      createdAt: true,
-      owner: { select: { name: true, email: true } },
-    },
-  });
+  const { ok, data } = await adminFetch<{
+    data?: Array<{
+      id: string;
+      name: string;
+      city: string;
+      status: SchoolStatus;
+      createdAt: string;
+      owner: { name: string | null; email: string };
+    }>;
+    schools?: Array<{
+      id: string;
+      name: string;
+      city: string;
+      status: SchoolStatus;
+      createdAt: string;
+      owner: { name: string | null; email: string };
+    }>;
+  }>(`/api/admin/schools?page=1&limit=${limit}`);
+
+  return ok && data?.schools ? data.schools : ok && data?.data ? data.data : [];
 }
 
 export async function getRecentInquiries(limit = 5) {
-  return prisma.inquiry.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      message: true,
-      status: true,
-      createdAt: true,
-      school: { select: { name: true } },
-      parent: { select: { name: true, email: true } },
-    },
-  });
+  const { ok, data } = await adminFetch<{
+    data?: Array<{
+      id: string;
+      message: string;
+      status: InquiryStatus;
+      createdAt: string;
+      school: { name: string };
+      parent: { name: string | null; email: string };
+    }>;
+    inquiries?: Array<{
+      id: string;
+      message: string;
+      status: InquiryStatus;
+      createdAt: string;
+      school: { name: string };
+      parent: { name: string | null; email: string };
+    }>;
+  }>(`/api/admin/inquiries?page=1&limit=${limit}`);
+
+  return ok && data?.inquiries ? data.inquiries : ok && data?.data ? data.data : [];
 }
 
 export async function getRecentModerationActivity(limit = 5) {
-  return prisma.school.findMany({
-    where: { status: { in: ["APPROVED", "REJECTED"] } },
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      rejectionReason: true,
-      updatedAt: true,
-    },
-  });
+  const { ok, data } = await adminFetch<{
+    data?: Array<{
+      id: string;
+      name: string;
+      status: SchoolStatus;
+      rejectionReason: string | null;
+      updatedAt?: string;
+      createdAt: string;
+    }>;
+  }>(`/api/admin/schools?page=1&limit=${limit}`);
+
+  if (!ok || !data?.data) return [];
+
+  return data.data
+    .filter((school) => school.status === "APPROVED" || school.status === "REJECTED")
+    .map((school) => ({
+      ...school,
+      updatedAt: school.updatedAt ?? school.createdAt,
+    }));
 }
 
 export type AdminSchoolRow = {
@@ -90,7 +103,7 @@ export type AdminSchoolRow = {
   city: string;
   board: string;
   status: SchoolStatus;
-  createdAt: Date;
+  createdAt: string;
   rejectionReason: string | null;
   owner: { name: string | null; email: string };
 };
@@ -103,57 +116,37 @@ export async function getAdminSchoolsList(options: {
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
-  const skip = (page - 1) * limit;
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
 
-  const where: {
-    status?: SchoolStatus;
-    OR?: Array<{
-      name?: { contains: string; mode: "insensitive" };
-      city?: { contains: string; mode: "insensitive" };
-      owner?: { email?: { contains: string; mode: "insensitive" } };
-    }>;
-  } = {};
+  if (options.status) params.set("status", options.status);
+  if (options.search?.trim()) params.set("search", options.search.trim());
 
-  if (options.status) {
-    where.status = options.status;
+  const { ok, data } = await adminFetch<{
+    data?: AdminSchoolRow[];
+    schools?: AdminSchoolRow[];
+    pagination?: { total: number; page: number; limit: number; totalPages: number };
+  }>(`/api/admin/schools?${params.toString()}`);
+
+  if (!ok || !data) {
+    return { schools: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  const term = options.search?.trim();
-  if (term) {
-    where.OR = [
-      { name: { contains: term, mode: "insensitive" } },
-      { city: { contains: term, mode: "insensitive" } },
-      { owner: { email: { contains: term, mode: "insensitive" } } },
-    ];
-  }
-
-  const [schools, total] = await Promise.all([
-    prisma.school.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        city: true,
-        board: true,
-        status: true,
-        createdAt: true,
-        rejectionReason: true,
-        owner: { select: { name: true, email: true } },
-      },
-    }),
-    prisma.school.count({ where }),
-  ]);
-
-  return {
-    schools,
-    total,
+  const pagination = data.pagination ?? {
+    total: 0,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages: 1,
+  };
+
+  return {
+    schools: data.schools ?? data.data ?? [],
+    total: pagination.total,
+    page: pagination.page,
+    limit: pagination.limit,
+    totalPages: pagination.totalPages,
   };
 }
 
@@ -163,7 +156,7 @@ export type AdminUserRow = {
   email: string;
   role: Role;
   phone: string | null;
-  createdAt: Date;
+  createdAt: string;
 };
 
 export async function getAdminUsersList(options: {
@@ -173,42 +166,36 @@ export async function getAdminUsersList(options: {
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
-  const skip = (page - 1) * limit;
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
 
-  const term = options.search?.trim();
-  const where = term
-    ? {
-        OR: [
-          { name: { contains: term, mode: "insensitive" as const } },
-          { email: { contains: term, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  if (options.search?.trim()) params.set("search", options.search.trim());
 
-  const [users, total] = await Promise.all([
-    prisma.user.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        phone: true,
-        createdAt: true,
-      },
-    }),
-    prisma.user.count({ where }),
-  ]);
+  const { ok, data } = await adminFetch<{
+    data?: AdminUserRow[];
+    users?: AdminUserRow[];
+    pagination?: { total: number; page: number; limit: number; totalPages: number };
+  }>(`/api/admin/users?${params.toString()}`);
 
-  return {
-    users,
-    total,
+  if (!ok || !data) {
+    return { users: [], total: 0, page, limit, totalPages: 1 };
+  }
+
+  const pagination = data.pagination ?? {
+    total: 0,
     page,
     limit,
-    totalPages: Math.ceil(total / limit) || 1,
+    totalPages: 1,
+  };
+
+  return {
+    users: data.users ?? data.data ?? [],
+    total: pagination.total,
+    page: pagination.page,
+    limit: pagination.limit,
+    totalPages: pagination.totalPages,
   };
 }
 
@@ -216,7 +203,7 @@ export type AdminInquiryRow = {
   id: string;
   message: string;
   status: InquiryStatus;
-  createdAt: Date;
+  createdAt: string;
   school: { id: string; name: string };
   parent: { name: string | null; email: string };
 };
@@ -229,53 +216,38 @@ export async function getAdminInquiriesList(options: {
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
-  const skip = (page - 1) * limit;
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
 
-  const where: {
-    status?: InquiryStatus;
-    OR?: Array<{
-      message?: { contains: string; mode: "insensitive" };
-      school?: { name?: { contains: string; mode: "insensitive" } };
-      parent?: {
-        name?: { contains: string; mode: "insensitive" };
-        email?: { contains: string; mode: "insensitive" };
-      };
-    }>;
-  } = {};
+  if (options.status) params.set("status", options.status);
+  if (options.search?.trim()) params.set("search", options.search.trim());
 
-  if (options.status) {
-    where.status = options.status;
+  const { ok, data } = await adminFetch<{
+    data?: AdminInquiryRow[];
+    inquiries?: AdminInquiryRow[];
+    pagination?: { total: number; page: number; limit: number; totalPages: number };
+  }>(`/api/admin/inquiries?${params.toString()}`);
+
+  if (!ok || !data) {
+    return { inquiries: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  const term = options.search?.trim();
-  if (term) {
-    where.OR = [
-      { message: { contains: term, mode: "insensitive" } },
-      { school: { name: { contains: term, mode: "insensitive" } } },
-      { parent: { name: { contains: term, mode: "insensitive" } } },
-      { parent: { email: { contains: term, mode: "insensitive" } } },
-    ];
-  }
+  const pagination = data.pagination ?? {
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
 
-  const [inquiries, total] = await Promise.all([
-    prisma.inquiry.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        message: true,
-        status: true,
-        createdAt: true,
-        school: { select: { id: true, name: true } },
-        parent: { select: { name: true, email: true } },
-      },
-    }),
-    prisma.inquiry.count({ where }),
-  ]);
-
-  return { inquiries, total, page, limit, totalPages: Math.ceil(total / limit) || 1 };
+  return {
+    inquiries: data.inquiries ?? data.data ?? [],
+    total: pagination.total,
+    page: pagination.page,
+    limit: pagination.limit,
+    totalPages: pagination.totalPages,
+  };
 }
 
 export { ACCOUNT_DISABLED_PHONE };

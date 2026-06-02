@@ -61,15 +61,9 @@ app.use("/api/favourites", favourite_routes_1.default);
 app.use(errorHandler_1.notFoundHandler);
 app.use(errorHandler_1.errorHandler);
 const PORT = Number(process.env.PORT) || 4000;
-const host = (0, production_1.getListenHost)();
 (0, production_1.logProductionWarnings)();
-const server = app.listen(PORT, host, () => {
-    if ((0, production_1.isProduction)()) {
-        console.log(`SchoolFinder API listening on port ${PORT} (production)`);
-    }
-    else {
-        console.log(`Server running on http://localhost:${PORT}`);
-    }
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
 });
 server.on("error", (error) => {
     console.error("[Server] Failed to start:", error);

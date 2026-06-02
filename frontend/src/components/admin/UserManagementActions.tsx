@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {

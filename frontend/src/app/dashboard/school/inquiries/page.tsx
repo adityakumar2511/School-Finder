@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import type { InquiryStatus } from "@prisma/client";
+import type { InquiryStatus } from "@/lib/types/database";
 import { auth } from "@/lib/auth";
 import { getOwnedSchool, getSchoolInquiriesList } from "@/lib/school/data";
 import InquiryFilters from "@/components/school/InquiryFilters";
@@ -28,7 +28,7 @@ type SearchParams = Promise<{
   q?: string;
 }>;
 
-function formatDate(date: Date) {
+function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -51,7 +51,7 @@ async function InquiriesContent({
       : undefined;
   const search = params.q?.trim();
 
-  const school = await getOwnedSchool(session!.user!.id);
+  const school = await getOwnedSchool();
 
   if (!school) {
     return (

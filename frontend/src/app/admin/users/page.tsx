@@ -22,7 +22,7 @@ const PAGE_SIZE = 10;
 
 type SearchParams = Promise<{ q?: string; page?: string }>;
 
-function formatDate(date: Date) {
+function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",

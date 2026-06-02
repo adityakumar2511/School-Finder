@@ -13,6 +13,7 @@ router.post("/register-parent", security_1.authRateLimiter, bruteForce_1.bruteFo
 router.post("/register-school", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.registerSchoolSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.registerSchool));
 router.post("/login", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.loginSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.login));
 router.post("/forgot-password", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.forgotPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.forgotPassword));
+router.post("/verify-otp", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.verifyOtpSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.verifyOtp));
 router.post("/reset-password", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.resetPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.resetPassword));
 router.get("/me", auth_1.auth, (0, asyncHandler_1.asyncHandler)(auth_controller_1.getMe));
 exports.default = router;

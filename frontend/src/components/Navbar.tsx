@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AUTH_ROUTES } from "@/lib/auth-config";
 import { performLogout } from "@/lib/logout";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 
 export default function Navbar() {
   const pathname = usePathname();

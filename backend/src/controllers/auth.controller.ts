@@ -1,10 +1,9 @@
-import { Request, Response } from "express";
 import crypto from "crypto";
+import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt, { type SignOptions } from "jsonwebtoken";
-import nodemailer from "nodemailer";
 import prisma from "../lib/prisma";
-import { AuthRequest } from "../middleware/auth";
+import { sendPasswordResetEmail } from "../lib/mailer";
+import { AuthRequest, blacklistToken, signAccessToken } from "../middleware/auth";
 import { AppError } from "../utils/AppError";
 import {
   assertLoginAllowed,
@@ -17,9 +16,8 @@ import type {
   RegisterParentInput,
   RegisterSchoolInput,
   ResetPasswordInput,
+  VerifyOtpInput,
 } from "../validators/auth.validator";
-
-const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ?? "7d") as SignOptions["expiresIn"];
 
 type SchoolDelegate = Pick<typeof prisma, "school">;
 
@@ -77,11 +75,11 @@ export const registerParent = async (req: Request, res: Response) => {
     },
   });
 
-  const token = jwt.sign(
-    { id: user.id, role: user.role, email: user.email },
-    process.env.JWT_SECRET!,
-    { expiresIn: jwtExpiresIn }
-  );
+  const token = signAccessToken({
+    id: user.id,
+    role: user.role,
+    email: user.email,
+  });
 
   res.status(201).json({
     message: "Account created successfully",
@@ -177,11 +175,11 @@ export const registerSchool = async (req: Request, res: Response) => {
     return { user, school };
   });
 
-  const token = jwt.sign(
-    { id: result.user.id, role: result.user.role, email: result.user.email },
-    process.env.JWT_SECRET!,
-    { expiresIn: jwtExpiresIn }
-  );
+  const token = signAccessToken({
+    id: result.user.id,
+    role: result.user.role,
+    email: result.user.email,
+  });
 
   res.status(201).json({
     message: "Registration successful. Your school will be live after admin approval.",
@@ -243,11 +241,11 @@ export const login = async (req: Request, res: Response) => {
 
   recordSuccessfulLogin(req, email);
 
-  const token = jwt.sign(
-    { id: user.id, role: user.role, email: user.email },
-    process.env.JWT_SECRET!,
-    { expiresIn: jwtExpiresIn }
-  );
+  const token = signAccessToken({
+    id: user.id,
+    role: user.role,
+    email: user.email,
+  });
 
   res.json({
     token,
@@ -261,33 +259,24 @@ export const login = async (req: Request, res: Response) => {
   });
 };
 
-const getFrontendUrl = (): string =>
-  (process.env.FRONTEND_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const getBcryptRounds = (): number =>
+  parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
 
-const sendPasswordResetEmail = async (to: string, resetLink: string): Promise<void> => {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
 
-  const from = process.env.SMTP_FROM ?? process.env.SMTP_USER;
+const hashResetToken = (token: string): string =>
+  crypto.createHash("sha256").update(token).digest("hex");
 
-  await transporter.sendMail({
-    from,
-    to,
-    subject: "Reset your SchoolFinder password",
-    text: `You requested a password reset.
-Click the link below to reset your password.
-This link expires in 1 hour.
-${resetLink}
-If you did not request this, ignore this email.`,
-  });
-};
+const clearResetTokenFields = {
+  resetToken: null,
+  resetTokenExpiry: null,
+} as const;
+
+const clearOtpFields = {
+  otpCode: null,
+  otpExpiry: null,
+  otpVerified: false,
+} as const;
 
 // POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response) => {
@@ -295,82 +284,139 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (user) {
-    const plainToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = await bcrypt.hash(
-      plainToken,
-      parseInt(process.env.BCRYPT_ROUNDS || "12")
-    );
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetToken: hashedToken,
-        resetTokenExpiry,
-      },
+  if (!user) {
+    res.status(200).json({
+      success: true,
+      message: "If this email is registered, a reset link has been sent.",
     });
-
-    const resetLink = `${getFrontendUrl()}/reset-password?token=${encodeURIComponent(plainToken)}`;
-
-    try {
-      await sendPasswordResetEmail(user.email, resetLink);
-    } catch {
-      // Do not reveal whether the email exists or whether sending failed
-    }
+    return;
   }
 
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const hashedToken = hashResetToken(rawToken);
+  const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      resetToken: hashedToken,
+      resetTokenExpiry,
+    },
+  });
+
+  const frontendUrl = (process.env.FRONTEND_URL ?? "http://localhost:3000").replace(
+    /\/$/,
+    ""
+  );
+  const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+  await sendPasswordResetEmail(user.email, resetLink, user.name ?? undefined);
+
   res.status(200).json({
-    message: "If this email exists, a reset link has been sent.",
+    success: true,
+    message: "If this email is registered, a reset link has been sent.",
+  });
+};
+
+// POST /api/auth/verify-otp
+export const verifyOtp = async (req: Request, res: Response) => {
+  const { email, otp } = req.body as VerifyOtpInput;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || !user.otpCode) {
+    throw new AppError(400, "Invalid or expired OTP.");
+  }
+
+  if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: clearOtpFields,
+    });
+    throw new AppError(400, "OTP has expired.");
+  }
+
+  const isValid = await bcrypt.compare(otp, user.otpCode);
+
+  if (!isValid) {
+    throw new AppError(400, "Invalid OTP.");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { otpVerified: true },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "OTP verified.",
   });
 };
 
 // POST /api/auth/reset-password
 export const resetPassword = async (req: Request, res: Response) => {
-  const { token, newPassword } = req.body as ResetPasswordInput;
+  const { token, newPassword, confirmPassword } = req.body as ResetPasswordInput;
 
-  const candidates = await prisma.user.findMany({
-    where: {
-      resetToken: { not: null },
-      resetTokenExpiry: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      resetToken: true,
-    },
+  if (!token) {
+    throw new AppError(400, "Invalid or expired reset link.");
+  }
+
+  const hashedToken = hashResetToken(token);
+
+  const user = await prisma.user.findFirst({
+    where: { resetToken: hashedToken },
   });
 
-  let matchedUserId: string | null = null;
-
-  for (const candidate of candidates) {
-    if (!candidate.resetToken) continue;
-    const isMatch = await bcrypt.compare(token, candidate.resetToken);
-    if (isMatch) {
-      matchedUserId = candidate.id;
-      break;
-    }
+  if (!user || !user.resetToken) {
+    throw new AppError(400, "Invalid or expired reset link.");
   }
 
-  if (!matchedUserId) {
-    res.status(400).json({ message: "Invalid or expired reset token." });
-    return;
+  if (!user.resetTokenExpiry || user.resetTokenExpiry.getTime() <= Date.now()) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: clearResetTokenFields,
+    });
+    throw new AppError(400, "Reset link has expired.");
   }
 
-  const hashedPassword = await bcrypt.hash(
-    newPassword,
-    parseInt(process.env.BCRYPT_ROUNDS || "12")
-  );
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    throw new AppError(400, "Passwords do not match.");
+  }
+
+  if (newPassword.length < 8) {
+    throw new AppError(400, "Password must be at least 8 characters.");
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, getBcryptRounds());
 
   await prisma.user.update({
-    where: { id: matchedUserId },
+    where: { id: user.id },
     data: {
       password: hashedPassword,
-      resetToken: null,
-      resetTokenExpiry: null,
+      ...clearResetTokenFields,
     },
   });
 
-  res.json({ message: "Password reset successful." });
+  res.status(200).json({
+    success: true,
+    message: "Password reset successfully.",
+  });
+};
+
+// POST /api/auth/logout
+export const logout = async (req: AuthRequest, res: Response) => {
+  const authHeader = req.headers.authorization;
+  const token =
+    authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+
+  if (token) {
+    blacklistToken(token);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully.",
+  });
 };
 
 // GET /api/auth/me
@@ -393,4 +439,104 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   }
 
   res.json(user);
+};
+
+// PATCH /api/auth/me
+export const updateMe = async (req: AuthRequest, res: Response) => {
+  const { name, phone, image } = req.body as {
+    name?: string;
+    phone?: string | null;
+    image?: string | null;
+  };
+
+  if (name !== undefined && typeof name === "string" && name.trim().length < 1) {
+    throw new AppError(400, "Name is required");
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user!.id },
+    data: {
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(image !== undefined ? { image } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      createdAt: true,
+    },
+  });
+
+  res.json({ success: true, data: user });
+};
+
+// POST /api/auth/google-sync
+export const syncGoogleUser = async (req: Request, res: Response) => {
+  const { email, name, image } = req.body as {
+    email?: string;
+    name?: string | null;
+    image?: string | null;
+  };
+
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new AppError(400, "Email is required");
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (existing && existing.role !== "PARENT") {
+    throw new AppError(403, "Unauthorized account type");
+  }
+
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          ...(name ? { name } : {}),
+          ...(image ? { image } : {}),
+          emailVerified: existing.emailVerified ?? new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          image: true,
+          phone: true,
+          createdAt: true,
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          name: name ?? null,
+          image: image ?? null,
+          role: "PARENT",
+          emailVerified: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          image: true,
+          phone: true,
+          createdAt: true,
+        },
+      });
+
+  const token = signAccessToken({
+    id: user.id,
+    role: user.role,
+    email: user.email,
+  });
+
+  res.json({ user, token });
 };

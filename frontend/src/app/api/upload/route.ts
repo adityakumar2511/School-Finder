@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/types/database";
 import { auth } from "@/lib/auth";
 import { uploadImage } from "@/lib/cloudinary";
 import {
