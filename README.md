@@ -2,12 +2,12 @@
 
 A full-stack school discovery and inquiry platform built for **Tier-2 and Tier-3 cities in India**. Parents can search and compare schools; school administrators manage listings and inquiries; platform administrators verify listings and maintain quality.
 
-This repository is a **monorepo** with a Next.js frontend, Express API, and shared PostgreSQL database (Neon).
+This repository is a **monorepo** with a Next.js frontend and an Express API. **PostgreSQL is accessed only by the backend** — the frontend has no database driver or Prisma dependency.
 
 | Layer | Technology | Port (local) |
 |-------|------------|--------------|
-| Frontend | Next.js 14, NextAuth v5 | `3000` |
-| Backend | Express.js, JWT | `4000` |
+| Frontend | Next.js 14, NextAuth v5 (JWT) | `3000` |
+| Backend | Express.js, JWT, Prisma | `4000` |
 | Database | PostgreSQL (Neon) | — |
 | Media | Cloudinary | — |
 
@@ -64,47 +64,53 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Frontend (Vercel)                                               │
-│  Next.js 14 App Router · NextAuth · Prisma (server reads)        │
-│  Public SEO pages · Dashboards · Upload route → Cloudinary        │
+│  Next.js 14 App Router · NextAuth v5 (JWT only, no DB adapter)   │
+│  backendFetch / adminFetch / BFF proxy routes → Express API      │
+│  Upload route → Cloudinary (server-side only)                    │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ HTTPS
                                 │ NEXT_PUBLIC_API_URL
+                                │ Authorization: Bearer <JWT>
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Backend API (Render / Railway)                                  │
-│  Express · JWT · Zod validation · Rate limits · Helmet           │
+│  Express · JWT (HS256) · Prisma · Zod · Rate limits · Helmet     │
+│  Single source of truth for all database operations              │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Neon PostgreSQL (shared)                                        │
-│  Users · Schools · Inquiries · Favourites · NextAuth tables      │
+│  Neon PostgreSQL                                                 │
+│  Schema: backend/prisma/schema.prisma                            │
+│  Users · Schools · Inquiries · Favourites · OAuth tables         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Frontend
 
 - **Next.js 14** (App Router) for SSR, SEO, and role-based dashboards
-- **NextAuth v5** for parent Google/credentials sessions (JWT strategy)
-- **Prisma** on the server for dashboard data and sitemap generation
-- Calls the **Express API** for public listings, admin JWT login, and some mutations
+- **NextAuth v5** with **JWT strategy only** — no Prisma adapter, no `DATABASE_URL`
+- All dashboard and authenticated data fetched via **REST API** (`backendFetch`, `adminFetch`, BFF proxies)
+- **Cloudinary** uploads handled by a Next.js route handler (`POST /api/upload`)
 
 ### Backend
 
-- **Express.js** REST API with modular routes and controllers
-- **JWT** for API authentication (especially admin and mobile-ready clients)
-- **Prisma** with selective queries and pagination defaults
+- **Express.js** REST API — **single source of truth** for the database
+- **Prisma** owns the schema at `backend/prisma/schema.prisma`
+- **JWT** for API authentication (Bearer tokens, role enforcement)
+- In-memory response cache with TTL; invalidation on school mutations
 
 ### Database
 
 - **Neon PostgreSQL** (serverless-friendly, SSL)
-- Schema is maintained from `frontend/prisma/schema.prisma`
-- Backend runs `prisma generate` only; use `db push` from the frontend project
+- Schema and migrations managed entirely from **`backend/`**
+- Frontend uses local TypeScript enums in `src/lib/types/database.ts` (no generated client)
 
 ### Media
 
 - **Cloudinary** for logos, gallery images, and profile photos
-- Uploads validated server-side (MIME, size, magic bytes); secrets never exposed to the browser
+- Frontend upload route validates MIME, size, and magic bytes; secrets never exposed to the browser
+- Backend stores image URLs via JSON body on school/profile endpoints
 
 ---
 
@@ -114,26 +120,28 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 .
 ├── README.md                 # This file — ecosystem overview
 ├── frontend/                 # Next.js application (UI, auth, SEO)
-│   ├── src/app/              # App Router pages and API routes
+│   ├── src/app/              # App Router pages and BFF API routes
 │   ├── src/components/       # UI and feature components
-│   ├── src/lib/              # Auth, data fetchers, SEO, uploads
-│   ├── prisma/schema.prisma  # Database schema (source of truth)
+│   ├── src/lib/              # Auth, API clients, data fetchers, SEO
 │   ├── Frontend.md           # Frontend architecture documentation
 │   └── vercel.json           # Vercel build configuration
 │
-└── backend/                  # Express REST API
+└── backend/                  # Express REST API + database owner
+    ├── prisma/
+    │   ├── schema.prisma     # Database schema (source of truth)
+    │   └── migrations/       # Prisma migration history
+    ├── generated/prisma/     # Generated Prisma client
     ├── src/controllers/      # Business logic
     ├── src/routes/           # HTTP route definitions
     ├── src/middleware/       # Auth, security, validation
-    ├── prisma/               # Schema mirror + client generate
     ├── Backend.md            # Backend architecture documentation
     └── render.yaml           # Render deployment blueprint
 ```
 
 | Folder | Responsibility |
 |--------|----------------|
-| `frontend/` | User interface, NextAuth, middleware route protection, SEO, image upload route, Prisma schema ownership |
-| `backend/` | Public and protected REST APIs, JWT issuance, admin moderation, inquiry and favourite APIs |
+| `frontend/` | User interface, NextAuth sessions, middleware route protection, SEO, image upload route, BFF proxies to backend |
+| `backend/` | All REST APIs, JWT issuance, Prisma/database access, admin moderation, inquiries, favourites, parent APIs |
 
 ---
 
@@ -143,16 +151,16 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 
 | Technology | Purpose |
 |------------|---------|
-| Next.js 14 | App Router, SSR, API routes |
+| Next.js 14 | App Router, SSR, BFF API routes |
 | TypeScript | Type safety |
 | Tailwind CSS | Styling and design tokens |
 | shadcn/ui | Accessible UI primitives |
-| NextAuth v5 | Authentication (Google + credentials) |
-| Prisma | Database access on the server |
-| Zod | Form and validation schemas |
-| React Hook Form | Client forms |
+| NextAuth v5 | Authentication (Google + credentials, JWT strategy) |
+| Zod + React Hook Form | Form and validation schemas |
 | Cloudinary | Image delivery (via server upload route) |
 | Framer Motion | Subtle UI motion (respects reduced motion) |
+
+**Not used on frontend:** Prisma, `@prisma/client`, database drivers.
 
 ### Backend
 
@@ -160,14 +168,15 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 |------------|---------|
 | Express.js 5 | HTTP API |
 | TypeScript | Type safety |
-| Prisma 7 | ORM (`generated/prisma` client) |
-| JWT | API token auth |
+| Prisma 5 | ORM (`generated/prisma` client, `@prisma/adapter-pg`) |
+| JWT (`jsonwebtoken`) | API token auth (HS256, issuer `schoolfinder-api`) |
 | Zod | Request validation |
-| Helmet | Security headers |
-| express-rate-limit | Rate limiting |
+| Helmet | Security headers (CSP, HSTS) |
+| express-rate-limit | General, auth, forgot/reset rate limiting |
 | bcryptjs | Password hashing |
+| Resend | Password reset and OTP emails |
 | Cloudinary | Server-side image utilities |
-| Multer | In-memory upload parsing |
+| Multer | In-memory upload parsing (available, not mounted on routes) |
 
 ### Database
 
@@ -181,6 +190,15 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 
 Authentication is **split by role**. There is no single shared login page for all users.
 
+### Two-Layer Token Model
+
+| Layer | Purpose | Lifetime |
+|-------|---------|----------|
+| **NextAuth JWT** | Frontend session for middleware and UI | 30 minutes |
+| **Backend Bearer JWT** | API authorization on Express | 7 days (configurable) |
+
+Parents receive a backend token on login (`backendAccessToken` in session). School admins and admins receive tokens from backend login; admins also store JWT in HTTP-only cookie `sf_admin_token`. When no backend token is in session, the frontend can mint a short-lived compatible JWT using shared `JWT_SECRET`.
+
 ### Parent (`PARENT`)
 
 | Route | Purpose |
@@ -190,7 +208,7 @@ Authentication is **split by role**. There is no single shared login page for al
 | `/forgot-password` | Request a password reset email |
 | `/reset-password` | Set a new password using a reset token |
 
-Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (optional `expectedRole: "PARENT"`), `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`.
+Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`.
 
 ### School administrator (`SCHOOL_ADMIN`)
 
@@ -199,7 +217,7 @@ Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (optional `exp
 | `/school-login` | School admin sign-in |
 | `/school-register` | Register school + owner (status `PENDING` until approved) |
 
-Backend: `POST /api/auth/register-school`, `POST /api/auth/login` with `expectedRole: "SCHOOL_ADMIN"`. Password reset uses the same forgot/reset endpoints as parents (`/forgot-password` linked from `/school-login`).
+Backend: `POST /api/auth/register-school`, `POST /api/auth/login` with `expectedRole: "SCHOOL_ADMIN"`.
 
 ### Platform administrator (`ADMIN`)
 
@@ -207,14 +225,14 @@ Backend: `POST /api/auth/register-school`, `POST /api/auth/login` with `expected
 |-------|---------|
 | `/admin-login` | Hidden route (not linked in public navigation) |
 
-Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie → NextAuth session sync for middleware.
+Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie `sf_admin_token` → NextAuth session sync for middleware.
 
 ### Role Separation and Protection
 
-- **Middleware** (`frontend/middleware.ts`) enforces role-based redirects using JWT role from NextAuth
+- **Middleware** (`frontend/middleware.ts`) enforces role-based redirects using NextAuth JWT role
 - **Backend** uses `auth` + `requireRole()` on protected routes
-- Cross-role access to another dashboard redirects to the correct home route
-- Unauthenticated dashboard access redirects to the role-specific login page with a `callbackUrl` query parameter; after sign-in, users return to the page they originally requested when safe
+- Cross-role access redirects to the correct home route
+- Unauthenticated dashboard access redirects to the role-specific login with `callbackUrl`
 
 | Role | Default home | Unauthenticated dashboard redirect |
 |------|----------------|-------------------------------------|
@@ -222,7 +240,7 @@ Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie →
 | `SCHOOL_ADMIN` | `/dashboard/school` | `/school-login?callbackUrl=…` |
 | `ADMIN` | `/admin` | `/admin-login?callbackUrl=…` |
 
-**Session:** JWT max age is 30 minutes. `SessionHeartbeat` refreshes the session every 10 minutes while the tab is open.
+**Session:** NextAuth JWT max age is 30 minutes. `SessionHeartbeat` refreshes the session every 10 minutes while the tab is open.
 
 ---
 
@@ -232,9 +250,9 @@ Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie →
 
 - Search and filter schools (city, board, medium, school type, text search)
 - View school detail pages (fees, facilities, gallery, contact)
-- Save schools to **favourites** (including bookmark toggle on school detail pages)
-- Send **inquiries** to approved schools (modal on school detail; view sent inquiries at `/parent/inquiries`)
-- **Parent dashboard**: saved schools, profile, recently viewed, sent inquiries with status
+- Save schools to **favourites** (toggle on school detail pages)
+- Send **inquiries** to approved schools
+- **Parent dashboard** (`/parent`): profile, favourites, recently viewed, sent inquiries
 
 ### Schools
 
@@ -258,11 +276,10 @@ Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie →
 
 - **Headings:** Plus Jakarta Sans (`font-heading`)
 - **Body:** Inter (`font-body`)
-- Scale: display, `h1`–`h3`, body, label, meta, button text
 
 ### Color Palette
 
-- **Primary blue** — trust, navigation, links (`blue-600`–`blue-800`)
+- **Primary blue** — trust, navigation, links
 - **Amber accent** — CTAs and highlights
 - **Neutral gray** — surfaces and borders
 - **Semantic** — success, warning, danger, info tokens in Tailwind config
@@ -271,14 +288,9 @@ Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie →
 
 - Mobile-first layouts for search, cards, and dashboards
 - Collapsible navigation and scrollable tables on small screens
-- Touch-friendly controls (minimum tap targets, full-width forms on mobile)
+- Touch-friendly controls on mobile
 
-### Accessibility
-
-- Semantic HTML and ARIA labels on search, pagination, and empty states
-- Visible focus rings (`focus-visible`)
-- `prefers-reduced-motion` respected for animations
-- Private routes use `noindex` headers and robots rules
+See [frontend/Frontend.md](frontend/Frontend.md) for the full design system reference.
 
 ---
 
@@ -293,11 +305,13 @@ Copy from `.env.example` files. **Never commit real secrets.**
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL for SEO and sitemap |
 | `NEXT_PUBLIC_API_URL` | Backend API base URL (HTTPS in production) |
 | `NEXTAUTH_URL` / `AUTH_URL` | NextAuth canonical URL |
-| `NEXTAUTH_SECRET` / `AUTH_SECRET` | Session encryption |
+| `NEXTAUTH_SECRET` / `AUTH_SECRET` | NextAuth session encryption |
 | `AUTH_TRUST_HOST` | Required on Vercel (`true`) |
+| `JWT_SECRET` | Must match backend — mints Bearer tokens for server-side API calls |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Parent Google OAuth |
-| `DATABASE_URL` | Neon connection (server-side Prisma) |
 | `CLOUDINARY_*` | Server upload route only |
+
+**No `DATABASE_URL` on the frontend.** Database is managed entirely by the backend.
 
 Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 
@@ -308,14 +322,16 @@ Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (injected on Render/Railway) |
 | `DATABASE_URL` | Neon PostgreSQL with `sslmode=require` |
-| `JWT_SECRET` | API token signing (server only) |
+| `JWT_SECRET` | API token signing (must match frontend `JWT_SECRET`) |
 | `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
 | `FRONTEND_URL` | CORS allowlist (comma-separated for multiple origins) |
 | `CLOUDINARY_*` | Image upload utilities |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Password reset emails (Resend) |
 | `BCRYPT_ROUNDS` | Password hashing cost (default `12`) |
 | `TRUST_PROXY` | Behind reverse proxy in production |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin account for `npm run seed:admin` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Nodemailer SMTP for password reset emails |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin for `npm run seed:admin` |
+
+See [backend/Backend.md](backend/Backend.md) for the full variable reference including startup validation notes.
 
 ---
 
@@ -327,48 +343,39 @@ Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 - Neon PostgreSQL (or compatible Postgres)
 - Cloudinary account (for uploads)
 - Google OAuth credentials (optional, for parent Google login)
+- Resend API key (optional locally; password reset emails)
 
-### 1. Database and schema
-
-Schema is owned by the frontend:
-
-```bash
-cd frontend
-cp .env.example .env.local
-# Edit DATABASE_URL and other variables
-
-npm install
-npx prisma db push
-npx prisma generate
-```
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-Set `NEXT_PUBLIC_API_URL=http://localhost:4000`.
-
-### 3. Backend
+### 1. Backend (database owner)
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit DATABASE_URL (same as frontend), JWT_SECRET, FRONTEND_URL
+# Edit DATABASE_URL, JWT_SECRET, FRONTEND_URL, Cloudinary, etc.
 
 npm install
 npx prisma generate
+npm run migrate:dev    # or: npx prisma migrate deploy (existing DB)
 npm run dev
 ```
 
 API: [http://localhost:4000](http://localhost:4000)  
 Health check: `GET http://localhost:4000/health`
 
-### 4. First admin user
+### 2. Frontend
+
+```bash
+cd frontend
+cp .env.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:4000
+# Set JWT_SECRET to the same value as backend
+
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### 3. First admin user
 
 **Option A — seeder (recommended):**
 
@@ -382,14 +389,11 @@ Sign in at `/admin-login` with those credentials.
 
 **Option B — manual role update:**
 
-1. Sign in or register as a parent.
-2. In the Neon SQL editor:
-
 ```sql
 UPDATE "User" SET role = 'ADMIN' WHERE email = 'your-email@example.com';
 ```
 
-3. Sign out and use `/admin-login`.
+Then sign in at `/admin-login`.
 
 ### Run both services
 
@@ -402,30 +406,36 @@ Use two terminals: frontend on port `3000`, backend on port `4000`.
 ### Database (Neon)
 
 1. Create a Neon project and copy `DATABASE_URL` with `?sslmode=require`.
-2. Run `npx prisma db push` from **frontend** once.
-3. Use the same `DATABASE_URL` on Vercel and Render/Railway.
+2. Run migrations from **backend** only:
 
-### Frontend (Vercel)
+```bash
+cd backend
+npx prisma migrate deploy
+```
 
-1. Connect the repository; set root directory to `frontend` if needed.
-2. Add all variables from `frontend/.env.example` for Production.
-3. Build uses `vercel.json`: `npx prisma generate && npm run build`.
-4. Set `NEXT_PUBLIC_API_URL` to your deployed API HTTPS URL.
-5. Add Google OAuth redirect: `https://your-domain.com/api/auth/callback/google`.
+3. Set `DATABASE_URL` on Render (backend). Frontend does **not** need it.
 
-See [frontend/Frontend.md](frontend/Frontend.md) for the full production checklist.
+### Backend (Render)
 
-### Backend (Render or Railway)
+Use `backend/render.yaml` or manual Web Service:
 
-**Render:** use `backend/render.yaml` or manual Web Service:
-
-- Build: `npm ci && npx prisma generate && npm run build`
-- Start: `npm start`
-- Health: `/health`
+- **Build:** `npm ci && npx prisma generate && npm run build`
+- **Pre-deploy:** `npx prisma migrate deploy`
+- **Start:** `npm start`
+- **Health:** `/health`
 
 Set `FRONTEND_URL` to your Vercel domain (exact match, HTTPS, no trailing slash).
 
-See [backend/Backend.md](backend/Backend.md) for server behavior and CORS notes.
+### Frontend (Vercel)
+
+1. Connect the repository; set root directory to `frontend`.
+2. Add all variables from `frontend/.env.example` for Production.
+3. Build uses `vercel.json`: `npm run build` (no Prisma step).
+4. Set `NEXT_PUBLIC_API_URL` to your deployed API HTTPS URL.
+5. Set `JWT_SECRET` to match backend.
+6. Add Google OAuth redirect: `https://your-domain.com/api/auth/callback/google`.
+
+See [frontend/Frontend.md](frontend/Frontend.md) for the full production checklist.
 
 ### Post-deploy verification
 
@@ -435,6 +445,7 @@ See [backend/Backend.md](backend/Backend.md) for server behavior and CORS notes.
 | Public school listing | Loads on `/schools` |
 | CORS | Browser requests from Vercel origin succeed |
 | Auth | Parent login and admin login work on production URLs |
+| Sitemap | `/sitemap.xml` includes approved schools from API |
 
 ---
 
@@ -442,19 +453,19 @@ See [backend/Backend.md](backend/Backend.md) for server behavior and CORS notes.
 
 | Feature | Implementation |
 |---------|----------------|
-| **JWT auth** | Bearer tokens; malformed/expired tokens rejected |
+| **JWT auth** | HS256, issuer `schoolfinder-api`, Bearer tokens; logout blacklist |
 | **Role protection** | Middleware (frontend) + `requireRole` (backend) |
 | **Hidden admin login** | `/admin-login` not in public nav; `expectedRole: ADMIN` on API |
 | **Upload validation** | MIME, extension, 5MB limit, magic-byte checks |
-| **Rate limiting** | 100 req/15 min general; 10 req/15 min on auth routes |
-| **Upload rate limiting** | 10 uploads/hour/user on `POST /api/upload` (authenticated roles only) |
-| **Session heartbeat** | Client pings session every 10 min; JWT max age 30 min |
-| **Brute-force guard** | Login attempt throttling per IP + email |
+| **Rate limiting** | 100 req/15 min general; 10 req/15 min auth; 3/h forgot; 5/h reset |
+| **Upload rate limiting** | 10 uploads/hour/user on `POST /api/upload` |
+| **Session heartbeat** | Client pings session every 10 min; NextAuth JWT max age 30 min |
+| **Brute-force guard** | Login throttling per IP + email |
 | **CORS** | Restricted to `FRONTEND_URL` in production |
-| **Helmet** | Security headers on API |
+| **Helmet** | Security headers + HSTS on API |
 | **Validation** | Zod on mutating routes; sanitized request bodies |
 | **Secrets** | JWT, DB, Cloudinary secrets server-side only |
-| **Error responses** | No stack traces in production |
+| **No frontend DB** | Database credentials never on Vercel |
 
 ---
 
@@ -463,24 +474,22 @@ See [backend/Backend.md](backend/Backend.md) for server behavior and CORS notes.
 ### SEO
 
 - Dynamic metadata per page (`lib/seo.ts`)
-- `robots.ts` and `sitemap.ts` (approved schools from Prisma)
+- `robots.ts` and `sitemap.ts` (approved schools from backend API)
 - JSON-LD structured data on home and school detail
 - Private dashboards excluded from indexing
 
 ### Performance
 
 - **Pagination** — schools default 12 per page; admin tables default 20
-- **ISR** — public school fetches with `revalidate`
+- **ISR** — public school fetches with `revalidate` and cache tags
+- **Backend cache** — in-memory TTL (list 60s, detail 300s, admin stats 30s)
 - **next/image** — AVIF/WebP, lazy loading, blur placeholders
 - **Suspense** — skeleton loaders on listings and featured schools
-- **Selective Prisma queries** — minimal fields on list endpoints
-- **Cache layer** — Redis-ready abstraction on backend (`withCache` pass-through today)
+- **Selective API responses** — minimal fields on list endpoints
 
 ---
 
 ## 13. Future Roadmap
-
-Planned product directions (architecture allows extension without rewrites):
 
 | Area | Direction |
 |------|-----------|
@@ -491,7 +500,7 @@ Planned product directions (architecture allows extension without rewrites):
 | **Analytics** | School and platform engagement dashboards |
 | **Reviews** | Moderated parent reviews post-verification |
 | **Mobile app** | React Native or Expo consuming the same API |
-| **Redis** | Enable listing and stats caching on the backend |
+| **Redis** | Replace in-memory cache on the backend |
 
 ---
 
@@ -505,22 +514,23 @@ This project is provided as an educational and production-oriented codebase. Add
 
 1. Fork the repository and create a feature branch.
 2. Follow existing patterns: TypeScript strict mode, role-separated auth, professional English in UI and API messages.
-3. Run `npm run build` in `frontend` and `npx tsc --noEmit` in `backend` before opening a pull request.
+3. Run `npm run build` in `frontend` and `npx tsc --noEmit` in both projects before opening a pull request.
 4. Do not commit `.env`, `.env.local`, or secrets.
-5. Schema changes: update `frontend/prisma/schema.prisma`, run `db push` from frontend, then `prisma generate` in both projects.
+5. **Schema changes:** update `backend/prisma/schema.prisma`, run `npm run migrate:dev` from backend, then `npx prisma generate`.
 
 ### Documentation
 
 | Document | Contents |
 |----------|----------|
-| [frontend/Frontend.md](frontend/Frontend.md) | App Router, auth, dashboards, SEO, deployment |
-| [backend/Backend.md](backend/Backend.md) | API routes, middleware, pagination, security |
+| [frontend/Frontend.md](frontend/Frontend.md) | App Router, auth, API integration, dashboards, SEO, deployment |
+| [backend/Backend.md](backend/Backend.md) | API routes, middleware, schema, pagination, security |
 
 ### Support and setup notes
 
 - **Backend offline:** public pages degrade gracefully when `NEXT_PUBLIC_API_URL` is unreachable.
 - **CORS errors:** ensure `FRONTEND_URL` on the API matches the Vercel domain exactly.
-- **Prisma client:** backend imports from `generated/prisma` (Prisma 7); run `npx prisma generate` after schema changes.
+- **JWT mismatch:** `JWT_SECRET` must be identical on frontend and backend for server-side API calls.
+- **Prisma client:** backend imports from `generated/prisma`; run `npx prisma generate` after schema changes.
 
 ---
 

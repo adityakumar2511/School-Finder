@@ -1,9 +1,10 @@
 # SchoolFinder — Frontend Documentation
 
-> **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Prisma · Cloudinary  
-> **Default port:** `3000` · **Repository path:** `frontend/`
+> **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
+> **Default port:** `3000` · **Repository path:** `frontend/`  
+> **Database:** None — all data via Express REST API at `NEXT_PUBLIC_API_URL`
 
-This document describes the production-ready SchoolFinder frontend: architecture, authentication, routing, performance, deployment, and security. It reflects the current implementation after performance hardening (FIX-19) and deployment readiness (FIX-20).
+This document describes the production-ready SchoolFinder frontend: architecture, backend API integration, authentication, routing, performance, deployment, and security.
 
 ---
 
@@ -12,18 +13,19 @@ This document describes the production-ready SchoolFinder frontend: architecture
 1. [Project Overview](#1-project-overview)
 2. [Tech Stack](#2-tech-stack)
 3. [Folder Structure](#3-folder-structure)
-4. [Authentication Architecture](#4-authentication-architecture)
-5. [Route Protection](#5-route-protection)
-6. [Dashboard Architecture](#6-dashboard-architecture)
-7. [Upload System](#7-upload-system)
-8. [SEO Architecture](#8-seo-architecture)
-9. [Performance Optimizations](#9-performance-optimizations)
-10. [Environment Variables](#10-environment-variables)
-11. [Local Development Setup](#11-local-development-setup)
-12. [Production Deployment](#12-production-deployment)
-13. [Security Notes](#13-security-notes)
-14. [UI/UX System](#14-uiux-system)
-15. [Future Improvements](#15-future-improvements)
+4. [Backend API Integration](#4-backend-api-integration)
+5. [Authentication Architecture](#5-authentication-architecture)
+6. [Route Protection](#6-route-protection)
+7. [Dashboard Architecture](#7-dashboard-architecture)
+8. [Upload System](#8-upload-system)
+9. [SEO Architecture](#9-seo-architecture)
+10. [Performance Optimizations](#10-performance-optimizations)
+11. [Environment Variables](#11-environment-variables)
+12. [Local Development Setup](#12-local-development-setup)
+13. [Production Deployment](#13-production-deployment)
+14. [Security Notes](#14-security-notes)
+15. [UI/UX System](#15-uiux-system)
+16. [Future Improvements](#16-future-improvements)
 
 ---
 
@@ -39,13 +41,23 @@ SchoolFinder is a school discovery platform for India. The frontend enables:
 
 Public marketing and listing pages are SEO-optimized. Authenticated areas are role-isolated and excluded from search indexing.
 
+### Architecture Principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| **No direct database access** | Zero Prisma dependency; no `DATABASE_URL` |
+| **Backend as source of truth** | All CRUD via Express REST API |
+| **JWT-only NextAuth** | Session strategy `jwt` — no Prisma adapter |
+| **BFF pattern** | Next.js `/api/*` routes proxy mutations to backend with Bearer tokens |
+| **Local type enums** | `src/lib/types/database.ts` mirrors backend Prisma enums |
+
 ### Next.js 14 Architecture
 
 The application uses the **App Router** with:
 
 - **Server Components** by default for data fetching, SEO metadata, and layout composition
 - **Client Components** only where interactivity is required (forms, uploads, filters, session actions)
-- **Route handlers** under `app/api/` for uploads, profile mutations, and admin proxies
+- **Route handlers** under `app/api/` as BFF proxies, NextAuth handlers, and Cloudinary upload
 - **ISR / caching** via `fetch(..., { next: { revalidate } })` for public school data
 
 ### Role-Based Authentication
@@ -54,7 +66,7 @@ Three distinct roles are enforced at the middleware and layout level:
 
 | Role | Primary entry | Home after login |
 |------|---------------|------------------|
-| `PARENT` | `/login`, `/register` | `/` (public home; parent area at `/parent`) |
+| `PARENT` | `/login`, `/register` | `/` (parent area at `/parent`) |
 | `SCHOOL_ADMIN` | `/school-login`, `/school-register` | `/dashboard/school` |
 | `ADMIN` | `/admin-login` (hidden) | `/admin` |
 
@@ -66,18 +78,20 @@ Authentication is **not** a single shared login page. Each role has dedicated ro
 
 | Technology | Usage |
 |------------|--------|
-| **Next.js 14** | App Router, SSR, API routes, image optimization |
+| **Next.js 14** | App Router, SSR, BFF API routes, image optimization |
 | **TypeScript** | End-to-end type safety |
 | **Tailwind CSS** | Utility-first styling, design tokens |
 | **shadcn/ui** | Accessible primitives (`Button`, `Card`, `Table`, `Dialog`, etc.) |
 | **NextAuth v5** | JWT sessions, Google OAuth, credentials provider |
-| **Prisma** | Database ORM (shared Neon PostgreSQL with backend) |
 | **Zod** | Form and API validation |
 | **React Hook Form** | Client form state and validation |
 | **Cloudinary** | Image storage and delivery (via server upload route) |
 | **Lucide React** | Icon system |
+| **Framer Motion** | Subtle UI motion |
 
-**External API:** Express backend at `NEXT_PUBLIC_API_URL` for public school listings, admin JWT auth, and some mutations.
+**External API:** Express backend at `NEXT_PUBLIC_API_URL` for all authenticated and public data.
+
+**Not used:** Prisma, `@prisma/client`, `@auth/prisma-adapter`, database drivers.
 
 ---
 
@@ -87,28 +101,26 @@ Authentication is **not** a single shared login page. Each role has dedicated ro
 frontend/
 ├── middleware.ts                 # Edge middleware — role-based redirects
 ├── vercel.json                   # Vercel build and region config
-├── .env.example                  # Environment template (no secrets)
-├── prisma/
-│   └── schema.prisma             # Shared database schema
+├── .env.example                  # Environment template (no DATABASE_URL)
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx            # Root layout, fonts, Navbar, Footer
 │   │   ├── page.tsx              # Homepage
-│   │   ├── providers.tsx         # Session provider
+│   │   ├── providers.tsx         # Session provider + SessionHeartbeat
 │   │   ├── robots.ts             # Crawler rules
-│   │   ├── sitemap.ts            # Dynamic sitemap (approved schools)
+│   │   ├── sitemap.ts            # Dynamic sitemap (approved schools via API)
 │   │   ├── globals.css           # CSS variables, Tailwind layers
 │   │   │
-│   │   ├── login/                # Parent sign-in (links to forgot-password)
+│   │   ├── login/                # Parent sign-in
 │   │   ├── register/             # Parent registration
-│   │   ├── forgot-password/      # Request password reset email
+│   │   ├── forgot-password/      # Request password reset (calls backend directly)
 │   │   ├── reset-password/       # Set new password via reset token
-│   │   ├── school-login/         # School admin sign-in (links to forgot-password)
+│   │   ├── school-login/         # School admin sign-in
 │   │   ├── school-register/      # School registration wizard
 │   │   ├── admin-login/          # Hidden admin sign-in
-│   │   ├── not-found.tsx         # Global 404 page
-│   │   ├── error.tsx             # Runtime error boundary
-│   │   ├── global-error.tsx      # Root layout error boundary
+│   │   ├── not-found.tsx
+│   │   ├── error.tsx
+│   │   ├── global-error.tsx
 │   │   │
 │   │   ├── schools/              # Public school discovery
 │   │   │   ├── page.tsx
@@ -122,7 +134,7 @@ frontend/
 │   │   │   ├── page.tsx
 │   │   │   ├── profile/
 │   │   │   ├── favourites/
-│   │   │   └── inquiries/        # Sent inquiries with status badges
+│   │   │   └── inquiries/
 │   │   │
 │   │   ├── dashboard/school/     # School admin panel (SCHOOL_ADMIN only)
 │   │   │   ├── layout.tsx
@@ -138,12 +150,12 @@ frontend/
 │   │   │   ├── inquiries/
 │   │   │   └── add-school/
 │   │   │
-│   │   └── api/                  # Next.js route handlers
-│   │       ├── auth/[...nextauth]/
-│   │       ├── upload/
-│   │       ├── school/           # Profile, gallery, inquiry status
-│   │       ├── parent/           # Profile, favourites
-│   │       └── admin/            # Session cookie, approve/reject proxies
+│   │   └── api/                  # BFF route handlers
+│   │       ├── auth/[...nextauth]/   # NextAuth handlers
+│   │       ├── upload/               # Cloudinary upload
+│   │       ├── admin/                # Session cookie, approve/reject proxies
+│   │       ├── parent/               # Profile, favourites proxies
+│   │       └── school/               # Profile, gallery, inquiry status proxies
 │   │
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui primitives
@@ -152,33 +164,36 @@ frontend/
 │   │   ├── school/               # Dashboard nav, profile, inquiries, wizard
 │   │   ├── parent/               # ParentNav, profile, recent schools
 │   │   ├── home/                 # FeaturedSchools (+ skeleton)
-│   │   ├── schools/              # School discovery UI
-│   │   │   ├── InquiryModal.tsx  # Parent inquiry modal (school detail)
-│   │   │   └── FavouriteButton.tsx # Parent bookmark toggle (school detail)
+│   │   ├── schools/              # FavouriteButton, InquiryModal, skeletons
 │   │   ├── upload/               # ImageUploadField
-│   │   ├── SessionHeartbeat.tsx  # Keeps session alive while tab is open
+│   │   ├── motion/               # fade-in, stagger-grid
 │   │   ├── seo/                  # JsonLd
-│   │   ├── SchoolCard.tsx
-│   │   ├── SchoolFilters.tsx
+│   │   ├── SessionHeartbeat.tsx
 │   │   ├── Navbar.tsx
 │   │   └── Footer.tsx
 │   │
 │   └── lib/
-│       ├── auth.ts               # NextAuth configuration
+│       ├── api/
+│       │   ├── server.ts         # backendFetch, adminFetch, getBackendToken
+│       │   ├── proxy.ts          # proxyToBackend for BFF routes
+│       │   └── pagination.ts     # Paginated response parser
+│       ├── types/
+│       │   └── database.ts       # Role, SchoolStatus, InquiryStatus enums
+│       ├── auth.ts               # NextAuth configuration (JWT only)
 │       ├── auth-config.ts        # Route constants, role homes, redirects
+│       ├── admin-auth.ts         # Admin JWT cookie name, API base
+│       ├── backend-jwt.ts        # mintBackendJwt for server-side API calls
 │       ├── middleware-auth.ts    # Middleware redirect resolution
 │       ├── logout.ts             # Centralized sign-out
-│       ├── admin-auth.ts         # Admin JWT cookie name, API base
-│       ├── admin/                # Admin server data helpers
-│       ├── school/               # School dashboard data, gallery
-│       ├── parent/               # Parent data, recent schools
+│       ├── parent-token.ts       # sessionStorage helper for client API calls
+│       ├── admin/                # Admin server data (adminFetch)
+│       ├── school/               # School dashboard data (backendFetch)
+│       ├── parent/               # Parent data (backendFetch)
 │       ├── data/schools-public.ts # Public API fetchers + ISR
-│       ├── api/pagination.ts     # Paginated response parser
 │       ├── seo.ts                # Metadata, JSON-LD builders
 │       ├── upload-security.ts    # MIME, size, magic-byte validation
 │       ├── upload-client.ts      # Client upload with progress
 │       ├── cloudinary.ts         # Server-side Cloudinary upload
-│       ├── image-placeholder.ts  # Blur placeholder for next/image
 │       └── utils.ts              # cn() and shared utilities
 ```
 
@@ -188,94 +203,164 @@ frontend/
 - **Logic:** Delegates to `src/lib/middleware-auth.ts`
 - **Matcher:** Admin, dashboard, parent, and all role-specific auth routes
 
-### Auth Structure
+---
 
-| Concern | Location |
-|---------|----------|
-| NextAuth config | `src/lib/auth.ts` |
-| Route constants | `src/lib/auth-config.ts` |
-| Middleware rules | `src/lib/middleware-auth.ts` |
-| Admin backend JWT | `src/lib/admin-auth.ts`, `app/api/admin/session/` |
-| Sign-out | `src/lib/logout.ts` |
+## 4. Backend API Integration
 
-### Upload System
+The frontend never connects to PostgreSQL. All data flows through the Express API.
 
-| Layer | Location |
-|-------|----------|
-| Client UI | `components/upload/ImageUploadField.tsx` |
-| Client API | `lib/upload-client.ts` |
-| Server route | `app/api/upload/route.ts` |
-| Validation | `lib/upload-security.ts` |
-| Cloudinary | `lib/cloudinary.ts` |
+### Integration Patterns
+
+| Pattern | When used | Implementation |
+|---------|-----------|----------------|
+| **Server fetch** | RSC dashboards, admin pages | `backendFetch()` / `adminFetch()` in `lib/api/server.ts` |
+| **Public fetch** | School listings, sitemap, home | Direct `fetch(NEXT_PUBLIC_API_URL/...)` with ISR |
+| **BFF proxy** | Client mutations from browser | `proxyToBackend()` in `lib/api/proxy.ts` via `/api/*` routes |
+| **Direct client fetch** | Auth flows, some favourites | Browser → backend with Bearer token |
+
+### `backendFetch` (Server Components)
+
+Used by `lib/school/data.ts`, `lib/parent/data.ts`, and server pages:
+
+```typescript
+import { backendFetch } from "@/lib/api/server";
+
+const { ok, data } = await backendFetch("/api/schools/my-school");
+```
+
+Token resolution order:
+
+1. **ADMIN** — `sf_admin_token` HTTP-only cookie
+2. **PARENT** — `session.backendAccessToken` from login
+3. **Fallback** — `mintBackendJwt()` using shared `JWT_SECRET`
+
+### `adminFetch` (Admin dashboards)
+
+Uses only the `sf_admin_token` cookie:
+
+```typescript
+import { adminFetch } from "@/lib/api/server";
+
+const { ok, data } = await adminFetch("/api/admin/stats");
+```
+
+### BFF Proxy Routes
+
+Browser client components call same-origin Next.js routes; handlers forward to backend:
+
+| Frontend route | Backend target | Token source |
+|----------------|----------------|--------------|
+| `PATCH /api/parent/profile` | `/api/parent/profile` | Session JWT |
+| `DELETE /api/parent/favourites` | `/api/parent/favourites?schoolId=` | Session JWT |
+| `PATCH /api/school/profile` | `/api/schools/:id` | Session JWT |
+| `GET/POST /api/school/gallery` | `/api/schools/my-school/images` | Session JWT |
+| `DELETE /api/school/gallery/[id]` | `/api/schools/images/:id` | Session JWT |
+| `PATCH /api/school/inquiries/[id]/status` | `/api/inquiries/:id/status` | Session JWT |
+| `PATCH /api/admin/schools/[id]/approve` | `/api/admin/schools/:id/approve` | Admin cookie |
+| `PATCH /api/admin/users/[id]/role` | `/api/admin/users/:id/role` | Admin cookie |
+
+### Domain Data Modules
+
+| Module | Backend endpoints |
+|--------|-------------------|
+| `lib/data/schools-public.ts` | `GET /api/schools`, `GET /api/schools/:slug`, `GET /api/schools/search` |
+| `lib/school/data.ts` | `GET /api/schools/my-school`, `GET /api/inquiries/school/:id` |
+| `lib/parent/data.ts` | `GET/PATCH /api/parent/profile`, `GET /api/parent/favourites`, `GET /api/parent/inquiries` |
+| `lib/admin/data.ts` | `GET /api/admin/stats`, `/schools`, `/users`, `/inquiries` |
+
+### Type Definitions
+
+Shared enums live in `src/lib/types/database.ts` (not generated from Prisma):
+
+```typescript
+export type Role = "PARENT" | "SCHOOL_ADMIN" | "ADMIN";
+export type SchoolStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type InquiryStatus = "NEW" | "CONTACTED" | "CLOSED";
+export type BoardType = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
+export type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
+export type MediumType = "HINDI" | "ENGLISH" | "BOTH";
+```
+
+Keep these in sync with `backend/prisma/schema.prisma` when enums change.
 
 ---
 
-## 4. Authentication Architecture
+## 5. Authentication Architecture
+
+### NextAuth Configuration (`src/lib/auth.ts`)
+
+| Setting | Value |
+|---------|-------|
+| Strategy | `jwt` (no database adapter) |
+| Session max age | 1800 seconds (30 minutes) |
+| Providers | Google, Credentials (parent/school/admin contexts) |
+| Secret | `AUTH_SECRET` or `NEXTAUTH_SECRET` |
+
+**No PrismaAdapter.** OAuth Account/Session tables exist in the backend schema but are not used by the frontend.
 
 ### Parent (`PARENT`)
 
 | Route | Purpose |
 |-------|---------|
-| `/login` | Sign in with Google or email/password (`authContext: parent`) |
+| `/login` | Google or email/password (`authContext: parent`) |
 | `/register` | Create parent account |
-| `/forgot-password` | Request a password reset email |
-| `/reset-password` | Set a new password using a reset token from email |
+| `/forgot-password` | Calls backend `POST /api/auth/forgot-password` |
+| `/reset-password` | Calls backend `POST /api/auth/reset-password` |
 
-- Google sign-in is restricted to **parent** accounts only (existing non-parent emails are rejected).
-- Credentials use NextAuth `CredentialsProvider` with `AUTH_CONTEXT_ROLE.parent`.
-- `/login` and `/school-login` link to `/forgot-password`.
+- Google sign-in calls backend `POST /api/auth/google-sync`; only `PARENT` role allowed.
+- Credentials login calls backend `POST /api/auth/login` with `expectedRole: "PARENT"`.
+- Backend JWT stored as `session.backendAccessToken`.
 
 ### School Administrator (`SCHOOL_ADMIN`)
 
 | Route | Purpose |
 |-------|---------|
-| `/school-login` | School admin credentials sign-in |
-| `/school-register` | Multi-step school registration wizard |
+| `/school-login` | Credentials sign-in (`authContext: school`) |
+| `/school-register` | Multi-step registration wizard |
 
-- Credentials provider expects `authContext: school`.
-- After approval, admins manage the school at `/dashboard/school`.
+- Login via backend with `expectedRole: "SCHOOL_ADMIN"`.
+- Server-side API calls use minted JWT when backend token not in session.
 
 ### Platform Administrator (`ADMIN`)
 
 | Route | Purpose |
 |-------|---------|
-| `/admin-login` | **Hidden** — not linked in public navigation |
+| `/admin-login` | Hidden — not in public navigation |
 
 **Flow:**
 
-1. POST credentials to backend `POST /api/auth/login` with `expectedRole: "ADMIN"`.
-2. Backend returns JWT; frontend stores it in HTTP-only cookie `sf_admin_token`.
-3. NextAuth credentials sign-in syncs session (`authContext: admin`) for middleware compatibility.
-4. Admin API routes use the backend token via `lib/admin/session.ts`.
-
-### Role Separation
-
-- Each role has dedicated login/register URLs.
-- `auth-config.ts` defines `ROLE_HOME` and `ROLE_LOGOUT_REDIRECT` per role.
-- Cross-role access to another role’s auth or dashboard routes triggers middleware redirects.
+1. POST to backend `POST /api/auth/login` with `expectedRole: "ADMIN"`.
+2. Store JWT in HTTP-only cookie `sf_admin_token` via `POST /api/admin/session`.
+3. NextAuth credentials sign-in syncs session for middleware.
+4. Admin data fetching uses `adminFetch()` with cookie token.
 
 ### Session Model
 
-- **Strategy:** JWT (not database sessions for middleware speed).
-- **Token fields:** `id`, `role` (refreshed from DB on each JWT callback).
-- **Max age:** 1800 seconds (30 minutes) on both session and JWT.
-- **Secret:** `AUTH_SECRET` or `NEXTAUTH_SECRET`.
-- **Production:** `trustHost: true` for Vercel; HTTPS enables secure cookies automatically.
+- **NextAuth JWT fields:** `id`, `role`, `backendAccessToken` (parents)
+- **Role refresh:** JWT callback calls `GET /api/auth/me` to sync role from backend
+- **Production:** `trustHost: true` for Vercel
 
 ### Post-Login Redirect (`callbackUrl`)
 
-When middleware or a layout redirects an unauthenticated user to a login page, the original path is preserved as a `callbackUrl` query parameter. After successful sign-in, login pages redirect to that URL when it is safe (same-origin, non-auth route); otherwise they fall back to the role’s `ROLE_HOME`. This restores the page the user was trying to access instead of always sending them to a fixed home route.
+Middleware preserves the original path as `callbackUrl`. After sign-in, login pages redirect to that URL when safe; otherwise they use `ROLE_HOME` from `auth-config.ts`.
 
 ---
 
-## 5. Route Protection
+## 6. Route Protection
 
 ### Middleware Flow
 
 ```
-Request → getToken (JWT) → resolveMiddlewareRedirect(pathname, role)
+Request → getToken (NextAuth JWT) → resolveMiddlewareRedirect(pathname, role)
          → redirect OR NextResponse.next()
-         → no-store headers on protected dashboard responses
+         → Cache-Control: no-store on protected dashboard responses
+```
+
+### Matcher
+
+```
+/admin, /admin/:path*, /dashboard/:path*, /parent, /parent/:path*,
+/login, /register, /school-login, /school-register, /admin-login
 ```
 
 ### Rules Summary
@@ -286,95 +371,75 @@ Request → getToken (JWT) → resolveMiddlewareRedirect(pathname, role)
 | `/dashboard/school/*` | `SCHOOL_ADMIN` | `/school-login?callbackUrl=…` |
 | `/admin/*` | `ADMIN` | `/admin-login?callbackUrl=…` |
 
-All other routes remain public unless explicitly protected elsewhere.
-
 **Cross-role behavior:**
 
-- `ADMIN` visiting school dashboard → `/admin`
-- `SCHOOL_ADMIN` visiting `/admin` → `/dashboard/school`
-- `PARENT` visiting admin or school dashboard → `/`
-- Signed-in users hitting another role’s login page → their `ROLE_HOME`
+- Wrong role on protected area → redirect to `ROLE_HOME[role]`
+- Signed-in user on another role's login page → their home route
 
-### Protected Dashboards
+### Layout Guards (defense in depth)
 
-All dashboard layouts set `robots: { index: false }` and rely on middleware for access control. Server layouts may also call `auth()` for defense in depth.
+- `parent/layout.tsx` — requires `PARENT`
+- `dashboard/school/layout.tsx` — requires `SCHOOL_ADMIN`
+- `admin/layout.tsx` — requires `ADMIN`
 
 ### Noindex Routes
 
-Applied via `next.config.ts` headers and `robots.ts` disallow:
+Via `robots.ts` and layout metadata:
 
-- `/admin`, `/admin/*`
-- `/dashboard/*`
-- `/parent/*`
-- `/admin-login`, `/school-login`
-- `/login`, `/register`
+- `/admin/*`, `/dashboard/*`, `/parent/*`
+- Auth routes: `/login`, `/register`, `/admin-login`, `/school-login`
 - `/api/*`
 
-Public school pages (`/`, `/schools`, `/schools/[slug]`) remain indexable.
+Public routes (`/`, `/schools`, `/schools/[slug]`) remain indexable.
 
 ---
 
-## 6. Dashboard Architecture
+## 7. Dashboard Architecture
 
 ### Parent Dashboard (`/parent`)
 
-| Route | Description |
-|-------|-------------|
-| `/parent` | Overview, recently viewed schools |
-| `/parent/profile` | Edit parent profile |
-| `/parent/favourites` | Saved schools with pagination |
-| `/parent/inquiries` | Sent inquiries with status badges and pagination |
+| Route | Description | Data source |
+|-------|-------------|-------------|
+| `/parent` | Overview, recently viewed schools | `lib/parent/data.ts` |
+| `/parent/profile` | Edit parent profile | `GET/PATCH /api/parent/profile` |
+| `/parent/favourites` | Saved schools with pagination | `GET /api/parent/favourites` |
+| `/parent/inquiries` | Sent inquiries with status | `GET /api/parent/inquiries` |
 
-**Permissions:** `PARENT` only. Data via Prisma server components and `/api/parent/*` routes.
-
-**Features:** Favourites CRUD, profile update, optional `TrackSchoolView` on school detail pages.
-
-**School detail page (public):** `InquiryModal` lets signed-in parents send inquiries to approved schools. `FavouriteButton` toggles bookmarks via `POST`/`DELETE` `/api/favourites`. Both components are role-gated to `PARENT` only.
-
----
+**School detail (public):** `InquiryModal` and `FavouriteButton` call backend favourites/inquiries endpoints (direct or via BFF).
 
 ### School Dashboard (`/dashboard/school`)
 
-| Route | Description |
-|-------|-------------|
-| `/dashboard/school` | Overview, status card, inquiry summary |
-| `/dashboard/school/inquiries` | Inquiry list with filters, search, pagination |
-| `/dashboard/school/profile` | School profile editor, logo upload, gallery manager |
+| Route | Description | Data source |
+|-------|-------------|-------------|
+| `/dashboard/school` | Overview, status card, inquiry summary | `GET /api/schools/my-school` |
+| `/dashboard/school/inquiries` | Inquiry list with filters | `GET /api/inquiries/school/:id` |
+| `/dashboard/school/profile` | Profile editor, logo, gallery | BFF `/api/school/*` |
 
-**Permissions:** `SCHOOL_ADMIN` only. Data via `lib/school/data.ts` and `/api/school/*`.
-
-**Inquiry management:** Status updates (`NEW`, `CONTACTED`, `CLOSED`) via PATCH `/api/school/inquiries/[id]/status` with ownership checks on the backend.
-
----
+**Inquiry status updates:** `PATCH /api/school/inquiries/[id]/status` → backend `/api/inquiries/:id/status`.
 
 ### Admin Dashboard (`/admin`)
 
-| Route | Description |
-|-------|-------------|
-| `/admin` | Platform overview stats |
-| `/admin/schools` | School moderation (approve/reject), search, pagination |
-| `/admin/users` | User management (role, disable) |
-| `/admin/inquiries` | Cross-school inquiry oversight |
-| `/admin/add-school` | Manual school creation |
+| Route | Description | Data source |
+|-------|-------------|-------------|
+| `/admin` | Platform stats | `GET /api/admin/stats` |
+| `/admin/schools` | School moderation | `GET /api/admin/schools` |
+| `/admin/users` | User management | `GET /api/admin/users` |
+| `/admin/inquiries` | Cross-school inquiries | `GET /api/admin/inquiries` |
+| `/admin/add-school` | Manual school creation | `POST /api/admin/add-school` |
 
-**Permissions:** `ADMIN` only. Uses backend admin API with JWT from `sf_admin_token`.
+**Moderation:** Approve/reject via BFF routes → `PATCH /api/admin/schools/:id/approve|reject`.
 
-**Moderation flow:**
-
-1. Schools register as `PENDING`.
-2. Admin reviews listing at `/admin/schools`.
-3. Approve/reject via `/api/admin/schools/[id]/approve` or `reject`.
-4. Only `APPROVED` schools appear in public listings and sitemap.
+Only `APPROVED` schools appear in public listings and sitemap.
 
 ---
 
-## 7. Upload System
+## 8. Upload System
 
 ### Cloudinary Integration
 
 - Uploads go through **`POST /api/upload`** (Next.js server route only).
 - **Authentication required:** valid NextAuth session with role `PARENT`, `SCHOOL_ADMIN`, or `ADMIN`.
-- **Rate limit:** 10 uploads per hour per user (in-memory counter on the server route; returns `429` when exceeded).
+- **Rate limit:** 10 uploads per hour per user (in-memory counter; returns `429` when exceeded).
 - Credentials (`CLOUDINARY_*`) never reach the browser.
 - Folders: `school-platform/logos`, `school-platform/gallery`, `school-platform/profiles`.
 
@@ -384,36 +449,29 @@ Public school pages (`/`, `/schools`, `/schools/[slug]`) remain indexable.
 |------|--------|
 | Allowed MIME types | `image/jpeg`, `image/png`, `image/webp` |
 | Max file size | **5 MB** |
-| Blocked types | SVG, PDF, executables, scripts, HTML, etc. |
 | Magic-byte check | Server validates actual file content vs declared MIME |
 
-### Client Behavior
+### Usage Flow
 
-- `ImageUploadField` shows progress via `upload-client.ts`.
-- Validation runs client-side first (`validateUploadFile`), then server-side again.
-- Cloudinary delivery uses `quality: auto` and `fetch_format: auto` for optimized URLs.
-
-### Usage
-
-- School logo and gallery: profile dashboard, registration wizard
-- Parent profile image: parent profile page
-- Admin add-school: logo upload
+1. Client uploads to `/api/upload` → receives Cloudinary URL.
+2. Client sends URL to backend via school/profile PATCH or gallery POST.
+3. Backend persists URL on `School` or `SchoolImage` records.
 
 ---
 
-## 8. SEO Architecture
+## 9. SEO Architecture
 
 ### Metadata
 
 - **Root:** `lib/seo.ts` → `rootMetadata`, `buildPageMetadata()`, `buildSchoolMetadata()`
-- **Per page:** `export const metadata` or `generateMetadata()` on dynamic routes
 - **School detail:** Dynamic title, description, canonical URL, Open Graph, Twitter cards
 
 ### Sitemap
 
 - **File:** `app/sitemap.ts`
-- **Source:** Prisma query for `APPROVED` schools
+- **Source:** `GET /api/schools?status=APPROVED&limit=1000` (not Prisma)
 - **URL base:** `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL`
+- **Revalidation:** 3600 seconds with cache tag `schools`
 
 ### Robots
 
@@ -421,82 +479,65 @@ Public school pages (`/`, `/schools`, `/schools/[slug]`) remain indexable.
 - Allows public discovery routes; disallows private and auth routes
 - Points to `/sitemap.xml`
 
-### Open Graph
-
-- Generated in `buildSchoolMetadata()` and root metadata
-- Uses school logo or site default image when available
-
 ### Structured Data
 
 - **Component:** `components/seo/JsonLd.tsx`
 - **Types:** `WebSite` (home), `EducationalOrganization` + `BreadcrumbList` (school detail)
-- Injected as JSON-LD script tags in Server Components
 
 ---
 
-## 9. Performance Optimizations
+## 10. Performance Optimizations
 
 ### Suspense and Streaming
 
 | Surface | Pattern |
 |---------|---------|
-| Homepage featured schools | `Suspense` + `FeaturedSchoolsSkeleton` |
+| Homepage featured schools | `Suspense` + skeleton |
 | Schools listing | `Suspense` + `SchoolGridSkeleton` |
-| Route transitions | `app/schools/loading.tsx`, `app/schools/[slug]/loading.tsx` |
-| Filters sidebar | `Suspense` with pulse fallback |
-
-### Lazy Loading
-
-- `TrackSchoolView` — `dynamic()` import on school detail (parent-only)
-- School card images — `loading="lazy"` below the fold
-- Hero school logo — `priority` for LCP
-
-### Image Optimization (`next/image`)
-
-- Remote patterns: Cloudinary, Google avatars
-- Formats: AVIF, WebP (via Next.js image pipeline)
-- `sizes` attribute per layout breakpoint
-- Shared blur placeholder: `lib/image-placeholder.ts`
-
-### Re-render Control
-
-- `SchoolCard` wrapped in `React.memo`
-- Server Components pass stable props; minimal client state on listing pages
-
-### Pagination Strategy
-
-- **Public listings:** Backend default **12** schools per page; `lib/api/pagination.ts` normalizes `{ data, pagination }`
-- **Admin tables:** Server-side pagination via query params
-- **School inquiries / favourites:** Dedicated pagination components
+| Route transitions | `loading.tsx` on `/schools` routes |
 
 ### Data Fetching
 
-- `lib/data/schools-public.ts` — centralized fetchers with ISR (`revalidate: 60` listing, `3600` featured)
+- `lib/data/schools-public.ts` — ISR (`revalidate: 60` listing, `3600` featured)
+- Server dashboards — `cache: "no-store"` via `backendFetch`
+- Backend applies in-memory cache (list 60s, detail 300s, admin stats 30s)
+
+### Image Optimization
+
+- Remote patterns: Cloudinary, Google avatars
+- Formats: AVIF, WebP via Next.js image pipeline
+- `sizes` attribute per layout breakpoint
+
+### Pagination
+
+- **Public listings:** Backend default 12 schools per page
+- **Admin tables:** Server-side pagination via query params
+- **Parent favourites/inquiries:** Paginated API responses
 
 ### Session Heartbeat
 
-- **Component:** `components/SessionHeartbeat.tsx`, mounted in `app/providers.tsx`
-- **Behavior:** While the user is authenticated, pings `GET /api/auth/session` every **10 minutes** to refresh the JWT before the 30-minute `maxAge` expires
-- **Purpose:** Keeps active tabs signed in without requiring manual re-login during normal use
+- **Component:** `components/SessionHeartbeat.tsx`
+- Pings `GET /api/auth/session` every **10 minutes** while authenticated
+- Keeps NextAuth JWT alive before 30-minute `maxAge` expires
 
 ---
 
-## 10. Environment Variables
+## 11. Environment Variables
 
 Copy `frontend/.env.example` to `.env.local`. Never commit real secrets.
 
 | Variable | Required | Description | Production notes |
 |----------|----------|-------------|------------------|
 | `NEXT_PUBLIC_SITE_URL` | Yes | Canonical site URL for SEO and sitemap | `https://your-app.vercel.app` |
-| `NEXT_PUBLIC_API_URL` | Yes | Express API base URL (browser-visible) | Must be **HTTPS** |
+| `NEXT_PUBLIC_API_URL` | Yes | Express API base URL | Must be **HTTPS** |
 | `NEXTAUTH_URL` | Yes | NextAuth canonical URL | Same as public site URL |
 | `AUTH_URL` | Yes | NextAuth v5 alias | Same as `NEXTAUTH_URL` |
 | `NEXTAUTH_SECRET` | Yes | Session encryption secret | `openssl rand -base64 32` |
 | `AUTH_SECRET` | Yes | NextAuth v5 alias | Same value as `NEXTAUTH_SECRET` |
-| `AUTH_TRUST_HOST` | Yes (Vercel) | Trust deployment host for callbacks | `true` |
+| `AUTH_TRUST_HOST` | Yes (Vercel) | Trust deployment host | `true` |
+| `JWT_SECRET` | Yes | Must match backend — server-side Bearer minting | Same as backend `JWT_SECRET` |
 | `GOOGLE_CLIENT_ID` | Yes* | Google OAuth client ID | Add production redirect URI |
 | `GOOGLE_CLIENT_SECRET` | Yes* | Google OAuth secret | Server-only |
-| `DATABASE_URL` | Yes | Neon PostgreSQL connection string | Include `?sslmode=require` |
 | `CLOUDINARY_CLOUD_NAME` | Yes** | Cloudinary cloud name | Server-only (upload route) |
 | `CLOUDINARY_API_KEY` | Yes** | Cloudinary API key | Server-only |
 | `CLOUDINARY_API_SECRET` | Yes** | Cloudinary API secret | Server-only |
@@ -504,40 +545,32 @@ Copy `frontend/.env.example` to `.env.local`. Never commit real secrets.
 \* Required if Google sign-in is enabled.  
 \** Required for image uploads.
 
+**Not required:** `DATABASE_URL` — database is managed entirely by the backend.
+
 ### What must not be exposed
 
-Only variables prefixed with `NEXT_PUBLIC_` are bundled for the browser. Keep `AUTH_SECRET`, `DATABASE_URL`, and `CLOUDINARY_API_SECRET` server-side only.
+Only `NEXT_PUBLIC_*` variables are bundled for the browser. Keep `AUTH_SECRET`, `JWT_SECRET`, and `CLOUDINARY_API_SECRET` server-side only.
 
 ---
 
-## 11. Local Development Setup
+## 12. Local Development Setup
 
 ### Prerequisites
 
 - Node.js 18+
-- Neon PostgreSQL database (or local Postgres)
 - Express backend running on port `4000`
 - Cloudinary account (for uploads)
-- Google OAuth credentials (optional, for parent Google login)
+- Google OAuth credentials (optional)
 
 ### Steps
 
 ```bash
-# 1. Navigate to frontend
 cd frontend
-
-# 2. Install dependencies
 npm install
-
-# 3. Configure environment
 cp .env.example .env.local
-# Edit .env.local with your values
+# Set NEXT_PUBLIC_API_URL=http://localhost:4000
+# Set JWT_SECRET to match backend
 
-# 4. Push schema and generate Prisma client
-npx prisma db push
-npx prisma generate
-
-# 5. Start development server
 npm run dev
 ```
 
@@ -545,260 +578,146 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Backend dependency
 
-Set `NEXT_PUBLIC_API_URL=http://localhost:4000` and ensure the backend is running. Public school pages degrade gracefully when the API is unavailable (empty states, no crash).
+Ensure the backend is running with migrations applied. Public school pages degrade gracefully when the API is unavailable.
+
+### Verify TypeScript
+
+```bash
+npx tsc --noEmit
+```
 
 ### First admin user
 
-1. Sign in with Google or register as a parent.
-2. In Neon SQL editor:
-
-```sql
-UPDATE "User" SET role = 'ADMIN' WHERE email = 'your-email@example.com';
-```
-
-3. Sign out and use `/admin-login`.
+Use backend seeder (`npm run seed:admin` in `backend/`) or promote a user via SQL, then sign in at `/admin-login`.
 
 ---
 
-## 12. Production Deployment
+## 13. Production Deployment
 
 ### Target: Vercel
 
-Configuration file: `vercel.json`
+Configuration: `vercel.json`
 
 ```json
 {
-  "buildCommand": "npx prisma generate && npm run build",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
   "regions": ["bom1"]
 }
 ```
 
+No Prisma generate step — frontend has no database client.
+
 ### Deployment steps
 
-1. Connect the repository to Vercel.
-2. Set root directory to `frontend` (if monorepo).
-3. Add all environment variables from [Section 10](#10-environment-variables) for **Production**.
-4. Deploy. Vercel runs `prisma generate` then `next build`.
-
-### Production build (local verify)
-
-```bash
-npx prisma generate
-npm run build
-npm start
-```
+1. Connect repository to Vercel; set root directory to `frontend`.
+2. Add all environment variables from [Section 11](#11-environment-variables).
+3. Set `JWT_SECRET` identical to backend.
+4. Deploy.
 
 ### Domain setup
 
-1. Add custom domain in Vercel → **Domains**.
-2. Update `NEXT_PUBLIC_SITE_URL`, `NEXTAUTH_URL`, and `AUTH_URL` to the production domain.
-3. Update Google OAuth authorized redirect URIs:
-   - `https://your-domain.com/api/auth/callback/google`
-4. Update backend `FRONTEND_URL` to match the Vercel domain (CORS).
-
-### CSP and API URL
-
-`next.config.ts` injects `NEXT_PUBLIC_API_URL` into Content-Security-Policy `connect-src` at **build time**. Redeploy the frontend after changing the API URL.
+1. Add custom domain in Vercel.
+2. Update `NEXT_PUBLIC_SITE_URL`, `NEXTAUTH_URL`, and `AUTH_URL`.
+3. Update Google OAuth redirect: `https://your-domain.com/api/auth/callback/google`.
+4. Update backend `FRONTEND_URL` for CORS.
 
 ### Production checklist
 
 | Step | Action |
 |------|--------|
-| 1 | Deploy backend (Render/Railway) with HTTPS |
-| 2 | Set `NEXT_PUBLIC_API_URL` to backend HTTPS URL |
-| 3 | Set canonical site and auth URLs on Vercel |
-| 4 | Configure Neon `DATABASE_URL` with SSL |
-| 5 | Configure Cloudinary and Google OAuth |
-| 6 | Verify `/health` on backend and smoke-test auth + listings |
+| 1 | Deploy backend with HTTPS |
+| 2 | Set `NEXT_PUBLIC_API_URL` to backend URL |
+| 3 | Set `JWT_SECRET` matching backend |
+| 4 | Configure Google OAuth and Cloudinary |
+| 5 | Verify `/health` on backend |
+| 6 | Smoke-test auth, listings, dashboards |
 | 7 | Confirm sitemap and robots in production |
 
 ---
 
-## 13. Security Notes
+## 14. Security Notes
 
 ### Protected routes
 
-- Middleware enforces role boundaries on all dashboard and admin paths.
-- Layout-level `auth()` checks provide additional server-side guards.
+- Middleware enforces role boundaries on dashboard and admin paths.
+- Layout-level `auth()` provides server-side defense in depth.
 
 ### Hidden admin login
 
-- `/admin-login` is not linked in `Navbar` or public UI.
-- `HideOnAdminLogin` hides global chrome on the admin login page.
-- Unauthenticated `/admin/*` requests redirect to `/admin-login`.
+- `/admin-login` not linked in public navigation.
+- `HideOnAdminLogin` hides global chrome on admin login page.
 
 ### Upload validation
 
 - Client and server validation (MIME, extension, size, magic bytes).
-- SVG and executable types explicitly blocked.
 - Upload route runs on Node.js runtime only.
 
 ### Auth restrictions
 
-- Google OAuth limited to parent role on sign-in.
+- Google OAuth limited to parent role.
 - Credentials provider validates `authContext` against expected role.
-- Disabled accounts (`phone = "__DISABLED__"`) cannot sign in.
+- Disabled accounts cannot sign in (backend enforces).
 - Admin uses separate backend JWT + HTTP-only cookie.
 
 ### Frontend security behavior
 
-- Security headers via `next.config.ts` (HSTS, CSP, X-Frame-Options, etc.).
-- `upgrade-insecure-requests` in production CSP.
-- `poweredByHeader: false`.
+- Security headers via Next.js config (HSTS, CSP, X-Frame-Options).
 - Protected responses use `Cache-Control: no-store` in middleware.
-- Rate limiting on backend (frontend relies on API for brute-force protection).
+- Rate limiting on backend auth routes.
 
 ---
 
-## 14. UI/UX Design System (FIX-26)
+## 15. UI/UX System
 
 ### Design principles
 
 - **Trust and clarity** — education-focused blue palette with amber CTAs
-- **Mobile-first** — responsive grids and touch-friendly controls (min 44px tap targets on primary actions)
-- **Consistency** — shared tokens in `tailwind.config.ts` and utility classes in `globals.css`
-- **Accessibility** — WCAG-friendly contrast, visible `:focus-visible` rings, semantic HTML
+- **Mobile-first** — responsive grids and touch-friendly controls
+- **Accessibility** — WCAG-friendly contrast, visible `:focus-visible` rings
 
 ### Typography
 
-Fonts are loaded in `src/app/layout.tsx` via `next/font/google`.
-
-| Role | Font | Weights | Tailwind |
-|------|------|---------|----------|
-| Headings, buttons, nav | Plus Jakarta Sans | 600, 700 | `font-heading` |
-| Body, labels, meta | Inter | 400, 500 | `font-body` |
-
-| Element | Spec | Tailwind classes |
-|---------|------|------------------|
-| H1 | Plus Jakarta Sans 700, 36–48px | `font-heading font-bold text-h1` |
-| H2 | Plus Jakarta Sans 700, 28–32px | `font-heading font-bold text-h2` |
-| H3 | Plus Jakarta Sans 600, 20–24px | `font-heading font-semibold text-h3` |
-| Body | Inter 400, 15–16px, line-height 1.7 | `font-body text-body` or `text-body-lg` |
-| Labels / meta | Inter 400, 12–13px | `font-body text-label` / `text-meta` |
-| Buttons | Plus Jakarta Sans 600, 14px | `font-heading text-btn font-semibold` |
-
-Base heading styles are applied in `globals.css` (`h1`–`h3`).
+| Role | Font | Tailwind |
+|------|------|----------|
+| Headings, buttons, nav | Plus Jakarta Sans | `font-heading` |
+| Body, labels, meta | Inter | `font-body` |
 
 ### Color palette
 
-**Primary blue**
+- **Primary blue:** `blue-50` through `blue-900`
+- **Accent amber:** `amber-50` through `amber-800`
+- **Neutral gray:** `gray-50` through `gray-900`
+- **Semantic:** success, warning, danger, info tokens
 
-| Token | Hex |
-|-------|-----|
-| `blue-50` | `#E6F1FB` |
-| `blue-200` | `#85B7EB` |
-| `blue-400` | `#378ADD` |
-| `blue-600` | `#185FA5` |
-| `blue-800` | `#0C447C` |
-| `blue-900` | `#042C53` |
+### Button variants
 
-**Accent amber**
+Defined in `src/components/ui/button.tsx`:
 
-| Token | Hex |
-|-------|-----|
-| `amber-50` | `#FAEEDA` |
-| `amber-400` | `#EF9F27` |
-| `amber-600` | `#BA7517` |
-| `amber-800` | `#633806` |
-
-**Neutral gray**
-
-| Token | Hex |
-|-------|-----|
-| `gray-50` | `#F1EFE8` |
-| `gray-100` | `#D3D1C7` |
-| `gray-400` | `#888780` |
-| `gray-900` | `#2C2C2A` |
-
-**Semantic** (text on background)
-
-| Role | Text | Background | Classes |
-|------|------|------------|---------|
-| Success | `#3B6D11` | `#EAF3DE` | `text-success-text bg-success-bg` |
-| Warning | `#854F0B` | `#FAEEDA` | `text-warning-text bg-warning-bg` |
-| Danger | `#A32D2D` | `#FCEBEB` | `text-danger-text bg-danger-bg` |
-| Info | `#185FA5` | `#E6F1FB` | `text-info-text bg-info-bg` |
-
-### Spacing and layout
-
-| Token | Value | Usage |
-|-------|-------|--------|
-| `section` | 2.5rem (40px) | Vertical gap between dashboard sections (`.dashboard-section`) |
-| `card` | 1.5rem (24px) | Default card padding reference |
-| Page max width | `max-w-7xl` | Navbar, footer, main marketing layouts |
-
-**Border radius**
-
-| Token | Size | Usage |
-|-------|------|--------|
-| `rounded-xl` | 12px | Inputs, small controls |
-| `rounded-2xl` | 16px | Cards, modals |
-| `rounded-3xl` | 24px | Hero search bar |
-
-### Button system
-
-Defined in `src/components/ui/button.tsx` and mirrored as utilities in `globals.css`.
-
-| Variant | Style | When to use |
-|---------|-------|-------------|
-| `default` (primary) | `bg-blue-600` + white text | Main actions (save, submit, approve) |
-| `secondary` | `bg-blue-50` + `text-blue-800` | Secondary actions (cancel adjacent to primary) |
-| `cta` | `bg-amber-400` + `text-amber-800` | High-intent CTAs (register school, search) |
-| `destructive` | `bg-danger-text` + white | Delete, reject, disable |
-| `outline` / `ghost` | Neutral borders / hover | Tertiary actions |
-
-Utility classes: `.btn-primary`, `.btn-secondary`, `.btn-cta`.
-
-### Card system
-
-- Base: `rounded-2xl border border-gray-100 bg-white shadow-card`
-- Hover (listings): `.card-premium` with `shadow-card-hover` on hover
-- Titles: `CardTitle` uses `text-h3` + `text-blue-800`
-
-### Form system
-
-- Inputs / textareas: `.form-input` — `h-11`, `rounded-xl`, `border-gray-100`, focus ring `ring-blue-600`
-- Labels: `.form-label` — `text-label`, `font-medium`
-- Errors: `.form-input-error` + `.alert-danger` for messages
-- Success feedback: `.alert-success`
-
-### Component consistency rules
-
-1. Use design tokens — avoid raw hex or default Tailwind palette colors (`green-*`, `red-*`).
-2. Use `font-heading` / `font-body` — do not mix other font families.
-3. Use semantic badges (`Badge` variants: `success`, `warning`, `danger`, `info`).
-4. Primary actions use `blue-600`, not `blue-700`.
-5. CTA actions use `amber-400` / `amber-800` text per spec.
-6. Dashboard section headings use `.dashboard-section-title`.
-
-### Accessibility notes
-
-- Global `:focus-visible` — 2px `ring-blue-600` with offset on `gray-50` background
-- Body text on white / `gray-50` uses `gray-900` for sufficient contrast
-- CTA amber on white: use `text-amber-800` on `amber-400` backgrounds
-- Prefer semantic HTML (`h1`–`h3`, `nav`, `main`, `button`, `label`)
-- `prefers-reduced-motion` disables smooth scroll and shortens animations in `globals.css`
-- Interactive icons include `aria-hidden` when decorative; forms use associated `<label>` elements
+| Variant | Usage |
+|---------|-------|
+| `default` | Primary actions (save, submit) |
+| `secondary` | Secondary actions |
+| `cta` | High-intent CTAs (register school) |
+| `destructive` | Delete, reject, disable |
+| `outline` / `ghost` | Tertiary actions |
 
 ### Responsive behavior
 
-- School grid: 1 column (mobile) → 2 (tablet) → 3 (desktop)
-- Dashboards: stacked sidebar navigation on mobile, fixed nav on desktop
-- School detail: single column on mobile, two-column layout on large screens
+- School grid: 1 → 2 → 3 columns
+- Dashboards: stacked nav on mobile, fixed nav on desktop
 
 ---
 
-## 15. Future Improvements
-
-Planned enhancements (not yet implemented):
+## 16. Future Improvements
 
 | Area | Direction |
 |------|-----------|
-| **AI recommendations** | Personalized school suggestions based on parent preferences and location |
-| **Payments** | Admission fee or inquiry deposit flows (Razorpay/Stripe) |
-| **Inquiry notifications** | Email or SMS alerts when inquiry status changes or a school is approved |
-| **Analytics** | Parent engagement dashboards, school performance metrics |
-| **Mobile app** | React Native or Expo companion using the same API |
+| **Unified client API layer** | Consolidate direct backend calls and BFF routes |
+| **AI recommendations** | Personalized school suggestions |
+| **Inquiry notifications** | Real-time or email alerts |
+| **Mobile app** | React Native companion using the same API |
 
 ---
 
@@ -808,13 +727,16 @@ Planned enhancements (not yet implemented):
 |------|----------------|
 | Dev server | `npm run dev` |
 | Production build | `npm run build` |
-| Prisma studio | `npm run db:studio` |
+| Type check | `npx tsc --noEmit` |
 | Env template | `.env.example` |
 | Auth config | `src/lib/auth.ts` |
+| API client | `src/lib/api/server.ts` |
+| BFF proxy | `src/lib/api/proxy.ts` |
 | Middleware | `middleware.ts` |
 | Public API fetch | `src/lib/data/schools-public.ts` |
+| Type enums | `src/lib/types/database.ts` |
 | SEO helpers | `src/lib/seo.ts` |
 
 ---
 
-*Last updated: FIX-26 global design system — typography, colors, buttons, cards, forms, and accessibility tokens enforced across the platform.*
+*Last updated: Post-Prisma migration — frontend uses backend REST API exclusively; NextAuth JWT-only strategy; no database dependency.*

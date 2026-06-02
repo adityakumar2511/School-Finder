@@ -1,9 +1,10 @@
 # SchoolFinder — Backend Documentation
 
-> **Stack:** Express.js 5 · TypeScript · Prisma 7 · PostgreSQL (Neon) · JWT · Cloudinary  
-> **Default port:** `4000` · **Repository path:** `backend/`
+> **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Cloudinary · Resend  
+> **Default port:** `4000` · **Repository path:** `backend/`  
+> **Schema owner:** `backend/prisma/schema.prisma` (single source of truth)
 
-This document describes the production-ready SchoolFinder REST API: architecture, authentication, security, data access, deployment, and operational behavior. It reflects security hardening (FIX-16), performance optimizations (FIX-19), and deployment readiness (FIX-20).
+This document describes the production-ready SchoolFinder REST API: architecture, authentication, security, data access, deployment, and operational behavior.
 
 ---
 
@@ -35,15 +36,16 @@ This document describes the production-ready SchoolFinder REST API: architecture
 
 ### Backend Purpose
 
-The SchoolFinder backend is a **stateless REST API** that powers:
+The SchoolFinder backend is a **stateless REST API** and the **single source of truth** for all database operations. It powers:
 
 - Public school discovery (listings, search, detail)
 - Role-separated authentication (parent, school admin, platform admin)
 - School registration and moderation workflows
 - Parent inquiries and favourites
 - Admin platform management (users, schools, inquiries)
+- Parent profile and dashboard APIs
 
-The Next.js frontend handles UI, NextAuth sessions, and primary image uploads. The backend enforces business rules, JWT authorization, and database access.
+The Next.js frontend handles UI, NextAuth sessions, and primary image uploads to Cloudinary. The backend enforces business rules, JWT authorization, and all Prisma/database access.
 
 ### Express.js API Architecture
 
@@ -52,30 +54,35 @@ The Next.js frontend handles UI, NextAuth sessions, and primary image uploads. T
 | **Routes** | HTTP method + path mapping, middleware chains |
 | **Controllers** | Request handling, Prisma operations, response shaping |
 | **Middleware** | Auth, roles, validation, security, errors |
-| **Lib** | Prisma client, pagination, queries, cache prep, Cloudinary |
+| **Lib** | Prisma client, pagination, queries, cache, Cloudinary, mailer |
 | **Validators** | Zod schemas for request bodies |
 
 Entry point: `src/server.ts` — mounts routes, global middleware, health checks, and error handlers.
 
 ### Prisma ORM
 
-- **Client output:** `generated/prisma` (Prisma 7 pattern)
-- **Schema source of truth:** `frontend/prisma/schema.prisma` (shared Neon database)
-- **Backend workflow:** `npx prisma generate` only — schema migrations/push run from the frontend project
+- **Schema source of truth:** `backend/prisma/schema.prisma`
+- **Client output:** `generated/prisma` (Prisma 5 with `@prisma/adapter-pg`)
+- **Migrations:** `backend/prisma/migrations/` — run from backend only
+- **Scripts:** `migrate:dev`, `migrate:deploy`, `db:generate`
+
+The frontend has **no Prisma dependency** and does not run migrations.
 
 ### JWT Authentication
 
-- Bearer tokens issued on register/login
+- Bearer tokens issued on register/login/google-sync
+- Algorithm: **HS256**, issuer: **`schoolfinder-api`**
 - Payload: `{ id, role, email }`
 - Validated by `middleware/auth.ts` on protected routes
-- Expiration configurable via `JWT_EXPIRES_IN` (default `7d`)
+- In-memory token blacklist on logout
+- Expiration via `JWT_EXPIRES_IN` (default `7d`)
 
 ### Role-Based Access Control
 
 | Role | Scope |
 |------|--------|
-| `PARENT` | Inquiries, favourites, public browsing |
-| `SCHOOL_ADMIN` | Own school profile, own school inquiries |
+| `PARENT` | Inquiries, favourites, parent profile APIs |
+| `SCHOOL_ADMIN` | Own school profile, images, own school inquiries |
 | `ADMIN` | Full moderation panel APIs |
 
 Roles are enforced with `requireRole()` after JWT verification.
@@ -88,15 +95,16 @@ Roles are enforced with `requireRole()` after JWT verification.
 |------------|--------|
 | **Express.js 5** | HTTP server, routing, middleware pipeline |
 | **TypeScript** | Type-safe controllers and middleware |
-| **Prisma ORM 7** | PostgreSQL access via `@prisma/adapter-pg` + `pg` pool |
+| **Prisma 5** | PostgreSQL access via `@prisma/adapter-pg` + `pg` pool |
 | **PostgreSQL (Neon)** | Managed serverless Postgres with SSL |
 | **JWT (`jsonwebtoken`)** | API authentication tokens |
 | **Zod** | Request body validation |
 | **bcryptjs** | Password hashing (`BCRYPT_ROUNDS`, default 12) |
+| **Resend** | Password reset and OTP emails |
 | **Cloudinary** | Image storage utilities (`lib/cloudinary.ts`) |
-| **Helmet** | Security headers |
-| **express-rate-limit** | Global and auth route rate limiting |
-| **Multer** | In-memory upload parsing (`middleware/upload.ts`) |
+| **Helmet** | Security headers (CSP, HSTS) |
+| **express-rate-limit** | Global and route-specific rate limiting |
+| **Multer** | In-memory upload parsing (`middleware/upload.ts`, not mounted) |
 | **CORS** | Origin-restricted cross-origin requests |
 
 ---
@@ -106,34 +114,37 @@ Roles are enforced with `requireRole()` after JWT verification.
 ```
 backend/
 ├── prisma/
-│   └── schema.prisma           # Mirror of shared schema (generate client)
+│   ├── schema.prisma           # Database schema (source of truth)
+│   └── migrations/             # Prisma migration history
 ├── generated/
-│   └── prisma/                 # Prisma 7 generated client
+│   └── prisma/                 # Generated Prisma client
 ├── render.yaml                 # Render deployment blueprint
 ├── .env.example                # Environment template
 ├── src/
 │   ├── server.ts               # App bootstrap, routes, health checks
 │   ├── config/
-│   │   └── production.ts       # Production host, config warnings
+│   │   └── production.ts       # Startup env validation
 │   ├── controllers/
 │   │   ├── auth.controller.ts
 │   │   ├── schools.controller.ts
 │   │   ├── admin.controller.ts
 │   │   ├── inquiry.controller.ts
-│   │   └── favourite.controller.ts
+│   │   ├── favourite.controller.ts
+│   │   └── parent.controller.ts
 │   ├── routes/
 │   │   ├── auth.routes.ts
 │   │   ├── schools.routes.ts
 │   │   ├── admin.routes.ts
 │   │   ├── inquiry.routes.ts
-│   │   └── favourite.routes.ts
+│   │   ├── favourite.routes.ts
+│   │   └── parent.routes.ts
 │   ├── middleware/
-│   │   ├── auth.ts             # JWT verification
+│   │   ├── auth.ts             # JWT verification, signAccessToken, blacklist
 │   │   ├── roleCheck.ts        # Role gate
 │   │   ├── validate.ts         # Zod body validation
 │   │   ├── security.ts         # Helmet, CORS, rate limits
 │   │   ├── bruteForce.ts       # Login attempt throttling
-│   │   ├── upload.ts           # Multer + file validation
+│   │   ├── upload.ts           # Multer + file validation (unused in routes)
 │   │   └── errorHandler.ts     # Centralized errors
 │   ├── validators/
 │   │   ├── auth.validator.ts
@@ -141,13 +152,14 @@ backend/
 │   ├── lib/
 │   │   ├── prisma.ts           # Database client + connection pool
 │   │   ├── pagination.ts       # Page/limit helpers, response envelope
-│   │   ├── cache.ts            # Redis-ready cache abstraction
+│   │   ├── cache.ts            # In-memory TTL cache + invalidation
+│   │   ├── mailer.ts           # Resend email (reset, OTP)
+│   │   ├── sanitize.ts         # HTML encoding, phone validation
 │   │   ├── queries/schools.ts  # Select objects, search builders
 │   │   ├── cloudinary.ts       # Upload/delete helpers
-│   │   ├── sanitize.ts         # Request body sanitization
 │   │   └── account-status.ts   # Disabled account sentinel
 │   ├── scripts/
-│   │   └── seed-admin.ts       # First admin user from ADMIN_EMAIL / ADMIN_PASSWORD
+│   │   └── seed-admin.ts       # First admin from ADMIN_EMAIL/PASSWORD
 │   └── utils/
 │       ├── AppError.ts         # Typed HTTP errors
 │       └── asyncHandler.ts     # Async route wrapper
@@ -163,24 +175,23 @@ backend/
 | `routes/` | Express routers; compose middleware + controllers |
 | `middleware/` | Cross-cutting concerns (auth, security, validation, errors) |
 | `validators/` | Zod schemas exported for `validate()` middleware |
-| `lib/` | Shared infrastructure (DB, pagination, queries, cache, Cloudinary) |
-| `utils/` | Small reusable helpers (`AppError`, `asyncHandler`) |
+| `lib/` | Shared infrastructure (DB, pagination, queries, cache, mail) |
+| `utils/` | Small reusable helpers |
 | `config/` | Environment-specific startup behavior |
 
 ---
 
 ## 4. Authentication Architecture
 
-Authentication is **role-separated**. There is no single generic login endpoint without role context.
+Authentication is **role-separated**. Login accepts optional `expectedRole` to prevent cross-role access.
 
 ### Parent (`PARENT`)
 
 | Frontend route | Backend endpoint |
 |----------------|------------------|
 | `/register` | `POST /api/auth/register-parent` |
-| `/login` | `POST /api/auth/login` with `expectedRole: "PARENT"` (optional but enforced when set) |
-
-Parents receive a JWT on registration or login. Google OAuth is handled on the frontend via NextAuth; backend credentials cover email/password flows.
+| `/login` | `POST /api/auth/login` with `expectedRole: "PARENT"` |
+| Google OAuth | `POST /api/auth/google-sync` (upsert parent, return JWT) |
 
 ### School Administrator (`SCHOOL_ADMIN`)
 
@@ -189,43 +200,39 @@ Parents receive a JWT on registration or login. Google OAuth is handled on the f
 | `/school-register` | `POST /api/auth/register-school` |
 | `/school-login` | `POST /api/auth/login` with `expectedRole: "SCHOOL_ADMIN"` |
 
-Registration creates a `User` + `School` in a transaction. New schools start with `status: PENDING` until admin approval.
+Registration creates `User` + `School` in a transaction. New schools start with `status: PENDING`.
 
 ### Platform Administrator (`ADMIN`)
 
 | Frontend route | Backend endpoint |
 |----------------|------------------|
-| `/admin-login` (hidden) | `POST /api/auth/login` with `expectedRole: "ADMIN"` |
-
-Admin sign-in on the frontend:
-
-1. Calls backend login with `expectedRole: "ADMIN"`.
-2. Stores JWT in HTTP-only cookie `sf_admin_token`.
-3. Syncs NextAuth session for UI middleware.
+| `/admin-login` | `POST /api/auth/login` with `expectedRole: "ADMIN"` |
 
 ### JWT Flow
 
 ```
 Client → Authorization: Bearer <token>
-       → auth middleware verifies signature + expiry
+       → auth middleware verifies HS256 + issuer schoolfinder-api
+       → check in-memory blacklist
        → req.user = { id, role, email }
        → requireRole(...) if needed
        → controller
 ```
 
-### Role Validation on Login
+### Password Reset
 
-`login` accepts optional `expectedRole`:
+1. `POST /api/auth/forgot-password` — generates random token, stores SHA-256 hash + 1h expiry on `User`
+2. Email sent via Resend with link `{FRONTEND_URL}/reset-password?token=...`
+3. `POST /api/auth/reset-password` — validates token hash + expiry, updates password, clears reset fields
 
-- `PARENT` — rejects non-parent accounts
-- `SCHOOL_ADMIN` — rejects non-school-admin accounts
-- `ADMIN` — rejects non-admin accounts
+### Logout
 
-Returns `403 Unauthorized account type` on mismatch.
+`POST /api/auth/logout` (authenticated) — adds token to in-memory blacklist.
 
-### Protected APIs
+### Profile
 
-Any route using `auth` middleware requires a valid Bearer token. Role-specific routes add `requireRole(...)`.
+- `GET /api/auth/me` — current user profile
+- `PATCH /api/auth/me` — update name, phone, image
 
 ### Middleware Flow (Auth Routes)
 
@@ -243,15 +250,16 @@ POST /api/auth/login
 
 ### REST Structure
 
-Base URL: `http://localhost:4000` (development) or your deployed HTTPS origin.
+Base URL: `http://localhost:4000` (development) or deployed HTTPS origin.
 
 | Prefix | Domain |
 |--------|--------|
-| `/api/auth` | Registration, login, current user |
-| `/api/schools` | Public listings, school CRUD |
+| `/api/auth` | Registration, login, profile, password reset, Google sync |
+| `/api/schools` | Public listings, search, school CRUD, images |
 | `/api/admin` | Platform administration (ADMIN only) |
 | `/api/inquiries` | Parent inquiries, school/admin management |
-| `/api/favourites` | Parent favourites |
+| `/api/favourites` | Parent favourites (legacy shape) |
+| `/api/parent` | Parent profile, favourites, inquiries (dashboard shape) |
 | `/health` | Liveness + database connectivity |
 | `/ready` | Lightweight readiness probe |
 
@@ -259,35 +267,17 @@ Base URL: `http://localhost:4000` (development) or your deployed HTTPS origin.
 
 - One router file per domain under `src/routes/`
 - Routers mounted in `server.ts` with clear prefixes
-- **Route order matters:** `/my-school` is registered before `/:slug` in `schools.routes.ts`
-
-### Modular Controller Design
-
-Controllers are plain async functions:
-
-- Throw `AppError` for expected failures
-- Use `asyncHandler` in routes to forward errors to `errorHandler`
-- Keep Prisma logic colocated; shared selects live in `lib/queries/`
+- **Route order matters:** static paths (`/my-school`, `/search`) before `/:slug`
 
 ### Validation Flow
 
 ```
 Request body
-  → sanitizeRequestBody() (strip dangerous keys)
+  → sanitizeRequestBody()
   → Zod safeParse
   → 400 + field errors on failure
-  → req.body replaced with parsed data on success
+  → req.body replaced with parsed data
   → controller
-```
-
-### Error Handling Flow
-
-```
-Controller throws AppError | Zod | Prisma | JWT error
-  → asyncHandler catches
-  → errorHandler maps to status + message
-  → JSON { success: false, message, errors? }
-  → stack trace only in development
 ```
 
 ---
@@ -307,44 +297,32 @@ Incoming request
   → errorHandler (global)
 ```
 
+### Rate Limiters
+
+| Limiter | Scope | Limit |
+|---------|-------|-------|
+| `generalRateLimiter` | All routes | 100 / 15 min / IP |
+| `authRateLimiter` | `/api/auth/*` (login, register, etc.) | 10 / 15 min / IP |
+| `forgotPasswordRateLimiter` | Forgot password | 3 / hour / IP |
+| `resetPasswordRateLimiter` | Reset password | 5 / hour / IP |
+
 ### `auth` — JWT Verification
 
 - Requires `Authorization: Bearer <token>`
-- Validates JWT structure (three segments)
+- Validates HS256, issuer `schoolfinder-api`
+- Checks in-memory blacklist
 - Attaches `req.user` on success
-- Maps expiry and malformed tokens to `401`
 
 ### `requireRole` — Role Gate
 
 - Factory: `requireRole("ADMIN")` or `requireRole("SCHOOL_ADMIN", "ADMIN")`
 - Returns `403` if role not in allowed list
 
-### `validate` — Zod Validation
-
-- Runs before controller on mutating routes
-- Sanitizes then parses `req.body`
-- Short-circuits with `400` and field-level `errors`
-
-### `security` — Global Hardening
-
-- **Helmet:** CSP, frame denial, XSS protection, hide `X-Powered-By`
-- **CORS:** Allowlist from `FRONTEND_URL` (comma-separated for multiple origins)
-- **Rate limiting:** General API limiter on all routes
-- **Auth rate limiting:** Stricter limit on `/api/auth/*`
-- **Trust proxy:** Enabled in production (or `TRUST_PROXY=true`) for correct client IP behind Render/Railway
-
 ### `bruteForce` — Login Protection
 
 - Tracks failures by `IP + email`
 - Blocks after 5 failures within 15 minutes
 - Returns `429` when blocked
-- Cleared on successful login
-
-### `errorHandler` — Centralized Errors
-
-- Registered last in `server.ts`
-- Handles `AppError`, Zod, Prisma, JWT, syntax errors
-- Production responses exclude stack traces
 
 ---
 
@@ -354,21 +332,17 @@ Incoming request
 
 | File | Schemas |
 |------|---------|
-| `validators/auth.validator.ts` | `registerParentSchema`, `registerSchoolSchema`, `loginSchema` |
+| `validators/auth.validator.ts` | `registerParentSchema`, `registerSchoolSchema`, `loginSchema`, forgot/reset schemas |
 | `validators/school.validator.ts` | `createSchoolBodySchema`, `updateSchoolBodySchema` |
 
-### Request Sanitization
+### Sanitization
 
-`lib/sanitize.ts` strips prototype pollution keys and normalizes string fields before Zod parsing.
+`lib/sanitize.ts`:
 
-### Payload Validation
-
-- Invalid bodies return `400` with `{ success: false, message: "Validation failed", errors: { field: "..." } }`
-- Valid bodies are typed via Zod inference in controllers
-
-### Safe Error Responses
-
-Validation failures never leak internal schema details beyond field messages. Unexpected validation exceptions return a generic `400`.
+- HTML entity encoding and tag stripping on text fields
+- Indian phone number normalization
+- `sanitizeSchoolData()` for school create/update
+- Prototype pollution key stripping in `sanitizeRequestBody()`
 
 ---
 
@@ -376,134 +350,138 @@ Validation failures never leak internal schema details beyond field messages. Un
 
 ### Helmet Configuration
 
-Configured in `middleware/security.ts`:
-
-- Content Security Policy for API responses
+- Content Security Policy
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `crossOriginResourcePolicy: cross-origin` for image delivery
+- HSTS via `strictTransportSecurity` in production
 
-### Rate Limiting
-
-| Limiter | Scope | Limit |
-|---------|-------|-------|
-| `generalRateLimiter` | All routes | 100 requests / 15 min / IP |
-| `authRateLimiter` | `/api/auth/*` | 10 requests / 15 min / IP |
-
-### Brute-Force Protection
-
-In-memory tracker on auth routes (upgradeable to Redis). Blocks repeated failed logins per IP+email combination.
-
-### JWT Validation
-
-- Secret required via `JWT_SECRET` (server fails configuration check if missing at verify time)
-- Malformed, expired, and not-yet-valid tokens return distinct `401` messages
-- Payload must include `id`, `role`, and `email`
-
-### CORS Restrictions
+### CORS
 
 - **Development:** defaults to `http://localhost:3000` if `FRONTEND_URL` unset
-- **Production:** empty allowlist if `FRONTEND_URL` unset (requests with `Origin` header rejected)
-- Supports multiple origins via comma-separated `FRONTEND_URL`
+- **Production:** requires `FRONTEND_URL` (comma-separated for multiple origins)
+- Exact origin match — no trailing slash
 
-### Upload Restrictions
+### JWT Hardening
 
-See [Upload System](#9-upload-system). Backend validates MIME, extension, magic bytes, and 5MB limit when Multer middleware is used.
+- Algorithm locked to HS256
+- Issuer claim: `schoolfinder-api`
+- Three-part structure validated before verify
+- Token blacklist on logout (in-memory; use Redis in multi-instance deployments)
+
+### Account Disable
+
+Disabled users have `phone = "__DISABLED__"`. Login returns `403`. Admin toggles via `PATCH /api/admin/users/:id/status`.
 
 ---
 
 ## 9. Upload System
 
-### Cloudinary Integration
+### Current Architecture
 
-`lib/cloudinary.ts` provides:
+Primary uploads happen on the **frontend** (`POST /api/upload` → Cloudinary). The backend receives **image URLs** in JSON bodies:
 
-- `uploadImage(buffer, folder, mime)` — uploads to `school-platform/{logos|gallery|profiles}`
-- Automatic optimization: `quality: auto:good`, `fetch_format: auto`
-- `deleteImage(publicId)` — cleanup helper
+- School logo/profile: `PATCH /api/schools/:id` with `logoUrl`
+- Gallery: `POST /api/schools/my-school/images` with `{ url, caption? }`
+- Delete gallery: `DELETE /api/schools/images/:id`
 
-### Upload Middleware
+### Backend Upload Utilities (Available)
 
-`middleware/upload.ts`:
-
-| Export | Purpose |
-|--------|---------|
-| `uploadMemory` | Multer memory storage, 5MB limit |
-| `singleImageUpload` | Single `file` field handler |
-| `validateUploadedFile` | Magic-byte + extension validation |
-| `detectImageMime` | JPEG, PNG, WebP detection |
-
-### MIME and Size Limits
+`lib/cloudinary.ts` and `middleware/upload.ts` provide Multer + magic-byte validation + Cloudinary upload. These are **not mounted on any route** currently but are available for direct API integration.
 
 | Rule | Value |
 |------|--------|
 | Allowed types | JPEG, PNG, WebP |
 | Max size | 5 MB |
-| Blocked | SVG, PDF, executables, scripts, HTML, etc. |
-
-### Production Note
-
-Primary user-facing uploads are handled by the **Next.js** route `POST /api/upload` on the frontend (same validation rules, server-side Cloudinary credentials). The backend upload layer is available for direct API integration or future endpoints.
-
-### Optimization Flow
-
-```
-Buffer → magic-byte detect → Cloudinary upload_stream
-      → optimized delivery URL returned to client
-      → URL persisted on School / User via Prisma
-```
 
 ---
 
 ## 10. Database Architecture
 
-### Prisma Schema Usage
+### Schema Location
 
-Shared models (defined in frontend schema, generated in backend):
+**Single source of truth:** `backend/prisma/schema.prisma`
+
+Run all schema changes and migrations from the backend project only.
+
+### Enums
+
+| Enum | Values |
+|------|--------|
+| `Role` | `PARENT`, `SCHOOL_ADMIN`, `ADMIN` |
+| `SchoolStatus` | `PENDING`, `APPROVED`, `REJECTED` |
+| `BoardType` | `CBSE`, `ICSE`, `UP_BOARD`, `OTHER` |
+| `SchoolType` | `BOYS`, `GIRLS`, `CO_ED` |
+| `MediumType` | `HINDI`, `ENGLISH`, `BOTH` |
+| `InquiryStatus` | `NEW`, `CONTACTED`, `CLOSED` |
+
+### Models
 
 | Model | Purpose |
 |-------|---------|
-| `User` | Accounts with `Role` enum; optional `resetToken` and `resetTokenExpiry` for password reset |
-| `School` | Listings with `SchoolStatus` workflow |
+| `User` | Accounts; `resetToken`, `resetTokenExpiry` for password reset; OTP fields |
+| `School` | Listings with fees, status, owner relation |
 | `SchoolImage` | Gallery images |
 | `Facility` / `SchoolFacility` | Many-to-many facilities |
 | `Inquiry` | Parent → school messages |
 | `Favourite` | Parent saved schools |
-| `Account`, `Session`, `VerificationToken` | NextAuth compatibility |
+| `Account`, `Session`, `VerificationToken` | OAuth tables (schema retained; frontend uses JWT-only NextAuth) |
 
-### Neon PostgreSQL
+### Indexes
 
-- Connection via `DATABASE_URL` with `?sslmode=require`
-- Production pool uses SSL (`lib/prisma.ts`)
-- Connection pool limits: 10 (production), 5 (development)
+**School:**
 
-### Relationships (Key)
+- `@@index([status, createdAt])`
+- `@@index([city, status])`
+- `@@index([board, status])`
+- `@@index([ownerId])`
+
+**Inquiry:**
+
+- `@@index([schoolId, status])`
+- `@@index([parentId])`
+
+**Favourite:**
+
+- `@@unique([parentId, schoolId])`
+- `@@index([parentId])`
+
+### Relationships
 
 ```
 User 1──* School (owner)
-User — resetToken, resetTokenExpiry (optional; password reset flow)
-School 1──* Inquiry
-User (parent) 1──* Inquiry
+User 1──* Inquiry (as parent)
 User 1──* Favourite *──1 School
-School *──* Facility (via SchoolFacility)
 School 1──* SchoolImage
+School *──* Facility (via SchoolFacility)
+School 1──* Inquiry
 ```
 
-### Pagination Strategy
+### Migrations
 
-`lib/pagination.ts`:
+```bash
+# Development — create and apply migration
+npm run migrate:dev
+
+# Production — apply pending migrations
+npm run migrate:deploy
+# or: npx prisma migrate deploy (via render.yaml preDeployCommand)
+```
+
+Migration history: `prisma/migrations/`
+
+### Pagination
 
 | Context | Default `limit` | Max |
 |---------|-----------------|-----|
-| Public schools | 12 | 50 |
+| Public schools | 12 | 50 (1000 for sitemap) |
 | Admin tables | 20 | 50 |
+| Parent dashboard | 20 | 50 |
 
-Standard response envelope:
+Response envelope:
 
 ```json
 {
   "data": [],
-  "schools": [],
   "pagination": {
     "page": 1,
     "limit": 12,
@@ -515,29 +493,23 @@ Standard response envelope:
 
 Legacy alias keys (`schools`, `users`, `inquiries`) preserve backward compatibility.
 
-### Query Optimization
+### Cache Layer
 
-`lib/queries/schools.ts`:
+`lib/cache.ts` — in-memory Map with TTL:
 
-- `schoolListSelect` — card fields + facility count
-- `schoolDetailSelect` — detail page fields + minimal relations
-- `adminSchoolListSelect` — moderation list fields
-- `buildSchoolSearchWhere()` — `OR` on name, city, state
-- `mapSchoolListItem()` — maps `_count` to `facilitiesCount`
+| Namespace | TTL |
+|-----------|-----|
+| School list | 60 seconds |
+| School detail | 300 seconds |
+| Admin stats | 30 seconds |
 
-Controllers prefer `select` over heavy `include` to avoid overfetching.
-
-### Cache Preparation
-
-`lib/cache.ts` — `withCache()` is pass-through today; `buildCacheKey()` ready for Redis.
+`invalidateSchoolCache()` clears related keys on school approve/reject/update.
 
 ---
 
 ## 11. Error Handling System
 
 ### Centralized Error Handler
-
-`middleware/errorHandler.ts` maps errors to HTTP status codes:
 
 | Source | Typical status |
 |--------|----------------|
@@ -548,27 +520,7 @@ Controllers prefer `select` over heavy `include` to avoid overfetching.
 | JWT errors | 401 |
 | Unknown | 500 |
 
-### `asyncHandler`
-
-Wraps async route handlers and forwards rejections to `next(err)`:
-
-```typescript
-router.get("/", asyncHandler(getSchools));
-```
-
-### Prisma Error Handling
-
-Known error codes translated to user-safe messages. Other Prisma errors return generic `400`/`500` without exposing query internals.
-
-### Validation Errors
-
-Returned as `{ success: false, message: "Validation failed", errors: { field: "..." } }`.
-
-### Production-Safe Responses
-
-- Stack traces included **only** when `NODE_ENV=development`
-- 5xx errors logged server-side; client receives generic message
-- 4xx client errors logged only in development (except 5xx)
+Stack traces included **only** when `NODE_ENV=development`.
 
 ---
 
@@ -588,22 +540,29 @@ Returned as `{ success: false, message: "Validation failed", errors: { field: ".
 | POST | `/register-parent` | Public | Create parent account + JWT |
 | POST | `/register-school` | Public | Create school admin + school (`PENDING`) + JWT |
 | POST | `/login` | Public | Login; optional `expectedRole` |
-| POST | `/forgot-password` | Public | Generate hashed reset token; send reset email via Nodemailer SMTP |
-| POST | `/reset-password` | Public | Verify token, update password, clear reset token fields |
+| POST | `/forgot-password` | Public | Generate reset token; send email via Resend |
+| POST | `/verify-otp` | Public | Verify OTP code |
+| POST | `/reset-password` | Public | Verify token, update password |
+| POST | `/logout` | Bearer | Revoke token (blacklist) |
 | GET | `/me` | Bearer | Current user profile |
+| PATCH | `/me` | Bearer | Update profile |
+| POST | `/google-sync` | Public | Upsert parent from Google profile; return JWT |
 
 ### Schools — `/api/schools`
 
 | Method | Path | Auth | Role | Description |
 |--------|------|------|------|-------------|
-| GET | `/` | Public | — | Paginated listing (search, filters, `status`) |
+| GET | `/` | Public | — | Paginated listing (search, filters, cursor/offset) |
+| GET | `/search` | Public | — | Autocomplete search |
+| GET | `/my-school` | Bearer | `SCHOOL_ADMIN` | Owner's school with images, facilities |
+| POST | `/my-school/images` | Bearer | `SCHOOL_ADMIN` | Add gallery image (URL in body) |
+| DELETE | `/images/:id` | Bearer | `SCHOOL_ADMIN` | Delete gallery image |
 | GET | `/:slug` | Public | — | School detail by slug |
-| GET | `/my-school` | Bearer | `SCHOOL_ADMIN` | Authenticated owner's school |
 | POST | `/` | Bearer | `SCHOOL_ADMIN` | Create school |
 | PATCH | `/:id` | Bearer | Owner/Admin | Update school |
 | DELETE | `/:id` | Bearer | `ADMIN` | Delete school |
 
-**Listing query params:** `search`, `city`, `board`, `schoolType`, `medium`, `status`, `page`, `limit`
+**Listing query params:** `search`, `city`, `board`, `schoolType`, `medium`, `status`, `page`, `limit`, `cursor`
 
 ### Admin — `/api/admin`
 
@@ -611,14 +570,14 @@ All routes require `ADMIN` role.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/stats` | Platform statistics |
+| GET | `/stats` | Platform statistics (cached 30s) |
 | GET | `/schools` | Paginated school moderation list |
 | GET | `/users` | Paginated user list |
 | GET | `/inquiries` | Paginated cross-school inquiries |
 | PATCH | `/schools/:id/approve` | Approve school by ID |
 | PATCH | `/schools/:id/reject` | Reject school by ID |
-| POST | `/approve` | Approve school (body) |
-| POST | `/reject` | Reject school (body) |
+| POST | `/approve` | Approve school (legacy body `schoolId`) |
+| POST | `/reject` | Reject school (legacy body) |
 | POST | `/add-school` | Admin direct school creation |
 | PATCH | `/users/:id/role` | Change user role |
 | PATCH | `/users/:id/status` | Enable/disable account |
@@ -628,9 +587,9 @@ All routes require `ADMIN` role.
 | Method | Path | Auth | Role | Description |
 |--------|------|------|------|-------------|
 | POST | `/` | Bearer | `PARENT` | Create inquiry for approved school |
-| GET | `/my` | Bearer | `PARENT` | Paginated list of inquiries sent by the logged-in parent (school name, city, logo) |
-| GET | `/school/:schoolId` | Bearer | `SCHOOL_ADMIN`, `ADMIN` | List inquiries (ownership enforced for school admin) |
-| PATCH | `/:id/status` | Bearer | `SCHOOL_ADMIN`, `ADMIN` | Update status (`NEW`, `CONTACTED`, `CLOSED`) |
+| GET | `/my` | Bearer | `PARENT` | Paginated own inquiries |
+| GET | `/school/:schoolId` | Bearer | `SCHOOL_ADMIN`, `ADMIN` | List school inquiries |
+| PATCH | `/:id/status` | Bearer | `SCHOOL_ADMIN`, `ADMIN` | Update status |
 
 ### Favourites — `/api/favourites`
 
@@ -642,11 +601,24 @@ All routes require `PARENT` role.
 | POST | `/` | Add favourite (`schoolId` in body) |
 | DELETE | `/` | Remove favourite (`schoolId` query param) |
 
+### Parent — `/api/parent`
+
+All routes require `PARENT` role. Richer response shapes for dashboard pages.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/profile` | Parent profile |
+| PATCH | `/profile` | Update parent profile |
+| GET | `/favourites` | Paginated favourites with school details |
+| POST | `/favourites` | Add favourite |
+| DELETE | `/favourites` | Remove favourite (`schoolId` query param) |
+| GET | `/inquiries` | Paginated sent inquiries with school details |
+
+> **Note:** `/api/favourites` and `/api/parent/favourites` overlap. The frontend dashboards use `/api/parent/*`; public favourite toggle may use `/api/favourites`.
+
 ---
 
 ## 13. Dashboard Permissions
-
-Permissions below map to frontend dashboards. The backend enforces them via JWT + `requireRole`.
 
 ### Parent Permissions
 
@@ -656,17 +628,15 @@ Permissions below map to frontend dashboards. The backend enforces them via JWT 
 | Create inquiry | Yes (`PARENT`) |
 | Manage favourites | Yes (`PARENT`) |
 | Access school/admin dashboards | No |
-| Moderate schools | No |
 
 ### School Admin Permissions
 
 | Action | Allowed |
 |--------|---------|
-| View/update own school | Yes (ownership check on mutations) |
-| View inquiries for own school | Yes |
-| Update inquiry status (own school) | Yes |
+| View/update own school | Yes (ownership check) |
+| Manage gallery images | Yes (own school) |
+| View/update inquiries for own school | Yes |
 | Access admin panel | No |
-| Delete arbitrary schools | No |
 
 ### Admin Permissions
 
@@ -677,7 +647,7 @@ Permissions below map to frontend dashboards. The backend enforces them via JWT 
 | View all inquiries | Yes |
 | Add school directly | Yes |
 | Delete schools | Yes |
-| Disable accounts (`phone = "__DISABLED__"`) | Yes |
+| Disable accounts | Yes |
 
 ---
 
@@ -688,36 +658,31 @@ Copy `backend/.env.example` to `.env`. Never commit real secrets.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NODE_ENV` | Recommended | `development` or `production` |
-| `PORT` | No (local) | Server port; injected by Render/Railway in production |
+| `PORT` | No (local) | Server port; injected by Render/Railway |
 | `DATABASE_URL` | Yes | Neon PostgreSQL URL with `sslmode=require` |
-| `JWT_SECRET` | Yes | Signing secret for API tokens |
+| `JWT_SECRET` | Yes | Signing secret (must match frontend `JWT_SECRET`) |
 | `JWT_EXPIRES_IN` | No | Token TTL (default `7d`) |
 | `FRONTEND_URL` | Yes (prod) | CORS allowlist; HTTPS, no trailing slash |
-| `CLOUDINARY_CLOUD_NAME` | For uploads* | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | For uploads* | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | For uploads* | Cloudinary API secret |
+| `CLOUDINARY_CLOUD_NAME` | Yes | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Yes | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Yes | Cloudinary API secret |
+| `RESEND_API_KEY` | For email | Resend API key (password reset emails) |
+| `EMAIL_FROM` | For email | From address for Resend (e.g. `SchoolFinder <noreply@example.com>`) |
 | `BCRYPT_ROUNDS` | No | Password hashing cost (default `12`) |
-| `TRUST_PROXY` | No | `true` behind reverse proxy (auto in production) |
-| `ADMIN_EMAIL` | For seeder† | Email for the initial admin account (`npm run seed:admin`) |
-| `ADMIN_PASSWORD` | For seeder† | Password for the initial admin account (one-time seeder) |
-| `SMTP_HOST` | For reset mail‡ | SMTP server hostname (password reset emails) |
-| `SMTP_PORT` | For reset mail‡ | SMTP port (e.g. `587`) |
-| `SMTP_USER` | For reset mail‡ | SMTP authentication username |
-| `SMTP_PASS` | For reset mail‡ | SMTP authentication password or app password |
-| `SMTP_FROM` | For reset mail‡ | From address for outbound mail (e.g. `SchoolFinder <noreply@example.com>`) |
+| `TRUST_PROXY` | No | `true` behind reverse proxy |
+| `ADMIN_EMAIL` | For seeder | Initial admin email |
+| `ADMIN_PASSWORD` | For seeder | Initial admin password |
 
-\* Required when using Cloudinary upload utilities.  
-† Required when running the admin seeder (`npm run seed:admin`). Remove or rotate after first use.  
-‡ Required for forgot-password / reset-password email delivery.
+### Email Configuration Note
 
-### Setup Instructions
+Password reset emails are sent via **Resend** (`RESEND_API_KEY`, `EMAIL_FROM`). The `.env.example` still lists SMTP variables, and `validateStartupEnv()` checks SMTP keys — align these in a future cleanup. For production email delivery, configure Resend.
+
+### Setup
 
 ```bash
 cp .env.example .env
-# Edit .env with your Neon, JWT, and Cloudinary values
+# Edit DATABASE_URL, JWT_SECRET, FRONTEND_URL, Cloudinary, Resend
 ```
-
-**Production:** set all variables in the Render/Railway dashboard. Use `generateValue` or a secrets manager for `JWT_SECRET`.
 
 ---
 
@@ -727,49 +692,35 @@ cp .env.example .env
 
 - Node.js 18+
 - Neon (or local) PostgreSQL database
-- Frontend project for schema push (shared DB)
 
 ### Commands
 
 ```bash
-# 1. Navigate to backend
 cd backend
-
-# 2. Install dependencies
 npm install
-
-# 3. Configure environment
 cp .env.example .env
 
-# 4. Generate Prisma client (schema pushed from frontend)
 npx prisma generate
-
-# 5. Start development server
+npm run migrate:dev    # create/apply migrations
 npm run dev
 ```
 
-API available at [http://localhost:4000](http://localhost:4000).
-
-### Database Setup
-
-Schema is owned by the frontend:
-
-```bash
-# From frontend/
-npx prisma db push
-npx prisma generate
-
-# From backend/
-npx prisma generate
-```
-
-Do **not** run conflicting migrations from both projects.
+API: [http://localhost:4000](http://localhost:4000)
 
 ### Verify
 
 ```bash
 curl http://localhost:4000/health
 # Expect: { "status": "ok", "database": "connected", ... }
+
+npx tsc --noEmit
+```
+
+### First admin
+
+```bash
+# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env
+npm run seed:admin
 ```
 
 ---
@@ -782,6 +733,7 @@ Blueprint: `render.yaml`
 
 ```yaml
 buildCommand: npm ci && npx prisma generate && npm run build
+preDeployCommand: npx prisma migrate deploy
 startCommand: npm start
 healthCheckPath: /health
 ```
@@ -791,10 +743,9 @@ healthCheckPath: /health
 | Setting | Value |
 |---------|--------|
 | Build | `npm ci && npx prisma generate && npm run build` |
+| Pre-deploy | `npx prisma migrate deploy` |
 | Start | `npm start` |
 | Health check | `/health` |
-
-Use the same environment variables as `.env.example`.
 
 ### Production Environment
 
@@ -803,27 +754,13 @@ Use the same environment variables as `.env.example`.
 | `NODE_ENV` | `production` |
 | `FRONTEND_URL` | `https://your-app.vercel.app` |
 | `DATABASE_URL` | Neon URL with SSL |
-| `JWT_SECRET` | Strong random secret (64+ bytes) |
+| `JWT_SECRET` | Strong random secret (64+ bytes); same on frontend |
 
 ### Neon Setup
 
-1. Create a Neon project and database.
-2. Copy connection string with `?sslmode=require`.
-3. Run `npx prisma db push` from **frontend** once.
-4. Set identical `DATABASE_URL` on Render and Vercel.
-
-### Production Build
-
-```bash
-npm run build    # compiles TypeScript to dist/
-npm start        # runs dist/server.js (prestart builds)
-```
-
-### SSL Requirements
-
-- Public API must be **HTTPS** (Render/Railway provide TLS termination).
-- Frontend `NEXT_PUBLIC_API_URL` must use `https://`.
-- CORS `FRONTEND_URL` must match the Vercel domain exactly.
+1. Create Neon project and copy connection string with `?sslmode=require`.
+2. Run `npx prisma migrate deploy` from backend.
+3. Set `DATABASE_URL` on Render only (not Vercel).
 
 ### Production Server Behavior
 
@@ -831,7 +768,7 @@ npm start        # runs dist/server.js (prestart builds)
 |---------|----------|
 | Listen | `0.0.0.0` on `PORT` |
 | Trust proxy | Enabled in production |
-| Config warnings | Logged for missing `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL` |
+| Startup validation | Warns/exits on missing critical env vars |
 | Health | Returns `503` if database unreachable |
 
 ---
@@ -841,27 +778,23 @@ npm start        # runs dist/server.js (prestart builds)
 ### Pagination
 
 - Bounded `limit` with defaults (schools: 12, admin: 20, max: 50)
-- `skip`/`take` Prisma queries — no unbounded list endpoints
+- Cursor pagination support on school listings
 
 ### Optimized Queries
 
 - Explicit `select` objects in `lib/queries/schools.ts`
 - Facility counts via `_count` instead of loading relations
-- Admin list endpoints use minimal field selections
+- `Promise.all` for parallel findMany + count
 
-### Controlled Includes
+### Cache
 
-- School detail uses targeted `select` for images, facilities, and owner name only
-- Avoids loading unused nested graphs
+- In-memory TTL cache on list, detail, and admin stats
+- Invalidation on school mutations
+- Upgrade path: replace Map with Redis for multi-instance deployments
 
-### Payload Minimization
+### Sanitization
 
-- `paginatedResponse()` returns `data` + `pagination` (+ legacy alias)
-- List mappers strip internal Prisma fields (`_count` → `facilitiesCount`)
-
-### Cache Layer (Prepared)
-
-`withCache()` ready for Redis; listing endpoints already compute deterministic cache keys.
+- Input sanitization before persistence reduces XSS risk on stored text fields
 
 ---
 
@@ -870,34 +803,20 @@ npm start        # runs dist/server.js (prestart builds)
 ### Hidden Admin Auth
 
 - No public discovery endpoint for admin login
-- `expectedRole: "ADMIN"` required on login for admin panel JWT
-- Admin routes mounted under `/api/admin` with global `requireRole("ADMIN")`
+- `expectedRole: "ADMIN"` required on login
+- All `/api/admin/*` routes use global `requireRole("ADMIN")`
 
 ### Role Restrictions
 
 - Cross-role login blocked via `expectedRole`
-- School admins cannot access other schools' inquiries (ownership check)
+- School admins cannot access other schools' data (ownership checks)
 - Parents cannot call admin or school-management endpoints
 
-### Protected APIs
-
-All non-public routes require valid Bearer JWT. Role middleware applied per router or route.
-
-### Upload Security
-
-- Magic-byte validation prevents MIME spoofing
-- Extension blocklist for dangerous file types
-- 5MB hard limit at Multer and validation layers
-
-### Token Validation
+### Token Security
 
 - Bearer scheme enforced
-- Three-part JWT structure checked before verify
-- Expired tokens return explicit `401` message
-
-### Account Disable
-
-Disabled users have `phone = "__DISABLED__"` (no schema migration). Login returns `403` for disabled accounts.
+- Logout blacklists token (in-memory — note multi-instance limitation)
+- Password reset tokens stored as SHA-256 hashes, 1-hour expiry
 
 ---
 
@@ -905,12 +824,13 @@ Disabled users have `phone = "__DISABLED__"` (no schema migration). Login return
 
 | Area | Direction |
 |------|-----------|
-| **Redis caching** | Enable `withCache()` for school listings and stats |
-| **WebSockets** | Real-time inquiry notifications for school admins |
-| **Inquiry notifications** | Email or SMS alerts on inquiry status and school approval events |
+| **Redis caching** | Replace in-memory cache for horizontal scaling |
+| **Redis token blacklist** | Shared logout across instances |
+| **Unified parent API** | Consolidate `/api/favourites` and `/api/parent/*` |
+| **Backend upload route** | Mount Multer + Cloudinary for direct API uploads |
+| **Email config cleanup** | Align `.env.example` and startup validation with Resend |
+| **WebSockets** | Real-time inquiry notifications |
 | **Audit logs** | Immutable admin action trail |
-| **Analytics** | Aggregated inquiry and search metrics |
-| **Microservices readiness** | Split auth, schools, and admin into services behind API gateway |
 
 ---
 
@@ -920,12 +840,14 @@ Disabled users have `phone = "__DISABLED__"` (no schema migration). Login return
 |------|----------------|
 | Dev server | `npm run dev` |
 | Production build | `npm run build && npm start` |
-| Prisma generate | `npx prisma generate` |
+| Prisma generate | `npm run db:generate` |
+| Migrate (dev) | `npm run migrate:dev` |
+| Migrate (prod) | `npm run migrate:deploy` |
+| Seed admin | `npm run seed:admin` |
+| Type check | `npx tsc --noEmit` |
 | Health check | `GET /health` |
-| Env template | `.env.example` |
+| Schema | `prisma/schema.prisma` |
 | Deploy blueprint | `render.yaml` |
-| Pagination helpers | `src/lib/pagination.ts` |
-| School query selects | `src/lib/queries/schools.ts` |
 
 ---
 
@@ -933,14 +855,14 @@ Disabled users have `phone = "__DISABLED__"` (no schema migration). Login return
 
 | Step | Action |
 |------|--------|
-| 1 | Deploy API to Render/Railway with `render.yaml` or equivalent |
-| 2 | Set `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, Cloudinary vars |
+| 1 | Deploy API to Render with `render.yaml` |
+| 2 | Set `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, Cloudinary, Resend |
 | 3 | Confirm `GET /health` returns `database: connected` |
-| 4 | Deploy frontend to Vercel with `NEXT_PUBLIC_API_URL` pointing to API |
+| 4 | Deploy frontend with matching `JWT_SECRET` and `NEXT_PUBLIC_API_URL` |
 | 5 | Verify CORS from production frontend origin |
-| 6 | Configure Google OAuth and admin user (`npm run seed:admin` or manual role update) |
-| 7 | Smoke-test auth, listings, inquiries, and moderation |
+| 6 | Run `npm run seed:admin` or promote user manually |
+| 7 | Smoke-test auth, listings, inquiries, moderation |
 
 ---
 
-*Last updated: production documentation pass (FIX-22) — reflects Express API architecture, split auth flows, security middleware, performance patterns, and Render deployment.*
+*Last updated: Post-Prisma migration — backend owns schema and all database operations; parent API routes; JWT hardening; in-memory cache; Resend email.*
