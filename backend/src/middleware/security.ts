@@ -134,6 +134,20 @@ export const resetPasswordRateLimiter = rateLimit({
   },
 });
 
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+export const otpRateLimiter = rateLimit({
+  windowMs: TEN_MINUTES_MS,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: "RATE_LIMITED",
+    message: "Too many OTP requests. Please wait before requesting again.",
+  },
+});
+
 export function applySecurityMiddleware(app: Express): void {
   const trustProxy =
     process.env.TRUST_PROXY === "true" ||

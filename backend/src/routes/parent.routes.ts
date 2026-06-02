@@ -17,6 +17,8 @@ router.use(auth, requireRole("PARENT"));
 
 router.get("/profile", asyncHandler(getParentProfile));
 router.patch("/profile", asyncHandler(updateParentProfile));
+// Preferred favourites API — use this for all new frontend code.
+// Richer response shape includes full school details and pagination.
 router.get("/favourites", asyncHandler(getParentFavourites));
 router.post("/favourites", asyncHandler(addParentFavourite));
 router.delete("/favourites", asyncHandler(removeParentFavourite));

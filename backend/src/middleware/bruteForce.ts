@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -42,7 +42,7 @@ export function assertLoginAllowed(req: Request, email?: string): void {
   const record = attempts.get(key);
 
   if (record?.blockedUntil && record.blockedUntil > Date.now()) {
-    throw new AppError(429, "Too many login attempts. Please try again later.");
+    throw Errors.RateLimited();
   }
 }
 

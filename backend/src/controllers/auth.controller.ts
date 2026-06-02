@@ -3,8 +3,10 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
 import { sendPasswordResetEmail } from "../lib/mailer";
-import { AuthRequest, blacklistToken, signAccessToken } from "../middleware/auth";
-import { AppError } from "../utils/AppError";
+import { AuthRequest, signAccessToken } from "../middleware/auth";
+import jwt from "jsonwebtoken";
+import { tokenBlacklist } from "../lib/tokenBlacklist";
+import { AppError, Errors } from "../utils/AppError";
 import {
   assertLoginAllowed,
   recordFailedLogin,
@@ -16,8 +18,15 @@ import type {
   RegisterParentInput,
   RegisterSchoolInput,
   ResetPasswordInput,
+  SendOtpInput,
   VerifyOtpInput,
 } from "../validators/auth.validator";
+import { isAccountDisabled } from "../lib/account-status";
+import {
+  generateOtp,
+  sendOtpViaSms,
+  verifyOtpCode,
+} from "../lib/otp";
 
 type SchoolDelegate = Pick<typeof prisma, "school">;
 
@@ -34,7 +43,7 @@ const generateUniqueSlug = async (
 ): Promise<string> => {
   const base = slugify(schoolName);
   if (!base) {
-    throw new AppError(400, "School name is required");
+    throw Errors.BadRequest("School name is required");
   }
 
   const baseTaken = await db.school.findUnique({ where: { slug: base } });
@@ -47,7 +56,7 @@ const generateUniqueSlug = async (
     if (!taken) return candidate;
   }
 
-  throw new AppError(500, "Failed to generate school identifier");
+  throw new AppError("Failed to generate school identifier", 500, "INTERNAL_ERROR");
 };
 
 // POST /api/auth/register-parent
@@ -57,7 +66,7 @@ export const registerParent = async (req: Request, res: Response) => {
   const existingUser = await prisma.user.findUnique({ where: { email } });
 
   if (existingUser) {
-    throw new AppError(400, "Email already exists");
+    throw Errors.Conflict("Email already exists");
   }
 
   const hashedPassword = await bcrypt.hash(
@@ -126,7 +135,7 @@ export const registerSchool = async (req: Request, res: Response) => {
   });
 
   if (existingUser) {
-    throw new AppError(400, "This email is already registered");
+    throw Errors.Conflict("This email is already registered");
   }
 
   const hashedPassword = await bcrypt.hash(
@@ -209,34 +218,34 @@ export const login = async (req: Request, res: Response) => {
 
   if (!user || !user.password) {
     recordFailedLogin(req, email);
-    throw new AppError(401, "Invalid email or password");
+    throw Errors.Unauthorized("Invalid email or password");
   }
 
   if (user.phone === "__DISABLED__") {
     recordFailedLogin(req, email);
-    throw new AppError(403, "This account has been disabled");
+    throw Errors.AccountDisabled();
   }
 
   const isValid = await bcrypt.compare(password, user.password);
 
   if (!isValid) {
     recordFailedLogin(req, email);
-    throw new AppError(401, "Invalid email or password");
+    throw Errors.Unauthorized("Invalid email or password");
   }
 
   if (expectedRole === "PARENT" && user.role !== "PARENT") {
     recordFailedLogin(req, email);
-    throw new AppError(403, "Unauthorized account type");
+    throw Errors.RoleConflict("Unauthorized account type");
   }
 
   if (expectedRole === "ADMIN" && user.role !== "ADMIN") {
     recordFailedLogin(req, email);
-    throw new AppError(403, "Unauthorized account type");
+    throw Errors.RoleConflict("Unauthorized account type");
   }
 
   if (expectedRole === "SCHOOL_ADMIN" && user.role !== "SCHOOL_ADMIN") {
     recordFailedLogin(req, email);
-    throw new AppError(403, "Unauthorized account type");
+    throw Errors.RoleConflict("Unauthorized account type");
   }
 
   recordSuccessfulLogin(req, email);
@@ -272,23 +281,34 @@ const clearResetTokenFields = {
   resetTokenExpiry: null,
 } as const;
 
-const clearOtpFields = {
-  otpCode: null,
-  otpExpiry: null,
-  otpVerified: false,
-} as const;
+const GENERIC_FORGOT_PASSWORD_MESSAGE =
+  "If this email exists, a reset link has been sent.";
+
+const INVALID_RESET_TOKEN_MESSAGE = "Invalid or expired reset token";
 
 // POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response) => {
-  const { email } = req.body as ForgotPasswordInput;
+  const { email, expectedRole } = req.body as ForgotPasswordInput;
+
+  const respondGeneric = () => {
+    res.status(200).json({
+      success: true,
+      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+    });
+  };
 
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
-    res.status(200).json({
-      success: true,
-      message: "If this email is registered, a reset link has been sent.",
-    });
+    respondGeneric();
+    return;
+  }
+
+  if (expectedRole && user.role !== expectedRole) {
+    console.warn(
+      `Forgot password role mismatch: email=${email} requested_role=${expectedRole} actual_role=${user.role}`
+    );
+    respondGeneric();
     return;
   }
 
@@ -308,57 +328,102 @@ export const forgotPassword = async (req: Request, res: Response) => {
     /\/$/,
     ""
   );
-  const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+  const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&role=${user.role}`;
 
   await sendPasswordResetEmail(user.email, resetLink, user.name ?? undefined);
 
-  res.status(200).json({
+  respondGeneric();
+};
+
+const OTP_SENT_MESSAGE =
+  "If this number is registered, an OTP has been sent.";
+
+// POST /api/auth/send-otp
+export const sendOtp = async (req: Request, res: Response) => {
+  const { phone } = req.body as SendOtpInput;
+
+  const user = await prisma.user.findFirst({ where: { phone } });
+
+  if (!user) {
+    res.json({
+      success: true,
+      message: OTP_SENT_MESSAGE,
+    });
+    return;
+  }
+
+  if (isAccountDisabled(user.phone)) {
+    throw Errors.AccountDisabled();
+  }
+
+  const { code, hashedCode, expiresAt } = generateOtp();
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      otpCode: hashedCode,
+      otpExpiry: expiresAt,
+      otpVerified: false,
+    },
+  });
+
+  const smsResult = await sendOtpViaSms(phone, code);
+
+  if (!smsResult.success && process.env.NODE_ENV === "production") {
+    console.error(`[OTP] Failed to send to ${phone}: ${smsResult.error}`);
+  }
+
+  res.json({
     success: true,
-    message: "If this email is registered, a reset link has been sent.",
+    message: OTP_SENT_MESSAGE,
   });
 };
 
 // POST /api/auth/verify-otp
 export const verifyOtp = async (req: Request, res: Response) => {
-  const { email, otp } = req.body as VerifyOtpInput;
+  const { phone, otp } = req.body as VerifyOtpInput;
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({ where: { phone } });
 
-  if (!user || !user.otpCode) {
-    throw new AppError(400, "Invalid or expired OTP.");
+  if (!user || !user.otpCode || !user.otpExpiry) {
+    throw Errors.BadRequest("Invalid or expired OTP");
   }
 
-  if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: clearOtpFields,
-    });
-    throw new AppError(400, "OTP has expired.");
-  }
-
-  const isValid = await bcrypt.compare(otp, user.otpCode);
+  const isValid = verifyOtpCode(otp, user.otpCode, user.otpExpiry);
 
   if (!isValid) {
-    throw new AppError(400, "Invalid OTP.");
+    throw Errors.BadRequest("Invalid or expired OTP");
   }
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { otpVerified: true },
+    data: {
+      otpCode: null,
+      otpExpiry: null,
+      otpVerified: true,
+    },
   });
 
-  res.status(200).json({
+  const token = signAccessToken({
+    id: user.id,
+    role: user.role,
+    email: user.email,
+  });
+
+  res.json({
     success: true,
-    message: "OTP verified.",
+    data: { token, role: user.role },
+    message: "OTP verified successfully",
   });
 };
 
 // POST /api/auth/reset-password
 export const resetPassword = async (req: Request, res: Response) => {
-  const { token, newPassword, confirmPassword } = req.body as ResetPasswordInput;
+  const { token, newPassword, confirmPassword, expectedRole } =
+    req.body as ResetPasswordInput;
 
   if (!token) {
-    throw new AppError(400, "Invalid or expired reset link.");
+    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
   }
 
   const hashedToken = hashResetToken(token);
@@ -368,7 +433,7 @@ export const resetPassword = async (req: Request, res: Response) => {
   });
 
   if (!user || !user.resetToken) {
-    throw new AppError(400, "Invalid or expired reset link.");
+    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
   }
 
   if (!user.resetTokenExpiry || user.resetTokenExpiry.getTime() <= Date.now()) {
@@ -376,15 +441,19 @@ export const resetPassword = async (req: Request, res: Response) => {
       where: { id: user.id },
       data: clearResetTokenFields,
     });
-    throw new AppError(400, "Reset link has expired.");
+    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
+  }
+
+  if (expectedRole && user.role !== expectedRole) {
+    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
   }
 
   if (confirmPassword !== undefined && newPassword !== confirmPassword) {
-    throw new AppError(400, "Passwords do not match.");
+    throw Errors.BadRequest("Passwords do not match.");
   }
 
   if (newPassword.length < 8) {
-    throw new AppError(400, "Password must be at least 8 characters.");
+    throw Errors.BadRequest("Password must be at least 8 characters.");
   }
 
   const hashedPassword = await bcrypt.hash(newPassword, getBcryptRounds());
@@ -410,7 +479,15 @@ export const logout = async (req: AuthRequest, res: Response) => {
     authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
 
   if (token) {
-    blacklistToken(token);
+    const decoded = jwt.decode(token) as {
+      jti?: string;
+      exp?: number;
+    } | null;
+
+    if (decoded?.jti && decoded?.exp) {
+      tokenBlacklist.add(decoded.jti, decoded.exp * 1000);
+      console.info(`[Logout] token jti=${decoded.jti} blacklisted`);
+    }
   }
 
   res.status(200).json({
@@ -435,7 +512,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   });
 
   if (!user) {
-    throw new AppError(404, "User not found");
+    throw Errors.NotFound("User");
   }
 
   res.json(user);
@@ -450,7 +527,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
   };
 
   if (name !== undefined && typeof name === "string" && name.trim().length < 1) {
-    throw new AppError(400, "Name is required");
+    throw Errors.BadRequest("Name is required");
   }
 
   const user = await prisma.user.update({
@@ -484,7 +561,7 @@ export const syncGoogleUser = async (req: Request, res: Response) => {
 
   const normalizedEmail = email?.trim().toLowerCase();
   if (!normalizedEmail) {
-    throw new AppError(400, "Email is required");
+    throw Errors.BadRequest("Email is required");
   }
 
   const existing = await prisma.user.findUnique({
@@ -492,7 +569,7 @@ export const syncGoogleUser = async (req: Request, res: Response) => {
   });
 
   if (existing && existing.role !== "PARENT") {
-    throw new AppError(403, "Unauthorized account type");
+    throw Errors.RoleConflict("Unauthorized account type");
   }
 
   const user = existing

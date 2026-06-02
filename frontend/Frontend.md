@@ -1,5 +1,7 @@
 # SchoolFinder — Frontend Documentation
 
+> Last updated: June 2, 2026 — verified against codebase
+
 > **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
 > **Default port:** `3000` · **Repository path:** `frontend/`  
 > **Database:** None — all data via Express REST API at `NEXT_PUBLIC_API_URL`
@@ -250,14 +252,22 @@ Browser client components call same-origin Next.js routes; handlers forward to b
 
 | Frontend route | Backend target | Token source |
 |----------------|----------------|--------------|
-| `PATCH /api/parent/profile` | `/api/parent/profile` | Session JWT |
-| `DELETE /api/parent/favourites` | `/api/parent/favourites?schoolId=` | Session JWT |
+| `GET/PATCH /api/parent/profile` | `/api/parent/profile` | Session JWT |
+| `GET/POST/DELETE /api/parent/favourites` | `/api/parent/favourites` | Session JWT |
 | `PATCH /api/school/profile` | `/api/schools/:id` | Session JWT |
 | `GET/POST /api/school/gallery` | `/api/schools/my-school/images` | Session JWT |
 | `DELETE /api/school/gallery/[id]` | `/api/schools/images/:id` | Session JWT |
 | `PATCH /api/school/inquiries/[id]/status` | `/api/inquiries/:id/status` | Session JWT |
+| `POST /api/admin/session` | Sets/clears `sf_admin_token` cookie | Admin login flow |
+| `POST /api/admin/add-school` | `/api/admin/add-school` | Admin cookie |
 | `PATCH /api/admin/schools/[id]/approve` | `/api/admin/schools/:id/approve` | Admin cookie |
+| `PATCH /api/admin/schools/[id]/reject` | `/api/admin/schools/:id/reject` | Admin cookie |
 | `PATCH /api/admin/users/[id]/role` | `/api/admin/users/:id/role` | Admin cookie |
+| `PATCH /api/admin/users/[id]/status` | `/api/admin/users/:id/status` | Admin cookie |
+| `POST /api/upload` | Cloudinary (server-side only) | NextAuth session |
+| `GET/POST /api/auth/[...nextauth]` | NextAuth handlers | — |
+
+**Direct client → backend (no BFF):** `FavouriteButton` on school detail uses legacy `POST/DELETE ${NEXT_PUBLIC_API_URL}/api/favourites` with Bearer token from `parent-token.ts`. Parent dashboard uses preferred `/api/parent/favourites` via BFF.
 
 ### Domain Data Modules
 
@@ -293,8 +303,11 @@ Keep these in sync with `backend/prisma/schema.prisma` when enums change.
 |---------|-------|
 | Strategy | `jwt` (no database adapter) |
 | Session max age | 1800 seconds (30 minutes) |
+| JWT max age | 1800 seconds (30 minutes) |
 | Providers | Google, Credentials (parent/school/admin contexts) |
 | Secret | `AUTH_SECRET` or `NEXTAUTH_SECRET` |
+| `trustHost` | `true` |
+| Custom sign-in page | `AUTH_ROUTES.parentLogin` (`/login`) |
 
 **No PrismaAdapter.** OAuth Account/Session tables exist in the backend schema but are not used by the frontend.
 
@@ -304,8 +317,10 @@ Keep these in sync with `backend/prisma/schema.prisma` when enums change.
 |-------|---------|
 | `/login` | Google or email/password (`authContext: parent`) |
 | `/register` | Create parent account |
-| `/forgot-password` | Calls backend `POST /api/auth/forgot-password` |
-| `/reset-password` | Calls backend `POST /api/auth/reset-password` |
+| `/forgot-password?role=PARENT` | Resend reset link via `POST /api/auth/forgot-password` with `expectedRole` |
+| `/reset-password?token=…&role=…` | `POST /api/auth/reset-password` with optional `expectedRole` |
+
+Login pages link to `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` for role-isolated reset.
 
 - Google sign-in calls backend `POST /api/auth/google-sync`; only `PARENT` role allowed.
 - Credentials login calls backend `POST /api/auth/login` with `expectedRole: "PARENT"`.
@@ -405,7 +420,7 @@ Public routes (`/`, `/schools`, `/schools/[slug]`) remain indexable.
 | `/parent/favourites` | Saved schools with pagination | `GET /api/parent/favourites` |
 | `/parent/inquiries` | Sent inquiries with status | `GET /api/parent/inquiries` |
 
-**School detail (public):** `InquiryModal` and `FavouriteButton` call backend favourites/inquiries endpoints (direct or via BFF).
+**School detail (public):** `InquiryModal` posts to backend inquiries; `FavouriteButton` uses legacy `/api/favourites` on the backend directly (not the BFF parent route).
 
 ### School Dashboard (`/dashboard/school`)
 
@@ -714,8 +729,9 @@ Defined in `src/components/ui/button.tsx`:
 
 | Area | Direction |
 |------|-----------|
+| **Phone OTP login UI** | Backend has `POST /api/auth/send-otp` and `verify-otp` (Fast2SMS) — no frontend pages yet |
+| **Migrate FavouriteButton** | Switch school detail toggle from legacy `/api/favourites` to `/api/parent/favourites` BFF |
 | **Unified client API layer** | Consolidate direct backend calls and BFF routes |
-| **AI recommendations** | Personalized school suggestions |
 | **Inquiry notifications** | Real-time or email alerts |
 | **Mobile app** | React Native companion using the same API |
 

@@ -1,21 +1,13 @@
+import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import { AppError } from "../utils/AppError";
+import { tokenBlacklist } from "../lib/tokenBlacklist";
+import { AppError, Errors } from "../utils/AppError";
 
 export const JWT_ISSUER = "schoolfinder-api";
 const JWT_ALGORITHM = "HS256" as const;
 
 const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ?? "7d") as SignOptions["expiresIn"];
-
-const tokenBlacklist = new Set<string>();
-
-export function blacklistToken(token: string): void {
-  tokenBlacklist.add(token);
-}
-
-function isTokenBlacklisted(token: string): boolean {
-  return tokenBlacklist.has(token);
-}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -25,10 +17,17 @@ export interface AuthRequest extends Request {
   };
 }
 
+type AccessTokenPayload = {
+  id: string;
+  role: string;
+  email: string;
+  jti?: string;
+};
+
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET?.trim();
   if (!secret) {
-    throw new AppError(500, "Server authentication is not configured");
+    throw new AppError("Server authentication is not configured", 500, "INTERNAL_ERROR");
   }
   return secret;
 }
@@ -38,40 +37,42 @@ export function signAccessToken(payload: {
   role: string;
   email: string;
 }): string {
-  return jwt.sign(payload, getJwtSecret(), {
-    expiresIn: jwtExpiresIn,
-    algorithm: JWT_ALGORITHM,
-    issuer: JWT_ISSUER,
-  });
+  return jwt.sign(
+    {
+      ...payload,
+      jti: crypto.randomUUID(),
+    },
+    getJwtSecret(),
+    {
+      expiresIn: jwtExpiresIn,
+      algorithm: JWT_ALGORITHM,
+      issuer: JWT_ISSUER,
+    }
+  );
 }
 
 export const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    next(new AppError(401, "Authentication token is required"));
+    next(Errors.Unauthorized("Authentication token is required"));
     return;
   }
 
   if (!authHeader.startsWith("Bearer ")) {
-    next(new AppError(401, "Authentication token must use Bearer scheme"));
+    next(Errors.Unauthorized("Authentication token must use Bearer scheme"));
     return;
   }
 
   const token = authHeader.slice(7).trim();
 
   if (!token) {
-    next(new AppError(401, "Authentication token is required"));
+    next(Errors.Unauthorized("Authentication token is required"));
     return;
   }
 
   if (token.split(".").length !== 3) {
-    next(new AppError(401, "Malformed authentication token"));
-    return;
-  }
-
-  if (isTokenBlacklisted(token)) {
-    next(new AppError(401, "Authentication token has been revoked"));
+    next(Errors.Unauthorized("Malformed authentication token"));
     return;
   }
 
@@ -79,35 +80,34 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction): void 
     const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: [JWT_ALGORITHM],
       issuer: JWT_ISSUER,
-    }) as {
-      id: string;
-      role: string;
-      email: string;
-    };
+    }) as AccessTokenPayload;
+
+    if (decoded.jti && tokenBlacklist.has(decoded.jti)) {
+      next(Errors.InvalidToken());
+      return;
+    }
 
     if (!decoded.id || !decoded.role || !decoded.email) {
-      next(new AppError(401, "Invalid authentication token"));
+      next(Errors.InvalidToken());
       return;
     }
 
-    req.user = decoded;
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      email: decoded.email,
+    };
     next();
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      next(new AppError(401, "Authentication token has expired"));
+    if (
+      error instanceof jwt.TokenExpiredError ||
+      error instanceof jwt.JsonWebTokenError ||
+      error instanceof jwt.NotBeforeError
+    ) {
+      next(Errors.InvalidToken());
       return;
     }
 
-    if (error instanceof jwt.JsonWebTokenError) {
-      next(new AppError(401, "Invalid authentication token"));
-      return;
-    }
-
-    if (error instanceof jwt.NotBeforeError) {
-      next(new AppError(401, "Authentication token is not yet valid"));
-      return;
-    }
-
-    next(new AppError(401, "Authentication failed"));
+    next(Errors.Unauthorized("Authentication failed"));
   }
 };

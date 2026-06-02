@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
 import type { CreateSchoolInput, UpdateSchoolInput } from "../validators/school.validator";
 import {
   buildPaginationMeta,
@@ -39,7 +39,7 @@ const slugify = (name: string): string =>
 const generateSlug = async (name: string): Promise<string> => {
   const base = slugify(name);
   if (!base) {
-    throw new AppError(400, "School name is required");
+    throw Errors.BadRequest("School name is required");
   }
 
   let slug = base;
@@ -85,7 +85,7 @@ export const getSchools = async (req: Request, res: Response) => {
     const decodedCursor = cursorValue ? decodeSchoolCursor(cursorValue) : null;
 
     if (cursorValue && !decodedCursor) {
-      throw new AppError(400, "Invalid pagination cursor");
+      throw Errors.BadRequest("Invalid pagination cursor");
     }
 
     const cacheKey = buildCacheKey("schools:list:cursor", {
@@ -215,7 +215,7 @@ export const getMySchool = async (req: AuthRequest, res: Response) => {
   });
 
   if (!school) {
-    throw new AppError(404, "School not found");
+    throw Errors.NotFound("School");
   }
 
   res.json({ data: school });
@@ -226,7 +226,7 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
   const slug = String(req.params.slug).trim();
 
   if (!slug) {
-    throw new AppError(400, "Invalid school identifier");
+    throw Errors.BadRequest("Invalid school identifier");
   }
 
   const cacheKey = buildCacheKey("schools:detail", { slug });
@@ -242,7 +242,7 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
   );
 
   if (!school) {
-    throw new AppError(404, "School not found");
+    throw Errors.NotFound("School");
   }
 
   if (school.status !== "APPROVED") {
@@ -250,7 +250,7 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
     const userRole = req.user?.role;
 
     if (!userId || (school.ownerId !== userId && userRole !== "ADMIN")) {
-      throw new AppError(404, "School not found");
+      throw Errors.NotFound("School");
     }
   }
 
@@ -301,7 +301,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
   const data = sanitizeSchoolData(req.body as UpdateSchoolInput);
 
   if (!id) {
-    throw new AppError(400, "Invalid school identifier");
+    throw Errors.BadRequest("Invalid school identifier");
   }
 
   const school = await prisma.school.findUnique({
@@ -310,11 +310,11 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
   });
 
   if (!school) {
-    throw new AppError(404, "School not found");
+    throw Errors.NotFound("School");
   }
 
   if (school.ownerId !== req.user!.id && req.user!.role !== "ADMIN") {
-    throw new AppError(403, "You do not have permission to update this school");
+    throw Errors.Forbidden("You do not have permission to update this school");
   }
 
   const statusReset =
@@ -335,7 +335,7 @@ export const deleteSchool = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
 
   if (!id) {
-    throw new AppError(400, "Invalid school identifier");
+    throw Errors.BadRequest("Invalid school identifier");
   }
 
   await prisma.school.delete({ where: { id } });
@@ -348,7 +348,7 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
   const { url, caption } = req.body as { url?: string; caption?: string | null };
 
   if (!url?.trim()) {
-    throw new AppError(400, "Image URL is required");
+    throw Errors.BadRequest("Image URL is required");
   }
 
   const school = await prisma.school.findFirst({
@@ -357,7 +357,7 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
   });
 
   if (!school) {
-    throw new AppError(404, "School not found");
+    throw Errors.NotFound("School");
   }
 
   const image = await prisma.schoolImage.create({
@@ -382,7 +382,7 @@ export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
   });
 
   if (!image || image.school.ownerId !== req.user!.id) {
-    throw new AppError(404, "Image not found");
+    throw Errors.NotFound("Image");
   }
 
   await prisma.schoolImage.delete({ where: { id: imageId } });

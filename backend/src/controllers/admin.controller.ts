@@ -2,7 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
 import {
   ACCOUNT_DISABLED_PHONE,
   isAccountDisabled,
@@ -34,7 +34,7 @@ const generateSlug = async (name: string): Promise<string> => {
     .trim();
 
   if (!base) {
-    throw new AppError(400, "School name is required");
+    throw Errors.BadRequest("School name is required");
   }
 
   let slug = base;
@@ -163,7 +163,7 @@ export const approveSchool = async (req: AuthRequest, res: Response) => {
   const { schoolId } = req.body;
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
   req.params = { id: schoolId };
@@ -175,7 +175,7 @@ export const rejectSchool = async (req: AuthRequest, res: Response) => {
   const { schoolId, reason } = req.body;
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
   req.params = { id: schoolId };
@@ -279,27 +279,27 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   const { role } = req.body as { role?: string };
 
   if (!role || !VALID_ROLES.includes(role as RoleValue)) {
-    throw new AppError(400, "Invalid role");
+    throw Errors.BadRequest("Invalid role");
   }
 
   if (targetId === req.user!.id && role !== "ADMIN") {
-    throw new AppError(403, "You cannot demote your own admin account");
+    throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
   const target = await prisma.user.findUnique({ where: { id: targetId } });
 
   if (!target) {
-    throw new AppError(404, "User not found");
+    throw Errors.NotFound("User");
   }
 
   if (target.id === req.user!.id && target.role === "ADMIN" && role !== "ADMIN") {
-    throw new AppError(403, "You cannot demote your own admin account");
+    throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
   const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
 
   if (target.role === "ADMIN" && role !== "ADMIN" && adminCount <= 1) {
-    throw new AppError(403, "Cannot remove the last administrator");
+    throw Errors.Forbidden("Cannot remove the last administrator");
   }
 
   const updated = await prisma.user.update({
@@ -330,17 +330,17 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
   const { status } = req.body as { status?: string };
 
   if (!status || !["active", "disabled"].includes(status)) {
-    throw new AppError(400, "Invalid status. Use active or disabled.");
+    throw Errors.BadRequest("Invalid status. Use active or disabled.");
   }
 
   if (targetId === req.user!.id) {
-    throw new AppError(403, "You cannot change your own account status");
+    throw Errors.Forbidden("You cannot change your own account status");
   }
 
   const target = await prisma.user.findUnique({ where: { id: targetId } });
 
   if (!target) {
-    throw new AppError(404, "User not found");
+    throw Errors.NotFound("User");
   }
 
   if (target.role === "ADMIN" && status === "disabled") {
@@ -349,7 +349,7 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
     });
 
     if (adminCount <= 1) {
-      throw new AppError(403, "Cannot disable the last active administrator");
+      throw Errors.Forbidden("Cannot disable the last active administrator");
     }
   }
 
@@ -380,7 +380,7 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
 // POST /api/admin/add-school
 export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
   if (!req.user?.id) {
-    throw new AppError(401, "Authentication required");
+    throw Errors.Unauthorized("Authentication required");
   }
 
   const {
@@ -411,7 +411,7 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
   } = req.body;
 
   if (!ownerEmail || !name) {
-    throw new AppError(400, "ownerEmail and school name are required");
+    throw Errors.BadRequest("ownerEmail and school name are required");
   }
 
   let owner = await prisma.user.findUnique({

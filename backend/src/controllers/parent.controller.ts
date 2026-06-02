@@ -1,17 +1,19 @@
 import { Response } from "express";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
+import {
+  addFavouriteForUser,
+  getFavouritesForUser,
+  parseFavouritesPagination,
+  removeFavouriteForUser,
+} from "../lib/favourites";
 import {
   buildPaginationMeta,
   parseLimit,
   parsePage,
 } from "../lib/pagination";
-import { mapSchoolListItem, schoolListSelect } from "../lib/queries/schools";
-
-const parentSchoolSelect = {
-  ...schoolListSelect,
-} as const;
+import { mapSchoolListItem } from "../lib/queries/schools";
 
 function mapFavouriteSchool(
   favourite: {
@@ -43,7 +45,7 @@ export const getParentProfile = async (req: AuthRequest, res: Response) => {
   });
 
   if (!user) {
-    throw new AppError(404, "User not found");
+    throw Errors.NotFound("User");
   }
 
   res.json({ data: user });
@@ -58,7 +60,7 @@ export const updateParentProfile = async (req: AuthRequest, res: Response) => {
   };
 
   if (name !== undefined && typeof name === "string" && name.trim().length < 1) {
-    throw new AppError(400, "Name is required");
+    throw Errors.BadRequest("Name is required");
   }
 
   const user = await prisma.user.update({
@@ -84,28 +86,17 @@ export const updateParentProfile = async (req: AuthRequest, res: Response) => {
 
 // GET /api/parent/favourites
 export const getParentFavourites = async (req: AuthRequest, res: Response) => {
-  const page = parsePage(req.query.page);
-  const limit = parseLimit(req.query.limit, 6, 50);
-  const skip = (page - 1) * limit;
-  const where = { parentId: req.user!.id };
-
-  const [rows, total] = await Promise.all([
-    prisma.favourite.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        school: { select: parentSchoolSelect },
-      },
-    }),
-    prisma.favourite.count({ where }),
-  ]);
+  const { page, limit } = parseFavouritesPagination(req.query);
+  const { rows, pagination } = await getFavouritesForUser(
+    req.user!.id,
+    page,
+    limit
+  );
 
   res.json({
     data: rows.map(mapFavouriteSchool),
     schools: rows.map((row) => mapSchoolListItem(row.school)),
-    pagination: buildPaginationMeta(total, page, limit),
+    pagination,
   });
 };
 
@@ -114,31 +105,10 @@ export const addParentFavourite = async (req: AuthRequest, res: Response) => {
   const { schoolId } = req.body as { schoolId?: string };
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
-  const school = await prisma.school.findUnique({
-    where: { id: schoolId },
-    select: { id: true, status: true },
-  });
-
-  if (!school || school.status !== "APPROVED") {
-    throw new AppError(404, "School not found");
-  }
-
-  const favourite = await prisma.favourite.upsert({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId,
-      },
-    },
-    update: {},
-    create: {
-      parentId: req.user!.id,
-      schoolId,
-    },
-  });
+  const favourite = await addFavouriteForUser(req.user!.id, schoolId);
 
   res.status(200).json({ data: favourite });
 };
@@ -148,30 +118,14 @@ export const removeParentFavourite = async (req: AuthRequest, res: Response) => 
   const schoolId = String(req.query.schoolId ?? "").trim();
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
-  const existing = await prisma.favourite.findUnique({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId,
-      },
-    },
-  });
+  const removed = await removeFavouriteForUser(req.user!.id, schoolId);
 
-  if (!existing) {
-    throw new AppError(404, "Favourite not found");
+  if (removed === 0) {
+    throw Errors.NotFound("Favourite");
   }
-
-  await prisma.favourite.delete({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId,
-      },
-    },
-  });
 
   res.json({ success: true, message: "Favourite removed successfully" });
 };

@@ -10,6 +10,8 @@ import {
 
   forgotPassword,
 
+  sendOtp,
+
   verifyOtp,
 
   resetPassword,
@@ -38,6 +40,8 @@ import {
 
   forgotPasswordSchema,
 
+  sendOtpSchema,
+
   verifyOtpSchema,
 
   resetPasswordSchema,
@@ -48,6 +52,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import {
   authRateLimiter,
   forgotPasswordRateLimiter,
+  otpRateLimiter,
   resetPasswordRateLimiter,
 } from "../middleware/security";
 import { bruteForceGuard } from "../middleware/bruteForce";
@@ -83,6 +88,13 @@ router.post(
   forgotPasswordRateLimiter,
   validate(forgotPasswordSchema),
   asyncHandler(forgotPassword)
+);
+
+router.post(
+  "/send-otp",
+  otpRateLimiter,
+  validate(sendOtpSchema),
+  asyncHandler(sendOtp)
 );
 
 router.post(

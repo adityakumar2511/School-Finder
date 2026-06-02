@@ -292,7 +292,7 @@ export default function ParentLoginContent() {
                   )}
                   <div className="flex justify-end pt-1">
                     <Link
-                      href="/forgot-password"
+                      href="/forgot-password?role=PARENT"
                       className="font-body text-meta text-blue-600 hover:text-blue-800"
                     >
                       Forgot password?

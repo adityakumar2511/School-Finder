@@ -1,7 +1,18 @@
 import { Response } from "express";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
+import {
+  addFavouriteForUser,
+  removeFavouriteForUser,
+} from "../lib/favourites";
+
+export const LEGACY_FAVOURITES_DEPRECATION =
+  "Use /api/parent/favourites instead";
+
+export function setLegacyFavouritesDeprecationHeader(res: Response): void {
+  res.setHeader("Deprecation", LEGACY_FAVOURITES_DEPRECATION);
+}
 
 // GET /api/favourites
 export const getFavourites = async (req: AuthRequest, res: Response) => {
@@ -29,6 +40,7 @@ export const getFavourites = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  setLegacyFavouritesDeprecationHeader(res);
   res.json(favourites);
 };
 
@@ -37,23 +49,12 @@ export const addFavourite = async (req: AuthRequest, res: Response) => {
   const { schoolId } = req.body;
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
-  const favourite = await prisma.favourite.upsert({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId,
-      },
-    },
-    update: {},
-    create: {
-      parentId: req.user!.id,
-      schoolId,
-    },
-  });
+  const favourite = await addFavouriteForUser(req.user!.id, schoolId);
 
+  setLegacyFavouritesDeprecationHeader(res);
   res.status(200).json(favourite);
 };
 
@@ -62,30 +63,18 @@ export const removeFavourite = async (req: AuthRequest, res: Response) => {
   const { schoolId } = req.query;
 
   if (!schoolId) {
-    throw new AppError(400, "schoolId is required");
+    throw Errors.BadRequest("schoolId is required");
   }
 
-  const existing = await prisma.favourite.findUnique({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId: schoolId as string,
-      },
-    },
-  });
+  const removed = await removeFavouriteForUser(
+    req.user!.id,
+    schoolId as string
+  );
 
-  if (!existing) {
-    throw new AppError(404, "Favourite not found");
+  if (removed === 0) {
+    throw Errors.NotFound("Favourite");
   }
 
-  await prisma.favourite.delete({
-    where: {
-      parentId_schoolId: {
-        parentId: req.user!.id,
-        schoolId: schoolId as string,
-      },
-    },
-  });
-
+  setLegacyFavouritesDeprecationHeader(res);
   res.json({ message: "Favourite removed successfully" });
 };

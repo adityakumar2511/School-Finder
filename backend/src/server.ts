@@ -10,6 +10,7 @@ import inquiryRoutes from "./routes/inquiry.routes";
 import favouriteRoutes from "./routes/favourite.routes";
 import parentRoutes from "./routes/parent.routes";
 import prisma from "./lib/prisma";
+import { tokenBlacklist } from "./lib/tokenBlacklist";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import {
   applySecurityMiddleware,
@@ -43,6 +44,7 @@ app.get("/health", async (_req, res) => {
     timestamp,
     environment: process.env.NODE_ENV ?? "development",
     version: process.env.npm_package_version ?? "1.0.0",
+    blacklistSize: tokenBlacklist.size(),
   };
 
   try {
@@ -86,6 +88,17 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
 server.on("error", (error) => {
   console.error("[Server] Failed to start:", error);
   process.exit(1);
+});
+
+process.on("unhandledRejection", (reason: unknown) => {
+  console.error("[UnhandledRejection]", reason);
+});
+
+process.on("uncaughtException", (err: Error) => {
+  console.error("[UncaughtException]", err.message, err.stack);
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
 });
 
 export default app;

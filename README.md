@@ -1,5 +1,7 @@
 # SchoolFinder
 
+> Last updated: June 2, 2026 — verified against codebase
+
 A full-stack school discovery and inquiry platform built for **Tier-2 and Tier-3 cities in India**. Parents can search and compare schools; school administrators manage listings and inquiries; platform administrators verify listings and maintain quality.
 
 This repository is a **monorepo** with a Next.js frontend and an Express API. **PostgreSQL is accessed only by the backend** — the frontend has no database driver or Prisma dependency.
@@ -174,9 +176,10 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 | Helmet | Security headers (CSP, HSTS) |
 | express-rate-limit | General, auth, forgot/reset rate limiting |
 | bcryptjs | Password hashing |
-| Resend | Password reset and OTP emails |
-| Cloudinary | Server-side image utilities |
-| Multer | In-memory upload parsing (available, not mounted on routes) |
+| Resend | Password reset emails |
+| Fast2SMS | Phone OTP SMS (`POST /api/auth/send-otp`) |
+| Cloudinary SDK | **(stub on backend)** — lib only; uploads happen on frontend |
+| Multer | **(stub)** — `middleware/upload.ts` not mounted on any route |
 
 ### Database
 
@@ -205,10 +208,10 @@ Parents receive a backend token on login (`backendAccessToken` in session). Scho
 |-------|---------|
 | `/login` | Sign in (Google or email/password) |
 | `/register` | Create parent account |
-| `/forgot-password` | Request a password reset email |
-| `/reset-password` | Set a new password using a reset token |
+| `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` | Request a password reset email (role-isolated) |
+| `/reset-password?token=…&role=…` | Set a new password using a reset token |
 
-Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`.
+Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password` (with `expectedRole`), `POST /api/auth/reset-password` (with `expectedRole`).
 
 ### School administrator (`SCHOOL_ADMIN`)
 
@@ -327,6 +330,7 @@ Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 | `FRONTEND_URL` | CORS allowlist (comma-separated for multiple origins) |
 | `CLOUDINARY_*` | Image upload utilities |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Password reset emails (Resend) |
+| `FAST2SMS_API_KEY` | Phone OTP SMS (optional; dev logs OTP if unset) |
 | `BCRYPT_ROUNDS` | Password hashing cost (default `12`) |
 | `TRUST_PROXY` | Behind reverse proxy in production |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin for `npm run seed:admin` |
@@ -344,6 +348,7 @@ See [backend/Backend.md](backend/Backend.md) for the full variable reference inc
 - Cloudinary account (for uploads)
 - Google OAuth credentials (optional, for parent Google login)
 - Resend API key (optional locally; password reset emails)
+- Fast2SMS API key (optional locally; phone OTP SMS)
 
 ### 1. Backend (database owner)
 
@@ -441,7 +446,7 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 
 | Check | Expected |
 |-------|----------|
-| `GET /health` | `{ "status": "ok", "database": "connected" }` |
+| `GET /health` | `{ "status": "ok", "database": "connected", "blacklistSize": N }` |
 | Public school listing | Loads on `/schools` |
 | CORS | Browser requests from Vercel origin succeed |
 | Auth | Parent login and admin login work on production URLs |
@@ -453,11 +458,12 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 
 | Feature | Implementation |
 |---------|----------------|
-| **JWT auth** | HS256, issuer `schoolfinder-api`, Bearer tokens; logout blacklist |
+| **JWT auth** | HS256, issuer `schoolfinder-api`, Bearer tokens; logout JTI blacklist (in-memory) |
 | **Role protection** | Middleware (frontend) + `requireRole` (backend) |
+| **Forgot-password role isolation** | `expectedRole` on forgot/reset; generic 200 on forgot (anti-enumeration) |
 | **Hidden admin login** | `/admin-login` not in public nav; `expectedRole: ADMIN` on API |
-| **Upload validation** | MIME, extension, 5MB limit, magic-byte checks |
-| **Rate limiting** | 100 req/15 min general; 10 req/15 min auth; 3/h forgot; 5/h reset |
+| **Upload validation** | MIME, extension, 5MB limit, magic-byte checks (frontend route) |
+| **Rate limiting** | 100 req/15 min general; 10 req/15 min auth; 3/h forgot; 5/h reset; 3/10 min OTP |
 | **Upload rate limiting** | 10 uploads/hour/user on `POST /api/upload` |
 | **Session heartbeat** | Client pings session every 10 min; NextAuth JWT max age 30 min |
 | **Brute-force guard** | Login throttling per IP + email |
@@ -493,6 +499,9 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 
 | Area | Direction |
 |------|-----------|
+| **Phone OTP login UI** | Backend API exists (`send-otp` / `verify-otp` via Fast2SMS); no frontend pages yet |
+| **Backend image upload route** | Mount Multer + Cloudinary on Express (currently frontend-only upload) |
+| **Migrate FavouriteButton** | Use `/api/parent/favourites` instead of legacy `/api/favourites` |
 | **Inquiry notifications** | Email or WhatsApp for inquiry status and school approval updates |
 | **Multilingual** | Hindi and regional language UI |
 | **AI recommendations** | School suggestions from parent preferences |
@@ -500,7 +509,7 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 | **Analytics** | School and platform engagement dashboards |
 | **Reviews** | Moderated parent reviews post-verification |
 | **Mobile app** | React Native or Expo consuming the same API |
-| **Redis** | Replace in-memory cache on the backend |
+| **Redis** | Replace in-memory cache and JWT blacklist on the backend |
 
 ---
 

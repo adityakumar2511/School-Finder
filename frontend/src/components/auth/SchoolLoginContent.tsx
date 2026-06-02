@@ -174,7 +174,7 @@ export default function SchoolLoginContent() {
                   )}
                   <div className="flex justify-end pt-1">
                     <Link
-                      href="/forgot-password"
+                      href="/forgot-password?role=SCHOOL_ADMIN"
                       className="font-body text-meta text-blue-600 hover:text-blue-800"
                     >
                       Forgot password?

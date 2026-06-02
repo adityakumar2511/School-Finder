@@ -2,7 +2,7 @@
  * Request body sanitization helpers used before Zod validation and DB writes.
  */
 
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
 
 const DANGEROUS_TAG_PATTERN =
   /<\s*(?:script|iframe|object)\b[^>]*>[\s\S]*?<\/\s*(?:script|iframe|object)\s*>|<\s*(?:script|iframe|object)\b[^>]*\/?>/gi;
@@ -42,7 +42,7 @@ export function normalizeIndianPhone(phone: string): string {
   const trimmed = phone.trim();
 
   if (!isValidIndianPhone(trimmed)) {
-    throw new AppError(400, "Enter a valid phone number (+91XXXXXXXXXX or 10 digits)");
+    throw Errors.BadRequest("Enter a valid phone number (+91XXXXXXXXXX or 10 digits)");
   }
 
   const plus91Match = /^\+91(\d{10})$/.exec(trimmed);

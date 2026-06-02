@@ -1,7 +1,19 @@
 import { randomInt } from "crypto";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+type EmailNotConfigured = { success: false; reason: "email_not_configured" };
+
+function ensureEmailConfigured(): EmailNotConfigured | null {
+  if (!process.env.RESEND_API_KEY?.trim() || !process.env.EMAIL_FROM?.trim()) {
+    console.warn("[Mailer] RESEND_API_KEY or EMAIL_FROM not set. Email not sent.");
+    return { success: false, reason: "email_not_configured" };
+  }
+  return null;
+}
+
+function getResendClient(): Resend {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 export function generateOtp(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -11,13 +23,18 @@ export async function sendPasswordResetEmail(
   email: string,
   resetLink: string,
   name?: string
-): Promise<void> {
+): Promise<void | EmailNotConfigured> {
+  const notConfigured = ensureEmailConfigured();
+  if (notConfigured) {
+    return notConfigured;
+  }
+
   console.log(
     `[Reset] Email: ${email} | Link sent | Time: ${new Date().toISOString()}`
   );
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: process.env.EMAIL_FROM!,
       to: email,
       subject: "Reset your SchoolFinder password",
@@ -37,13 +54,18 @@ export async function sendOtpEmail(
   email: string,
   otp: string,
   name?: string
-): Promise<void> {
+): Promise<void | EmailNotConfigured> {
+  const notConfigured = ensureEmailConfigured();
+  if (notConfigured) {
+    return notConfigured;
+  }
+
   console.log(
     `[OTP] Email: ${email} | OTP: ${otp} | Time: ${new Date().toISOString()}`
   );
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: process.env.EMAIL_FROM!,
       to: email,
       subject: "Your SchoolFinder Password Reset OTP",

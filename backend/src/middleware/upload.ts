@@ -1,5 +1,5 @@
 import multer from "multer";
-import { AppError } from "../utils/AppError";
+import { Errors } from "../utils/AppError";
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -58,22 +58,21 @@ export function validateUploadedFile(
   } = {}
 ): void {
   if (buffer.length === 0) {
-    throw new AppError(400, "Empty files are not allowed");
+    throw Errors.BadRequest("Empty files are not allowed");
   }
 
   if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new AppError(400, "File size exceeds 5MB limit");
+    throw Errors.BadRequest("File size exceeds 5MB limit");
   }
 
   const filename = options.originalname?.toLowerCase() ?? "";
 
   if (filename && BLOCKED_EXTENSIONS.test(filename)) {
-    throw new AppError(400, "File type is not allowed");
+    throw Errors.BadRequest("File type is not allowed");
   }
 
   if (filename && !ALLOWED_EXTENSIONS.test(filename)) {
-    throw new AppError(
-      400,
+    throw Errors.BadRequest(
       "Invalid file extension. Only .jpg, .jpeg, .png, and .webp are allowed"
     );
   }
@@ -81,14 +80,14 @@ export function validateUploadedFile(
   const detectedMime = detectImageMime(buffer);
 
   if (!detectedMime) {
-    throw new AppError(400, "File content does not match an allowed image format");
+    throw Errors.BadRequest("File content does not match an allowed image format");
   }
 
   if (
     options.mimetype &&
     !ALLOWED_MIME_TYPES.includes(options.mimetype as AllowedMimeType)
   ) {
-    throw new AppError(400, "Only JPEG, PNG, and WebP images are allowed");
+    throw Errors.BadRequest("Only JPEG, PNG, and WebP images are allowed");
   }
 
   if (
@@ -96,7 +95,7 @@ export function validateUploadedFile(
     options.mimetype !== detectedMime &&
     !(options.mimetype === "image/jpg" && detectedMime === "image/jpeg")
   ) {
-    throw new AppError(400, "File content does not match the declared MIME type");
+    throw Errors.BadRequest("File content does not match the declared MIME type");
   }
 }
 

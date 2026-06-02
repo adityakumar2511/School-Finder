@@ -98,22 +98,36 @@ export const forgotPasswordSchema = z.object({
     preprocessEmail,
     z.string().min(1, "Email is required").email("Enter a valid email address")
   ),
+  expectedRole: expectedRoleSchema.optional(),
+});
+
+export const sendOtpSchema = z.object({
+  phone: z
+    .string()
+    .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
 });
 
 export const verifyOtpSchema = z.object({
-  email: z.string().email(),
-  otp: z.string().length(6),
+  phone: z
+    .string()
+    .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+  otp: z
+    .string()
+    .length(6)
+    .regex(/^\d{6}$/, "OTP must be 6 digits"),
 });
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1, "Reset token is required"),
   newPassword: z.string().min(8),
   confirmPassword: z.string().min(8).optional(),
+  expectedRole: expectedRoleSchema.optional(),
 });
 
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterSchoolInput = z.infer<typeof registerSchoolSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

@@ -24,11 +24,6 @@ export function validateStartupEnv(): void {
     "CLOUDINARY_CLOUD_NAME",
     "CLOUDINARY_API_KEY",
     "CLOUDINARY_API_SECRET",
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_USER",
-    "SMTP_PASS",
-    "SMTP_FROM",
   ] as const;
 
   const productionRequired = ["FRONTEND_URL"] as const;
@@ -60,6 +55,15 @@ export function validateStartupEnv(): void {
     }
 
     console.warn(message);
+  }
+
+  const emailVars = ["RESEND_API_KEY", "EMAIL_FROM"] as const;
+  const missingEmail = emailVars.filter((key) => isEnvMissing(key));
+  if (missingEmail.length > 0) {
+    console.warn(
+      `[Config] Email not configured. Missing: ${missingEmail.join(", ")}. ` +
+        "Password reset emails will not be sent."
+    );
   }
 
   if (production) {
