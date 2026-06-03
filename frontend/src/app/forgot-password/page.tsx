@@ -132,6 +132,7 @@ function ForgotPasswordForm() {
       }
 
       // OTP actually gaya — step 2 pe jao
+      setError(null);
       setEmail(trimmedEmail);
       setStep(2);
     } catch {

@@ -9,6 +9,8 @@ const TEN_MINUTES_MS = 10 * 60 * 1000;
 
 const ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"] as const;
 
+const IS_DEV = process.env.NODE_ENV === "development";
+
 export const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -92,6 +94,17 @@ export function corsMethodGuard(
   next();
 }
 
+/**
+ * Normalise the client IP so the key is always a non-empty string.
+ * In development, Express may report "::1" (IPv6 loopback) or undefined
+ * when trust proxy is off — we collapse both to "127.0.0.1".
+ */
+function normaliseIp(req: Request): string {
+  const raw = req.ip ?? req.socket?.remoteAddress ?? "";
+  if (!raw || raw === "::1" || raw === "::ffff:127.0.0.1") return "127.0.0.1";
+  return raw;
+}
+
 export const generalRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES_MS,
   max: 100,
@@ -118,12 +131,16 @@ export const authRateLimiter = rateLimit({
 
 export const forgotPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
-  max: process.env.NODE_ENV === "development" ? 50 : 3,
+  // Production: 3 attempts/hour per IP+email. Development: 50 (effectively unlimited for testing).
+  max: IS_DEV ? 50 : 3,
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting entirely in development so testing is never blocked.
+  skip: () => IS_DEV,
   keyGenerator: (req) => {
+    const ip = normaliseIp(req);
     const email = (req.body?.email ?? "").toLowerCase().trim();
-    return `${req.ip}-${email}`;
+    return `fgpw-${ip}-${email}`;
   },
   message: {
     success: false,
@@ -134,12 +151,14 @@ export const forgotPasswordRateLimiter = rateLimit({
 
 export const resetPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
-  max: process.env.NODE_ENV === "development" ? 50 : 5,
+  max: IS_DEV ? 50 : 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => IS_DEV,
   keyGenerator: (req) => {
+    const ip = normaliseIp(req);
     const email = (req.body?.email ?? "").toLowerCase().trim();
-    return `${req.ip}-${email}`;
+    return `rspw-${ip}-${email}`;
   },
   message: {
     success: false,
@@ -150,9 +169,10 @@ export const resetPasswordRateLimiter = rateLimit({
 
 export const otpRateLimiter = rateLimit({
   windowMs: TEN_MINUTES_MS,
-  max: process.env.NODE_ENV === "development" ? 50 : 3,
+  max: IS_DEV ? 50 : 3,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => IS_DEV,
   message: {
     success: false,
     code: "RATE_LIMITED",

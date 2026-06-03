@@ -288,6 +288,8 @@ const clearOtpAndResetFields = {
 export const forgotPassword = async (req: Request, res: Response) => {
   const { email, expectedRole } = req.body as ForgotPasswordInput;
 
+  console.log(`[ForgotPassword] email=${email} expectedRole=${expectedRole} type=${typeof expectedRole}`);
+
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || (expectedRole && user.role !== expectedRole)) {

@@ -11,6 +11,7 @@ import {
   getAdminInquiries,
   updateUserRole,
   updateUserStatus,
+  checkOwnerEmail,
 } from "../controllers/admin.controller";
 import { auth } from "../middleware/auth";
 import { requireRole } from "../middleware/roleCheck";
@@ -24,6 +25,7 @@ router.get("/stats", asyncHandler(getStats));
 router.get("/schools", asyncHandler(getAdminSchools));
 router.get("/users", asyncHandler(getAdminUsers));
 router.get("/inquiries", asyncHandler(getAdminInquiries));
+router.get("/check-owner", asyncHandler(checkOwnerEmail));
 
 router.patch("/schools/:id/approve", asyncHandler(approveSchoolById));
 router.patch("/schools/:id/reject", asyncHandler(rejectSchoolById));

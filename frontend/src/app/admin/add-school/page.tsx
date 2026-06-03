@@ -20,65 +20,82 @@ import {
   ArrowLeft,
   ChevronRight,
 } from "lucide-react";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 const emptyToUndefined = (value: unknown) =>
   value === "" || value === null || value === undefined ? undefined : value;
 
-// ── Zod Schema ──────────────────────────────────────────────────────────────
 const addSchoolSchema = z
   .object({
-  // Owner
-  ownerEmail: z.string().email("Enter a valid email address"),
-  ownerName: z.string().min(2, "Name must be at least 2 characters"),
-  ownerPassword: z
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .optional()
-    .or(z.literal("")),
+    ownerEmail: z.string().email("Enter a valid email address"),
+    ownerName: z.string().min(2, "Name must be at least 2 characters"),
+    ownerPassword: z
+      .string()
+      .min(6, "Password must be at least 6 characters")
+      .optional()
+      .or(z.literal("")),
 
-  // School Info
-  name: z.string().min(3, "School name is required"),
-  city: z.string().min(2, "City is required"),
-  state: z.string().min(2, "State is required"),
-  address: z.string().min(5, "Address is required"),
-  pincode: z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional().or(z.literal("")),
-  phone: z.string().min(10, "Enter a valid phone number"),
-  email: z.string().email("Enter a valid email address").optional().or(z.literal("")),
-  website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
+    name: z.string().min(3, "School name is required"),
+    city: z.string().min(2, "City is required"),
+    state: z.string().min(2, "State is required"),
+    address: z.string().min(5, "Address is required"),
+    pincode: z
+      .string()
+      .regex(/^\d{6}$/, "Enter a valid 6-digit pincode")
+      .optional()
+      .or(z.literal("")),
+    phone: z.string().min(10, "Enter a valid phone number"),
+    email: z
+      .string()
+      .email("Enter a valid email address")
+      .optional()
+      .or(z.literal("")),
+    website: z.string().url("Enter a valid URL").optional().or(z.literal("")),
 
-  // Academic
-  board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]),
-  schoolType: z.enum(["BOYS", "GIRLS", "CO_ED"]),
-  medium: z.enum(["HINDI", "ENGLISH", "BOTH"]),
-  classesFrom: z.coerce.number().min(1).max(12),
-  classesTo: z.coerce.number().min(1).max(12),
-  establishedYear: z.preprocess(
-    emptyToUndefined,
-    z.coerce.number().min(1800).max(new Date().getFullYear()).optional()
-  ),
-  totalStudents: z.preprocess(
-    emptyToUndefined,
-    z.coerce.number().min(1).optional()
-  ),
+    board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]),
+    schoolType: z.enum(["BOYS", "GIRLS", "CO_ED"]),
+    medium: z.enum(["HINDI", "ENGLISH", "BOTH"]),
+    classesFrom: z.coerce.number().min(1).max(12),
+    classesTo: z.coerce.number().min(1).max(12),
+    establishedYear: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(1800).max(new Date().getFullYear()).optional()
+    ),
+    totalStudents: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(1).optional()
+    ),
 
-  // Fees
-  admissionFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
-  tuitionFeeMonthly: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
-  totalAnnualFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
-  transportFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
-  hostelFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+    admissionFee: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(0).optional()
+    ),
+    tuitionFeeMonthly: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(0).optional()
+    ),
+    totalAnnualFee: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(0).optional()
+    ),
+    transportFee: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(0).optional()
+    ),
+    hostelFee: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().min(0).optional()
+    ),
 
-  // Description
-  description: z.string().optional(),
-})
+    description: z.string().optional(),
+  })
   .refine((data) => data.classesFrom <= data.classesTo, {
-    message: "Classes To must be greater than or equal to Classes From",
+    message: "Classes To must be >= Classes From",
     path: ["classesTo"],
   });
 
 type AddSchoolFormData = z.infer<typeof addSchoolSchema>;
 
-// ── Step config ──────────────────────────────────────────────────────────────
 const STEPS = [
   { id: 0, label: "Owner Info", icon: User },
   { id: 1, label: "School Info", icon: Building2 },
@@ -93,6 +110,32 @@ const STEP_FIELDS: Record<number, (keyof AddSchoolFormData)[]> = {
   3: [],
 };
 
+// Existing school info dikhane ke liye
+type OwnerCheckResult = {
+  exists: boolean;
+  role?: string;
+  name?: string;
+  hasSchool?: boolean;
+  school?: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  } | null;
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  APPROVED: "Approved",
+  PENDING: "Pending review",
+  REJECTED: "Rejected",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  APPROVED: "text-green-700 bg-green-50 border-green-200",
+  PENDING: "text-amber-700 bg-amber-50 border-amber-200",
+  REJECTED: "text-red-700 bg-red-50 border-red-200",
+};
+
 export default function AdminAddSchoolPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -101,15 +144,18 @@ export default function AdminAddSchoolPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [ownerCheck, setOwnerCheck] = useState<OwnerCheckResult | null>(null);
 
   const {
     register,
     handleSubmit,
     trigger,
     reset,
+    getValues,
     formState: { errors },
   } = useForm<AddSchoolFormData>({
     resolver: zodResolver(addSchoolSchema),
@@ -122,7 +168,6 @@ export default function AdminAddSchoolPage() {
     },
   });
 
-  // ── Auth guard ──────────────────────────────────────────────────────────
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -136,7 +181,6 @@ export default function AdminAddSchoolPage() {
     return null;
   }
 
-  // ── Logo upload ─────────────────────────────────────────────────────────
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,11 +190,43 @@ export default function AdminAddSchoolPage() {
     reader.readAsDataURL(file);
   }
 
-  // ── Next step ───────────────────────────────────────────────────────────
+  // ── Step 0 Next — email check + validation ──────────────────────────────
   async function handleNext() {
     const fields = STEP_FIELDS[step];
     const valid = await trigger(fields);
-    if (valid) setStep((s) => s + 1);
+    if (!valid) return;
+
+    // Step 0 pe email check
+    if (step === 0) {
+      const email = getValues("ownerEmail").trim().toLowerCase();
+      setIsCheckingEmail(true);
+      setErrorMessage(null);
+      setOwnerCheck(null);
+
+      try {
+        const res = await fetch(
+          `/api/admin/check-owner?email=${encodeURIComponent(email)}`
+        );
+        const data: OwnerCheckResult = await res.json().catch(() => ({ exists: false }));
+
+        // Already registered SCHOOL_ADMIN with a school → block
+        if (data.exists && data.role === "SCHOOL_ADMIN" && data.hasSchool) {
+          setOwnerCheck(data);
+          return; // Step nahi badhega — error card dikhega
+        }
+
+        // Koi aur case — allow karo aage jaane do
+        setOwnerCheck(null);
+        setStep((s) => s + 1);
+      } catch {
+        setErrorMessage("Unable to verify email. Please try again.");
+      } finally {
+        setIsCheckingEmail(false);
+      }
+      return;
+    }
+
+    setStep((s) => s + 1);
   }
 
   function onValidationError(fieldErrors: FieldErrors<AddSchoolFormData>) {
@@ -174,15 +250,29 @@ export default function AdminAddSchoolPage() {
       payload.ownerPassword = data.ownerPassword.trim();
     }
 
-    if (!data.pincode?.trim()) delete payload.pincode;
-    if (!data.email?.trim()) delete payload.email;
-    if (!data.website?.trim()) delete payload.website;
-    if (!data.description?.trim()) delete payload.description;
+    // Empty optional fields clean karo
+    const optionalStrings = ["pincode", "email", "website", "description"] as const;
+    for (const key of optionalStrings) {
+      if (!data[key]?.toString().trim()) delete payload[key];
+    }
+
+    // Empty fee fields clean karo
+    const feeFields = [
+      "admissionFee",
+      "tuitionFeeMonthly",
+      "totalAnnualFee",
+      "transportFee",
+      "hostelFee",
+    ] as const;
+    for (const key of feeFields) {
+      if (payload[key] === undefined || payload[key] === null) {
+        delete payload[key];
+      }
+    }
 
     return payload;
   }
 
-  // ── Submit ──────────────────────────────────────────────────────────────
   async function onSubmit(data: AddSchoolFormData) {
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -206,7 +296,8 @@ export default function AdminAddSchoolPage() {
 
         if (!uploadRes.ok || !uploadData.success || !uploadData.url) {
           setErrorMessage(
-            uploadData.message ?? "Logo upload failed. Try again or continue without a logo."
+            uploadData.message ??
+              "Logo upload failed. Try again or continue without a logo."
           );
           return;
         }
@@ -233,13 +324,13 @@ export default function AdminAddSchoolPage() {
           return;
         }
         setErrorMessage(
-          body.message ?? `Unable to add school (error ${res.status}). Please try again.`
+          body.message ??
+            `Unable to add school (error ${res.status}). Please try again.`
         );
         return;
       }
 
-      const message = body.message ?? "School added successfully";
-      setSuccessMessage(message);
+      setSuccessMessage(body.message ?? "School added successfully");
       setShowSuccessScreen(true);
     } catch {
       setErrorMessage("Unable to reach the server. Please try again later.");
@@ -252,6 +343,7 @@ export default function AdminAddSchoolPage() {
     setShowSuccessScreen(false);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setOwnerCheck(null);
     setStep(0);
     setLogoFile(null);
     setLogoPreview(null);
@@ -293,7 +385,6 @@ export default function AdminAddSchoolPage() {
     );
   }
 
-  // ── Main render ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -362,10 +453,17 @@ export default function AdminAddSchoolPage() {
                     {...register("ownerEmail")}
                     type="email"
                     placeholder="owner@school.com"
+                    onChange={() => {
+                      // Email change hone par purana check clear karo
+                      if (ownerCheck) setOwnerCheck(null);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.ownerEmail && (
-                    <p className="text-danger-text font-body text-meta mt-1">{errors.ownerEmail.message}</p>
+                    <p className="text-danger-text font-body text-meta mt-1">
+                      {errors.ownerEmail.message}
+                    </p>
                   )}
                 </div>
 
@@ -380,7 +478,9 @@ export default function AdminAddSchoolPage() {
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.ownerName && (
-                    <p className="text-danger-text font-body text-meta mt-1">{errors.ownerName.message}</p>
+                    <p className="text-danger-text font-body text-meta mt-1">
+                      {errors.ownerName.message}
+                    </p>
                   )}
                 </div>
 
@@ -389,19 +489,68 @@ export default function AdminAddSchoolPage() {
                     Owner Password{" "}
                     <span className="text-gray-400">(optional — to create a new account)</span>
                   </label>
-                  <input
+                  <PasswordInput
                     {...register("ownerPassword")}
-                    type="password"
                     placeholder="Min 6 characters"
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.ownerPassword && (
-                    <p className="text-danger-text font-body text-meta mt-1">{errors.ownerPassword.message}</p>
+                    <p className="text-danger-text font-body text-meta mt-1">
+                      {errors.ownerPassword.message}
+                    </p>
                   )}
                   <p className="text-gray-400 font-body text-meta mt-1">
                     If the email is already registered, the existing account will be used
                   </p>
                 </div>
+
+                {/* Already registered school card */}
+                {ownerCheck?.exists &&
+                  ownerCheck.role === "SCHOOL_ADMIN" &&
+                  ownerCheck.hasSchool &&
+                  ownerCheck.school && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-heading text-label font-semibold text-amber-800">
+                            This email is already registered as a school admin
+                          </p>
+                          <p className="font-body text-meta text-amber-700 mt-0.5">
+                            Use a different email to register a new school.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Existing school detail */}
+                      <div className="bg-white rounded-lg border border-amber-100 p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-heading text-label font-semibold text-gray-800">
+                            {ownerCheck.school.name}
+                          </span>
+                          <span
+                            className={`text-meta font-body px-2 py-0.5 rounded-full border text-xs ${
+                              STATUS_COLORS[ownerCheck.school.status] ??
+                              "text-gray-600 bg-gray-50 border-gray-200"
+                            }`}
+                          >
+                            {STATUS_LABELS[ownerCheck.school.status] ??
+                              ownerCheck.school.status}
+                          </span>
+                        </div>
+                        <p className="font-body text-meta text-gray-500">
+                          Owner: {ownerCheck.name}
+                        </p>
+                        <Link
+                          href={`/schools/${ownerCheck.school.slug}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 font-body text-meta text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          View school page →
+                        </Link>
+                      </div>
+                    </div>
+                  )}
               </div>
             )}
 
@@ -423,7 +572,9 @@ export default function AdminAddSchoolPage() {
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.name && (
-                    <p className="text-danger-text font-body text-meta mt-1">{errors.name.message}</p>
+                    <p className="text-danger-text font-body text-meta mt-1">
+                      {errors.name.message}
+                    </p>
                   )}
                 </div>
 
@@ -439,7 +590,9 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.city && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.city.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.city.message}
+                      </p>
                     )}
                   </div>
                   <div>
@@ -453,7 +606,9 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.state && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.state.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.state.message}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -469,13 +624,17 @@ export default function AdminAddSchoolPage() {
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.address && (
-                    <p className="text-danger-text font-body text-meta mt-1">{errors.address.message}</p>
+                    <p className="text-danger-text font-body text-meta mt-1">
+                      {errors.address.message}
+                    </p>
                   )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-body text-label text-gray-800 mb-1.5">Pincode</label>
+                    <label className="block font-body text-label text-gray-800 mb-1.5">
+                      Pincode
+                    </label>
                     <input
                       {...register("pincode")}
                       type="text"
@@ -484,7 +643,9 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.pincode && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.pincode.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.pincode.message}
+                      </p>
                     )}
                   </div>
                   <div>
@@ -498,14 +659,18 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.phone && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.phone.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.phone.message}
+                      </p>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-body text-label text-gray-800 mb-1.5">School Email</label>
+                    <label className="block font-body text-label text-gray-800 mb-1.5">
+                      School Email
+                    </label>
                     <input
                       {...register("email")}
                       type="email"
@@ -514,7 +679,9 @@ export default function AdminAddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block font-body text-label text-gray-800 mb-1.5">Website</label>
+                    <label className="block font-body text-label text-gray-800 mb-1.5">
+                      Website
+                    </label>
                     <input
                       {...register("website")}
                       type="url"
@@ -526,7 +693,9 @@ export default function AdminAddSchoolPage() {
 
                 {/* Logo Upload */}
                 <div>
-                  <label className="block font-body text-label text-gray-800 mb-1.5">School Logo</label>
+                  <label className="block font-body text-label text-gray-800 mb-1.5">
+                    School Logo
+                  </label>
                   <div className="flex items-center gap-4">
                     {logoPreview ? (
                       <img
@@ -554,7 +723,9 @@ export default function AdminAddSchoolPage() {
 
                 {/* Description */}
                 <div>
-                  <label className="block font-body text-label text-gray-800 mb-1.5">Description</label>
+                  <label className="block font-body text-label text-gray-800 mb-1.5">
+                    Description
+                  </label>
                   <textarea
                     {...register("description")}
                     rows={3}
@@ -628,7 +799,9 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.classesFrom && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.classesFrom.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.classesFrom.message}
+                      </p>
                     )}
                   </div>
                   <div>
@@ -643,14 +816,18 @@ export default function AdminAddSchoolPage() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                     />
                     {errors.classesTo && (
-                      <p className="text-danger-text font-body text-meta mt-1">{errors.classesTo.message}</p>
+                      <p className="text-danger-text font-body text-meta mt-1">
+                        {errors.classesTo.message}
+                      </p>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-body text-label text-gray-800 mb-1.5">Established Year</label>
+                    <label className="block font-body text-label text-gray-800 mb-1.5">
+                      Established Year
+                    </label>
                     <input
                       {...register("establishedYear")}
                       type="number"
@@ -661,7 +838,9 @@ export default function AdminAddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block font-body text-label text-gray-800 mb-1.5">Total Students</label>
+                    <label className="block font-body text-label text-gray-800 mb-1.5">
+                      Total Students
+                    </label>
                     <input
                       {...register("totalStudents")}
                       type="number"
@@ -679,19 +858,25 @@ export default function AdminAddSchoolPage() {
               <div className="space-y-5">
                 <h2 className="font-heading text-h3 font-semibold text-blue-800 mb-4">
                   Fee Structure{" "}
-                  <span className="text-gray-400 font-body text-body font-normal">(Optional)</span>
+                  <span className="text-gray-400 font-body text-body font-normal">
+                    (Optional)
+                  </span>
                 </h2>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { field: "admissionFee" as const, label: "Admission Fee (₹)" },
-                    { field: "tuitionFeeMonthly" as const, label: "Monthly Tuition (₹)" },
-                    { field: "totalAnnualFee" as const, label: "Total Annual Fee (₹)" },
-                    { field: "transportFee" as const, label: "Transport Fee/Month (₹)" },
-                    { field: "hostelFee" as const, label: "Hostel Fee/Month (₹)" },
-                  ].map(({ field, label }) => (
+                  {(
+                    [
+                      { field: "admissionFee", label: "Admission Fee (₹)" },
+                      { field: "tuitionFeeMonthly", label: "Monthly Tuition (₹)" },
+                      { field: "totalAnnualFee", label: "Total Annual Fee (₹)" },
+                      { field: "transportFee", label: "Transport Fee/Month (₹)" },
+                      { field: "hostelFee", label: "Hostel Fee/Month (₹)" },
+                    ] as const
+                  ).map(({ field, label }) => (
                     <div key={field}>
-                      <label className="block font-body text-label text-gray-800 mb-1.5">{label}</label>
+                      <label className="block font-body text-label text-gray-800 mb-1.5">
+                        {label}
+                      </label>
                       <input
                         {...register(field)}
                         type="number"
@@ -703,11 +888,11 @@ export default function AdminAddSchoolPage() {
                   ))}
                 </div>
 
-                {/* Info notice */}
                 <div className="flex items-center gap-3 p-4 bg-info-bg rounded-xl">
                   <CheckCircle className="w-5 h-5 text-info-text flex-shrink-0" />
                   <p className="font-body text-label text-info-text">
-                    This school will be added with <strong>Approved</strong> status — no review pending
+                    This school will be added with{" "}
+                    <strong>Approved</strong> status — no review pending
                   </p>
                 </div>
               </div>
@@ -723,25 +908,7 @@ export default function AdminAddSchoolPage() {
               </div>
             )}
 
-            {successMessage && !showSuccessScreen && (
-              <div
-                role="status"
-                className="flex items-start gap-3 p-4 mt-6 bg-success-bg rounded-xl border border-success-text/20"
-              >
-                <CheckCircle className="w-5 h-5 text-success-text flex-shrink-0 mt-0.5" />
-                <div className="font-body text-body text-success-text">
-                  <p>{successMessage}</p>
-                  <Link
-                    href="/admin/schools"
-                    className="mt-2 inline-block font-heading text-btn text-blue-600 hover:text-blue-800"
-                  >
-                    View schools list →
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* ── Navigation buttons ─────────────────────────────────── */}
+            {/* Navigation buttons */}
             <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
               {step > 0 ? (
                 <button
@@ -759,9 +926,17 @@ export default function AdminAddSchoolPage() {
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors shadow-btn"
+                  disabled={isCheckingEmail}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors shadow-btn disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Next →
+                  {isCheckingEmail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    "Next →"
+                  )}
                 </button>
               ) : (
                 <button
@@ -786,7 +961,6 @@ export default function AdminAddSchoolPage() {
           </form>
         </div>
 
-        {/* Location icon decoration */}
         <div className="flex items-center justify-center gap-2 mt-6 text-gray-400 font-body text-meta">
           <MapPin className="w-3.5 h-3.5" />
           This school will appear on the approved list immediately

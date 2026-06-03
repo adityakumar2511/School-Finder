@@ -292,7 +292,11 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     throw Errors.NotFound("User");
   }
 
-  if (target.id === req.user!.id && target.role === "ADMIN" && role !== "ADMIN") {
+  if (
+    target.id === req.user!.id &&
+    target.role === "ADMIN" &&
+    role !== "ADMIN"
+  ) {
     throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
@@ -419,16 +423,36 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
   });
 
   if (!owner) {
-    const tempPassword = await bcrypt.hash(
-      Math.random().toString(36).slice(-8),
-      parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
+    // const tempPassword = await bcrypt.hash(
+    //   Math.random().toString(36).slice(-8),
+    //   parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
+    // );
+
+    // owner = await prisma.user.create({
+    //   data: {
+    //     name: ownerName || ownerEmail.split("@")[0],
+    //     email: ownerEmail,
+    //     password: tempPassword,
+    //     role: "SCHOOL_ADMIN",
+    //   },
+    // });
+
+    // NAYA — ownerPassword use karo agar diya ho
+    const { ownerPassword } = req.body;
+
+    const passwordToHash =
+      ownerPassword?.trim() || Math.random().toString(36).slice(-8);
+
+    const hashedPassword = await bcrypt.hash(
+      passwordToHash,
+      parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
     );
 
     owner = await prisma.user.create({
       data: {
         name: ownerName || ownerEmail.split("@")[0],
         email: ownerEmail,
-        password: tempPassword,
+        password: hashedPassword,
         role: "SCHOOL_ADMIN",
       },
     });
@@ -461,7 +485,9 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
       website: website ?? null,
       logoUrl: logoUrl ?? null,
       admissionFee: admissionFee ? parseFloat(admissionFee) : null,
-      tuitionFeeMonthly: tuitionFeeMonthly ? parseFloat(tuitionFeeMonthly) : null,
+      tuitionFeeMonthly: tuitionFeeMonthly
+        ? parseFloat(tuitionFeeMonthly)
+        : null,
       totalAnnualFee: totalAnnualFee ? parseFloat(totalAnnualFee) : null,
       transportFee: transportFee ? parseFloat(transportFee) : null,
       hostelFee: hostelFee ? parseFloat(hostelFee) : null,
@@ -475,5 +501,54 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
   res.status(201).json({
     message: "School added successfully",
     school,
+  });
+};
+
+// GET /api/admin/check-owner?email=xxx
+export const checkOwnerEmail = async (req: AuthRequest, res: Response) => {
+  const email = (req.query.email as string)?.trim().toLowerCase();
+
+  if (!email) {
+    throw Errors.BadRequest("Email is required");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      school: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    return res.json({ exists: false });
+  }
+
+  if (user.role !== "SCHOOL_ADMIN") {
+    return res.json({
+      exists: true,
+      role: user.role,
+      hasSchool: false,
+      school: null,
+    });
+  }
+
+  const school = (user as any).school ?? null;
+
+  return res.json({
+    exists: true,
+    role: user.role,
+    name: user.name,
+    hasSchool: !!school,
+    school: school ?? null,
   });
 };
