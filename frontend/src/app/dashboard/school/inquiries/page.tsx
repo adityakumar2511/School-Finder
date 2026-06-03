@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import type { InquiryStatus } from "@/lib/types/database";
-import { auth } from "@/lib/auth";
 import { getOwnedSchool, getSchoolInquiriesList } from "@/lib/school/data";
 import InquiryFilters from "@/components/school/InquiryFilters";
 import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
@@ -41,7 +40,6 @@ async function InquiriesContent({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await auth();
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const statusParam = params.status;

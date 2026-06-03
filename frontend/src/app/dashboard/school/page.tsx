@@ -7,7 +7,6 @@ import {
   ArrowRight,
   AlertCircle,
 } from "lucide-react";
-import { auth } from "@/lib/auth";
 import {
   getOwnedSchool,
   getInquiryStats,
@@ -34,7 +33,6 @@ function formatDate(date: Date | string) {
 }
 
 export default async function SchoolDashboardPage() {
-  const session = await auth();
   const school = await getOwnedSchool();
 
   if (!school) {

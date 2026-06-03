@@ -7,7 +7,6 @@ import {
   Search,
   MessageSquare,
 } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { getParentDashboardData } from "@/lib/parent/data";
 import RecentViewedSchools from "@/components/parent/RecentViewedSchools";
 import SchoolCard from "@/components/SchoolCard";
@@ -15,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default async function ParentDashboardPage() {
-  const session = await auth();
   const { user, favouritesCount, recentSaved } = await getParentDashboardData();
   const firstName = user?.name?.split(" ")[0] ?? "there";
 

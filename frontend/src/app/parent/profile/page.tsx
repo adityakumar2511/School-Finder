@@ -1,10 +1,8 @@
-import { auth } from "@/lib/auth";
 import { getParentProfile } from "@/lib/parent/data";
 import ProfileForm from "@/components/parent/ProfileForm";
 import { redirect } from "next/navigation";
 
 export default async function ParentProfilePage() {
-  const session = await auth();
   const user = await getParentProfile();
 
   if (!user) {

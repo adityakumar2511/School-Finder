@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { getParentFavourites } from "@/lib/parent/data";
 import SchoolCard from "@/components/SchoolCard";
 import RemoveFavouriteButton from "./RemoveFavouriteButton";
@@ -13,7 +12,6 @@ type Props = {
 };
 
 export default async function ParentFavouritesPage({ searchParams }: Props) {
-  const session = await auth();
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
   const { schools, total, totalPages } = await getParentFavourites(page, PAGE_SIZE);
   const currentPage = Math.min(page, totalPages);
