@@ -42,30 +42,30 @@ function detectImageMime(buffer) {
 }
 function validateUploadedFile(buffer, options = {}) {
     if (buffer.length === 0) {
-        throw new AppError_1.AppError(400, "Empty files are not allowed");
+        throw AppError_1.Errors.BadRequest("Empty files are not allowed");
     }
     if (buffer.length > exports.MAX_UPLOAD_BYTES) {
-        throw new AppError_1.AppError(400, "File size exceeds 5MB limit");
+        throw AppError_1.Errors.BadRequest("File size exceeds 5MB limit");
     }
     const filename = options.originalname?.toLowerCase() ?? "";
     if (filename && BLOCKED_EXTENSIONS.test(filename)) {
-        throw new AppError_1.AppError(400, "File type is not allowed");
+        throw AppError_1.Errors.BadRequest("File type is not allowed");
     }
     if (filename && !ALLOWED_EXTENSIONS.test(filename)) {
-        throw new AppError_1.AppError(400, "Invalid file extension. Only .jpg, .jpeg, .png, and .webp are allowed");
+        throw AppError_1.Errors.BadRequest("Invalid file extension. Only .jpg, .jpeg, .png, and .webp are allowed");
     }
     const detectedMime = detectImageMime(buffer);
     if (!detectedMime) {
-        throw new AppError_1.AppError(400, "File content does not match an allowed image format");
+        throw AppError_1.Errors.BadRequest("File content does not match an allowed image format");
     }
     if (options.mimetype &&
         !exports.ALLOWED_MIME_TYPES.includes(options.mimetype)) {
-        throw new AppError_1.AppError(400, "Only JPEG, PNG, and WebP images are allowed");
+        throw AppError_1.Errors.BadRequest("Only JPEG, PNG, and WebP images are allowed");
     }
     if (options.mimetype &&
         options.mimetype !== detectedMime &&
         !(options.mimetype === "image/jpg" && detectedMime === "image/jpeg")) {
-        throw new AppError_1.AppError(400, "File content does not match the declared MIME type");
+        throw AppError_1.Errors.BadRequest("File content does not match the declared MIME type");
     }
 }
 exports.uploadMemory = (0, multer_1.default)({

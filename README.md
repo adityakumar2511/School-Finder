@@ -1,6 +1,6 @@
 # SchoolFinder
 
-> Last updated: June 2, 2026 — verified against codebase
+> Last updated: June 3, 2026 — verified against codebase
 
 A full-stack school discovery and inquiry platform built for **Tier-2 and Tier-3 cities in India**. Parents can search and compare schools; school administrators manage listings and inquiries; platform administrators verify listings and maintain quality.
 
@@ -208,10 +208,9 @@ Parents receive a backend token on login (`backendAccessToken` in session). Scho
 |-------|---------|
 | `/login` | Sign in (Google or email/password) |
 | `/register` | Create parent account |
-| `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` | Request a password reset email (role-isolated) |
-| `/reset-password?token=…&role=…` | Set a new password using a reset token |
+| `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` | 3-step OTP password reset (email → OTP → new password), role-isolated via `expectedRole` |
 
-Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password` (with `expectedRole`), `POST /api/auth/reset-password` (with `expectedRole`).
+Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password`, `POST /api/auth/verify-reset-otp`, `POST /api/auth/reset-password` (all with optional `expectedRole` where applicable). **OTP is terminal-only for now** — the backend logs the 6-digit code to the console; Brevo email is prepared but not active.
 
 ### School administrator (`SCHOOL_ADMIN`)
 
@@ -329,7 +328,8 @@ Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 | `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
 | `FRONTEND_URL` | CORS allowlist (comma-separated for multiple origins) |
 | `CLOUDINARY_*` | Image upload utilities |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Password reset emails (Resend) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Password reset emails (Resend; existing flow) |
+| `BREVO_API_KEY` | OTP email via Brevo — **optional (planned)**; not active yet |
 | `FAST2SMS_API_KEY` | Phone OTP SMS (optional; dev logs OTP if unset) |
 | `BCRYPT_ROUNDS` | Password hashing cost (default `12`) |
 | `TRUST_PROXY` | Behind reverse proxy in production |
@@ -460,7 +460,7 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 |---------|----------------|
 | **JWT auth** | HS256, issuer `schoolfinder-api`, Bearer tokens; logout JTI blacklist (in-memory) |
 | **Role protection** | Middleware (frontend) + `requireRole` (backend) |
-| **Forgot-password role isolation** | `expectedRole` on forgot/reset; generic 200 on forgot (anti-enumeration) |
+| **Forgot-password role isolation** | `expectedRole` on forgot / verify-reset-otp / reset; generic 200 on forgot (anti-enumeration); 3-step email OTP flow (`otpVerified` required before reset) |
 | **Hidden admin login** | `/admin-login` not in public nav; `expectedRole: ADMIN` on API |
 | **Upload validation** | MIME, extension, 5MB limit, magic-byte checks (frontend route) |
 | **Rate limiting** | 100 req/15 min general; 10 req/15 min auth; 3/h forgot; 5/h reset; 3/10 min OTP |
@@ -499,6 +499,7 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 
 | Area | Direction |
 |------|-----------|
+| **Brevo OTP email** | Infrastructure ready in `mailer.ts`; needs API key and activation (currently terminal-only) |
 | **Phone OTP login UI** | Backend API exists (`send-otp` / `verify-otp` via Fast2SMS); no frontend pages yet |
 | **Backend image upload route** | Mount Multer + Cloudinary on Express (currently frontend-only upload) |
 | **Migrate FavouriteButton** | Use `/api/parent/favourites` instead of legacy `/api/favourites` |

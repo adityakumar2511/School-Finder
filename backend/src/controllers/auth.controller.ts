@@ -1,8 +1,6 @@
-import crypto from "crypto";
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
-import { sendPasswordResetEmail } from "../lib/mailer";
 import { AuthRequest, signAccessToken } from "../middleware/auth";
 import jwt from "jsonwebtoken";
 import { tokenBlacklist } from "../lib/tokenBlacklist";
@@ -20,6 +18,7 @@ import type {
   ResetPasswordInput,
   SendOtpInput,
   VerifyOtpInput,
+  VerifyResetOtpInput,
 } from "../validators/auth.validator";
 import { isAccountDisabled } from "../lib/account-status";
 import {
@@ -271,68 +270,86 @@ export const login = async (req: Request, res: Response) => {
 const getBcryptRounds = (): number =>
   parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
 
-const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
+const GENERIC_FORGOT_PASSWORD_MESSAGE =
+  "If an account exists, an OTP has been sent.";
 
-const hashResetToken = (token: string): string =>
-  crypto.createHash("sha256").update(token).digest("hex");
+const INVALID_RESET_OTP_MESSAGE = "Invalid or expired OTP";
 
-const clearResetTokenFields = {
+const clearOtpAndResetFields = {
+  otpCode: null,
+  otpExpiry: null,
+  otpVerified: false,
   resetToken: null,
   resetTokenExpiry: null,
 } as const;
 
-const GENERIC_FORGOT_PASSWORD_MESSAGE =
-  "If this email exists, a reset link has been sent.";
-
-const INVALID_RESET_TOKEN_MESSAGE = "Invalid or expired reset token";
-
+// POST /api/auth/forgot-password
 // POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response) => {
   const { email, expectedRole } = req.body as ForgotPasswordInput;
 
-  const respondGeneric = () => {
-    res.status(200).json({
-      success: true,
-      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
-    });
-  };
-
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user) {
-    respondGeneric();
+  if (!user || (expectedRole && user.role !== expectedRole)) {
+    // ✅ otpSent: false — role mismatch ya user nahi mila
+    res.status(200).json({
+      success: true,
+      otpSent: false,
+      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+    });
     return;
   }
 
-  if (expectedRole && user.role !== expectedRole) {
-    console.warn(
-      `Forgot password role mismatch: email=${email} requested_role=${expectedRole} actual_role=${user.role}`
-    );
-    respondGeneric();
-    return;
-  }
-
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = hashResetToken(rawToken);
-  const resetTokenExpiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+  const { code, hashedCode, expiresAt } = generateOtp();
 
   await prisma.user.update({
     where: { id: user.id },
     data: {
-      resetToken: hashedToken,
-      resetTokenExpiry,
+      otpCode: hashedCode,
+      otpExpiry: expiresAt,
+      otpVerified: false,
     },
   });
 
-  const frontendUrl = (process.env.FRONTEND_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    ""
-  );
-  const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&role=${user.role}`;
+  console.log(`[OTP] Email: ${email} | OTP: ${code} | Expires: ${expiresAt.toISOString()}`);
 
-  await sendPasswordResetEmail(user.email, resetLink, user.name ?? undefined);
+  // ✅ otpSent: true — OTP actually gaya
+  res.status(200).json({
+    success: true,
+    otpSent: true,
+    message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+  });
+};
 
-  respondGeneric();
+// POST /api/auth/verify-reset-otp
+export const verifyResetOtp = async (req: Request, res: Response) => {
+  const { email, otp, expectedRole } = req.body as VerifyResetOtpInput;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || (expectedRole && user.role !== expectedRole)) {
+    throw Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
+  }
+
+  if (!user.otpCode || !user.otpExpiry) {
+    throw Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
+  }
+
+  const isValid = verifyOtpCode(otp, user.otpCode, user.otpExpiry);
+
+  if (!isValid) {
+    throw Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { otpVerified: true },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "OTP verified",
+  });
 };
 
 const OTP_SENT_MESSAGE =
@@ -419,41 +436,21 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
 // POST /api/auth/reset-password
 export const resetPassword = async (req: Request, res: Response) => {
-  const { token, newPassword, confirmPassword, expectedRole } =
-    req.body as ResetPasswordInput;
+  const { email, newPassword, expectedRole } = req.body as ResetPasswordInput;
 
-  if (!token) {
-    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
-  }
+  const user = await prisma.user.findUnique({ where: { email } });
 
-  const hashedToken = hashResetToken(token);
-
-  const user = await prisma.user.findFirst({
-    where: { resetToken: hashedToken },
-  });
-
-  if (!user || !user.resetToken) {
-    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
-  }
-
-  if (!user.resetTokenExpiry || user.resetTokenExpiry.getTime() <= Date.now()) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: clearResetTokenFields,
-    });
-    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
+  if (
+    !user ||
+    !user.otpVerified ||
+    !user.otpExpiry ||
+    user.otpExpiry.getTime() <= Date.now()
+  ) {
+    throw Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
   }
 
   if (expectedRole && user.role !== expectedRole) {
-    throw Errors.BadRequest(INVALID_RESET_TOKEN_MESSAGE);
-  }
-
-  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
-    throw Errors.BadRequest("Passwords do not match.");
-  }
-
-  if (newPassword.length < 8) {
-    throw Errors.BadRequest("Password must be at least 8 characters.");
+    throw Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
   }
 
   const hashedPassword = await bcrypt.hash(newPassword, getBcryptRounds());
@@ -462,13 +459,13 @@ export const resetPassword = async (req: Request, res: Response) => {
     where: { id: user.id },
     data: {
       password: hashedPassword,
-      ...clearResetTokenFields,
+      ...clearOtpAndResetFields,
     },
   });
 
   res.status(200).json({
     success: true,
-    message: "Password reset successfully.",
+    message: "Password reset successfully",
   });
 };
 

@@ -1,6 +1,6 @@
 # SchoolFinder — Frontend Documentation
 
-> Last updated: June 2, 2026 — verified against codebase
+> Last updated: June 3, 2026 — verified against codebase
 
 > **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
 > **Default port:** `3000` · **Repository path:** `frontend/`  
@@ -115,8 +115,7 @@ frontend/
 │   │   │
 │   │   ├── login/                # Parent sign-in
 │   │   ├── register/             # Parent registration
-│   │   ├── forgot-password/      # Request password reset (calls backend directly)
-│   │   ├── reset-password/       # Set new password via reset token
+│   │   ├── forgot-password/      # 3-step OTP reset (email → OTP → new password)
 │   │   ├── school-login/         # School admin sign-in
 │   │   ├── school-register/      # School registration wizard
 │   │   ├── admin-login/          # Hidden admin sign-in
@@ -161,6 +160,7 @@ frontend/
 │   │
 │   ├── components/
 │   │   ├── ui/                   # shadcn/ui primitives
+│   │   │   └── PasswordInput.tsx # Password field with show/hide toggle
 │   │   ├── auth/                 # CredentialsLoginForm, AuthRoleGuard
 │   │   ├── admin/                # AdminNav, moderation actions, pagination
 │   │   ├── school/               # Dashboard nav, profile, inquiries, wizard
@@ -259,7 +259,7 @@ Browser client components call same-origin Next.js routes; handlers forward to b
 | `DELETE /api/school/gallery/[id]` | `/api/schools/images/:id` | Session JWT |
 | `PATCH /api/school/inquiries/[id]/status` | `/api/inquiries/:id/status` | Session JWT |
 | `POST /api/admin/session` | Sets/clears `sf_admin_token` cookie | Admin login flow |
-| `POST /api/admin/add-school` | `/api/admin/add-school` | Admin cookie |
+| `POST /api/admin/add-school` | `/api/admin/add-school` | HTTP-only `sf_admin_token` (server reads cookie, forwards Bearer); 401 if missing |
 | `PATCH /api/admin/schools/[id]/approve` | `/api/admin/schools/:id/approve` | Admin cookie |
 | `PATCH /api/admin/schools/[id]/reject` | `/api/admin/schools/:id/reject` | Admin cookie |
 | `PATCH /api/admin/users/[id]/role` | `/api/admin/users/:id/role` | Admin cookie |
@@ -317,10 +317,11 @@ Keep these in sync with `backend/prisma/schema.prisma` when enums change.
 |-------|---------|
 | `/login` | Google or email/password (`authContext: parent`) |
 | `/register` | Create parent account |
-| `/forgot-password?role=PARENT` | Resend reset link via `POST /api/auth/forgot-password` with `expectedRole` |
-| `/reset-password?token=…&role=…` | `POST /api/auth/reset-password` with optional `expectedRole` |
+| `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` | 3-step OTP reset: (1) `POST /api/auth/forgot-password` with `expectedRole`, (2) `POST /api/auth/verify-reset-otp`, (3) `POST /api/auth/reset-password` — all from the client to the backend API |
 
-Login pages link to `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` for role-isolated reset.
+Login pages link to `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` for role-isolated reset. **OTP delivery:** backend logs the code to the terminal in development (Brevo email not active yet). There is no separate `/reset-password` page — new password is step 3 on `/forgot-password`.
+
+All password fields use `PasswordInput` (`src/components/ui/PasswordInput.tsx`) for show/hide toggle.
 
 - Google sign-in calls backend `POST /api/auth/google-sync`; only `PARENT` role allowed.
 - Credentials login calls backend `POST /api/auth/login` with `expectedRole: "PARENT"`.
@@ -729,6 +730,7 @@ Defined in `src/components/ui/button.tsx`:
 
 | Area | Direction |
 |------|-----------|
+| **Enable Brevo OTP email** | Backend `sendOtpEmail` is ready; needs `BREVO_API_KEY` and uncomment Brevo block in `mailer.ts` |
 | **Phone OTP login UI** | Backend has `POST /api/auth/send-otp` and `verify-otp` (Fast2SMS) — no frontend pages yet |
 | **Migrate FavouriteButton** | Switch school detail toggle from legacy `/api/favourites` to `/api/parent/favourites` BFF |
 | **Unified client API layer** | Consolidate direct backend calls and BFF routes |

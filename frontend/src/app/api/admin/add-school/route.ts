@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { ADMIN_TOKEN_COOKIE, getAdminApiBase } from "@/lib/admin-auth";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("sf_admin_token")?.value;
+  const token = cookieStore.get(ADMIN_TOKEN_COOKIE)?.value;
 
   if (!token) {
     return NextResponse.json(
-      { message: "Session expired. Please log in again as admin." },
+      { success: false, message: "Not authenticated" },
       { status: 401 }
     );
   }
 
   const body = await req.json();
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-  const backendRes = await fetch(`${apiUrl}/api/admin/add-school`, {
+  const backendRes = await fetch(`${getAdminApiBase()}/api/admin/add-school`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
+    cache: "no-store",
   });
 
   const data = await backendRes.json().catch(() => ({}));

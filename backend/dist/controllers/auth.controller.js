@@ -3,14 +3,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMe = exports.resetPassword = exports.verifyOtp = exports.forgotPassword = exports.login = exports.registerSchool = exports.registerParent = void 0;
+exports.syncGoogleUser = exports.updateMe = exports.getMe = exports.logout = exports.resetPassword = exports.verifyOtp = exports.sendOtp = exports.verifyResetOtp = exports.forgotPassword = exports.login = exports.registerSchool = exports.registerParent = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
-const mailer_1 = require("../lib/mailer");
+const auth_1 = require("../middleware/auth");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const tokenBlacklist_1 = require("../lib/tokenBlacklist");
 const AppError_1 = require("../utils/AppError");
 const bruteForce_1 = require("../middleware/bruteForce");
-const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ?? "7d");
+const account_status_1 = require("../lib/account-status");
+const otp_1 = require("../lib/otp");
 const slugify = (value) => value
     .trim()
     .toLowerCase()
@@ -19,7 +21,7 @@ const slugify = (value) => value
 const generateUniqueSlug = async (schoolName, db = prisma_1.default) => {
     const base = slugify(schoolName);
     if (!base) {
-        throw new AppError_1.AppError(400, "School name is required");
+        throw AppError_1.Errors.BadRequest("School name is required");
     }
     const baseTaken = await db.school.findUnique({ where: { slug: base } });
     if (!baseTaken)
@@ -31,14 +33,14 @@ const generateUniqueSlug = async (schoolName, db = prisma_1.default) => {
         if (!taken)
             return candidate;
     }
-    throw new AppError_1.AppError(500, "Failed to generate school identifier");
+    throw new AppError_1.AppError("Failed to generate school identifier", 500, "INTERNAL_ERROR");
 };
 // POST /api/auth/register-parent
 const registerParent = async (req, res) => {
     const { name, email, phone, password } = req.body;
     const existingUser = await prisma_1.default.user.findUnique({ where: { email } });
     if (existingUser) {
-        throw new AppError_1.AppError(400, "Email already exists");
+        throw AppError_1.Errors.Conflict("Email already exists");
     }
     const hashedPassword = await bcryptjs_1.default.hash(password, parseInt(process.env.BCRYPT_ROUNDS || "12"));
     const user = await prisma_1.default.user.create({
@@ -50,7 +52,11 @@ const registerParent = async (req, res) => {
             role: "PARENT",
         },
     });
-    const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role, email: user.email }, process.env.JWT_SECRET, { expiresIn: jwtExpiresIn });
+    const token = (0, auth_1.signAccessToken)({
+        id: user.id,
+        role: user.role,
+        email: user.email,
+    });
     res.status(201).json({
         message: "Account created successfully",
         token,
@@ -72,7 +78,7 @@ const registerSchool = async (req, res) => {
         where: { email: ownerEmail },
     });
     if (existingUser) {
-        throw new AppError_1.AppError(400, "This email is already registered");
+        throw AppError_1.Errors.Conflict("This email is already registered");
     }
     const hashedPassword = await bcryptjs_1.default.hash(ownerPassword, parseInt(process.env.BCRYPT_ROUNDS || "12"));
     const result = await prisma_1.default.$transaction(async (tx) => {
@@ -112,7 +118,11 @@ const registerSchool = async (req, res) => {
         });
         return { user, school };
     });
-    const token = jsonwebtoken_1.default.sign({ id: result.user.id, role: result.user.role, email: result.user.email }, process.env.JWT_SECRET, { expiresIn: jwtExpiresIn });
+    const token = (0, auth_1.signAccessToken)({
+        id: result.user.id,
+        role: result.user.role,
+        email: result.user.email,
+    });
     res.status(201).json({
         message: "Registration successful. Your school will be live after admin approval.",
         token,
@@ -138,31 +148,35 @@ const login = async (req, res) => {
     const user = await prisma_1.default.user.findUnique({ where: { email } });
     if (!user || !user.password) {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(401, "Invalid email or password");
+        throw AppError_1.Errors.Unauthorized("Invalid email or password");
     }
     if (user.phone === "__DISABLED__") {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(403, "This account has been disabled");
+        throw AppError_1.Errors.AccountDisabled();
     }
     const isValid = await bcryptjs_1.default.compare(password, user.password);
     if (!isValid) {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(401, "Invalid email or password");
+        throw AppError_1.Errors.Unauthorized("Invalid email or password");
     }
     if (expectedRole === "PARENT" && user.role !== "PARENT") {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(403, "Unauthorized account type");
+        throw AppError_1.Errors.RoleConflict("Unauthorized account type");
     }
     if (expectedRole === "ADMIN" && user.role !== "ADMIN") {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(403, "Unauthorized account type");
+        throw AppError_1.Errors.RoleConflict("Unauthorized account type");
     }
     if (expectedRole === "SCHOOL_ADMIN" && user.role !== "SCHOOL_ADMIN") {
         (0, bruteForce_1.recordFailedLogin)(req, email);
-        throw new AppError_1.AppError(403, "Unauthorized account type");
+        throw AppError_1.Errors.RoleConflict("Unauthorized account type");
     }
     (0, bruteForce_1.recordSuccessfulLogin)(req, email);
-    const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role, email: user.email }, process.env.JWT_SECRET, { expiresIn: jwtExpiresIn });
+    const token = (0, auth_1.signAccessToken)({
+        id: user.id,
+        role: user.role,
+        email: user.email,
+    });
     res.json({
         token,
         user: {
@@ -176,57 +190,56 @@ const login = async (req, res) => {
 };
 exports.login = login;
 const getBcryptRounds = () => parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
-const clearOtpFields = {
+const GENERIC_FORGOT_PASSWORD_MESSAGE = "If an account exists, an OTP has been sent.";
+const INVALID_RESET_OTP_MESSAGE = "Invalid or expired OTP";
+const clearOtpAndResetFields = {
     otpCode: null,
     otpExpiry: null,
     otpVerified: false,
+    resetToken: null,
+    resetTokenExpiry: null,
 };
 // POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
-    const { email } = req.body;
-    const user = await prisma_1.default.user.findUnique({ where: { email } });
-    if (!user) {
+    const { email, expectedRole } = req.body;
+    const respondGeneric = () => {
         res.status(200).json({
             success: true,
-            message: "If this email is registered, an OTP has been sent.",
+            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
         });
+    };
+    const user = await prisma_1.default.user.findUnique({ where: { email } });
+    if (!user || (expectedRole && user.role !== expectedRole)) {
+        respondGeneric();
         return;
     }
-    const plainOtp = (0, mailer_1.generateOtp)();
-    const hashedOtp = await bcryptjs_1.default.hash(plainOtp, getBcryptRounds());
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const { code, hashedCode, expiresAt } = (0, otp_1.generateOtp)();
     await prisma_1.default.user.update({
         where: { id: user.id },
         data: {
-            otpCode: hashedOtp,
-            otpExpiry,
+            otpCode: hashedCode,
+            otpExpiry: expiresAt,
             otpVerified: false,
         },
     });
-    await (0, mailer_1.sendOtpEmail)(user.email, plainOtp, user.name ?? undefined);
-    res.status(200).json({
-        success: true,
-        message: "OTP sent to your email.",
-    });
+    console.log(`[OTP] Email: ${email} | OTP: ${code} | Expires: ${expiresAt.toISOString()}`);
+    // await sendOtpEmail(email, code);
+    respondGeneric();
 };
 exports.forgotPassword = forgotPassword;
-// POST /api/auth/verify-otp
-const verifyOtp = async (req, res) => {
-    const { email, otp } = req.body;
+// POST /api/auth/verify-reset-otp
+const verifyResetOtp = async (req, res) => {
+    const { email, otp, expectedRole } = req.body;
     const user = await prisma_1.default.user.findUnique({ where: { email } });
-    if (!user || !user.otpCode) {
-        throw new AppError_1.AppError(400, "Invalid or expired OTP.");
+    if (!user || (expectedRole && user.role !== expectedRole)) {
+        throw AppError_1.Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
     }
-    if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
-        await prisma_1.default.user.update({
-            where: { id: user.id },
-            data: clearOtpFields,
-        });
-        throw new AppError_1.AppError(400, "OTP has expired.");
+    if (!user.otpCode || !user.otpExpiry) {
+        throw AppError_1.Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
     }
-    const isValid = await bcryptjs_1.default.compare(otp, user.otpCode);
+    const isValid = (0, otp_1.verifyOtpCode)(otp, user.otpCode, user.otpExpiry);
     if (!isValid) {
-        throw new AppError_1.AppError(400, "Invalid OTP.");
+        throw AppError_1.Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
     }
     await prisma_1.default.user.update({
         where: { id: user.id },
@@ -234,40 +247,119 @@ const verifyOtp = async (req, res) => {
     });
     res.status(200).json({
         success: true,
-        message: "OTP verified.",
+        message: "OTP verified",
+    });
+};
+exports.verifyResetOtp = verifyResetOtp;
+const OTP_SENT_MESSAGE = "If this number is registered, an OTP has been sent.";
+// POST /api/auth/send-otp
+const sendOtp = async (req, res) => {
+    const { phone } = req.body;
+    const user = await prisma_1.default.user.findFirst({ where: { phone } });
+    if (!user) {
+        res.json({
+            success: true,
+            message: OTP_SENT_MESSAGE,
+        });
+        return;
+    }
+    if ((0, account_status_1.isAccountDisabled)(user.phone)) {
+        throw AppError_1.Errors.AccountDisabled();
+    }
+    const { code, hashedCode, expiresAt } = (0, otp_1.generateOtp)();
+    await prisma_1.default.user.update({
+        where: { id: user.id },
+        data: {
+            otpCode: hashedCode,
+            otpExpiry: expiresAt,
+            otpVerified: false,
+        },
+    });
+    const smsResult = await (0, otp_1.sendOtpViaSms)(phone, code);
+    if (!smsResult.success && process.env.NODE_ENV === "production") {
+        console.error(`[OTP] Failed to send to ${phone}: ${smsResult.error}`);
+    }
+    res.json({
+        success: true,
+        message: OTP_SENT_MESSAGE,
+    });
+};
+exports.sendOtp = sendOtp;
+// POST /api/auth/verify-otp
+const verifyOtp = async (req, res) => {
+    const { phone, otp } = req.body;
+    const user = await prisma_1.default.user.findFirst({ where: { phone } });
+    if (!user || !user.otpCode || !user.otpExpiry) {
+        throw AppError_1.Errors.BadRequest("Invalid or expired OTP");
+    }
+    const isValid = (0, otp_1.verifyOtpCode)(otp, user.otpCode, user.otpExpiry);
+    if (!isValid) {
+        throw AppError_1.Errors.BadRequest("Invalid or expired OTP");
+    }
+    await prisma_1.default.user.update({
+        where: { id: user.id },
+        data: {
+            otpCode: null,
+            otpExpiry: null,
+            otpVerified: true,
+        },
+    });
+    const token = (0, auth_1.signAccessToken)({
+        id: user.id,
+        role: user.role,
+        email: user.email,
+    });
+    res.json({
+        success: true,
+        data: { token, role: user.role },
+        message: "OTP verified successfully",
     });
 };
 exports.verifyOtp = verifyOtp;
 // POST /api/auth/reset-password
 const resetPassword = async (req, res) => {
-    const { email, newPassword, confirmPassword } = req.body;
+    const { email, newPassword, expectedRole } = req.body;
     const user = await prisma_1.default.user.findUnique({ where: { email } });
-    if (!user || !user.otpVerified) {
-        throw new AppError_1.AppError(403, "Please verify OTP first.");
+    if (!user ||
+        !user.otpVerified ||
+        !user.otpExpiry ||
+        user.otpExpiry.getTime() <= Date.now()) {
+        throw AppError_1.Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
     }
-    if (!user.otpExpiry || user.otpExpiry.getTime() <= Date.now()) {
-        throw new AppError_1.AppError(400, "Session expired. Request a new OTP.");
-    }
-    if (newPassword !== confirmPassword) {
-        throw new AppError_1.AppError(400, "Passwords do not match.");
-    }
-    if (newPassword.length < 8) {
-        throw new AppError_1.AppError(400, "Password must be at least 8 characters.");
+    if (expectedRole && user.role !== expectedRole) {
+        throw AppError_1.Errors.BadRequest(INVALID_RESET_OTP_MESSAGE);
     }
     const hashedPassword = await bcryptjs_1.default.hash(newPassword, getBcryptRounds());
     await prisma_1.default.user.update({
         where: { id: user.id },
         data: {
             password: hashedPassword,
-            ...clearOtpFields,
+            ...clearOtpAndResetFields,
         },
     });
     res.status(200).json({
         success: true,
-        message: "Password reset successfully.",
+        message: "Password reset successfully",
     });
 };
 exports.resetPassword = resetPassword;
+// POST /api/auth/logout
+const logout = async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (token) {
+        const decoded = jsonwebtoken_1.default.decode(token);
+        if (decoded?.jti && decoded?.exp) {
+            tokenBlacklist_1.tokenBlacklist.add(decoded.jti, decoded.exp * 1000);
+            console.info(`[Logout] token jti=${decoded.jti} blacklisted`);
+        }
+    }
+    res.status(200).json({
+        success: true,
+        message: "Logged out successfully.",
+    });
+};
+exports.logout = logout;
 // GET /api/auth/me
 const getMe = async (req, res) => {
     const user = await prisma_1.default.user.findUnique({
@@ -283,8 +375,91 @@ const getMe = async (req, res) => {
         },
     });
     if (!user) {
-        throw new AppError_1.AppError(404, "User not found");
+        throw AppError_1.Errors.NotFound("User");
     }
     res.json(user);
 };
 exports.getMe = getMe;
+// PATCH /api/auth/me
+const updateMe = async (req, res) => {
+    const { name, phone, image } = req.body;
+    if (name !== undefined && typeof name === "string" && name.trim().length < 1) {
+        throw AppError_1.Errors.BadRequest("Name is required");
+    }
+    const user = await prisma_1.default.user.update({
+        where: { id: req.user.id },
+        data: {
+            ...(name !== undefined ? { name: name.trim() } : {}),
+            ...(phone !== undefined ? { phone } : {}),
+            ...(image !== undefined ? { image } : {}),
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            image: true,
+            phone: true,
+            createdAt: true,
+        },
+    });
+    res.json({ success: true, data: user });
+};
+exports.updateMe = updateMe;
+// POST /api/auth/google-sync
+const syncGoogleUser = async (req, res) => {
+    const { email, name, image } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+        throw AppError_1.Errors.BadRequest("Email is required");
+    }
+    const existing = await prisma_1.default.user.findUnique({
+        where: { email: normalizedEmail },
+    });
+    if (existing && existing.role !== "PARENT") {
+        throw AppError_1.Errors.RoleConflict("Unauthorized account type");
+    }
+    const user = existing
+        ? await prisma_1.default.user.update({
+            where: { id: existing.id },
+            data: {
+                ...(name ? { name } : {}),
+                ...(image ? { image } : {}),
+                emailVerified: existing.emailVerified ?? new Date(),
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                image: true,
+                phone: true,
+                createdAt: true,
+            },
+        })
+        : await prisma_1.default.user.create({
+            data: {
+                email: normalizedEmail,
+                name: name ?? null,
+                image: image ?? null,
+                role: "PARENT",
+                emailVerified: new Date(),
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                image: true,
+                phone: true,
+                createdAt: true,
+            },
+        });
+    const token = (0, auth_1.signAccessToken)({
+        id: user.id,
+        role: user.role,
+        email: user.email,
+    });
+    res.json({ user, token });
+};
+exports.syncGoogleUser = syncGoogleUser;

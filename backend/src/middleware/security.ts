@@ -2,8 +2,10 @@ import type { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
+const TEN_MINUTES_MS = 10 * 60 * 1000;
 
 const ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"] as const;
 
@@ -97,6 +99,7 @@ export const generalRateLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
+    code: "RATE_LIMITED",
     message: "Too many requests. Please try again later.",
   },
 });
@@ -108,37 +111,46 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
+    code: "RATE_LIMITED",
     message: "Too many requests. Please try again later.",
   },
 });
 
 export const forgotPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
-  max: 3,
+  max: process.env.NODE_ENV === "development" ? 50 : 3,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = (req.body?.email ?? "").toLowerCase().trim();
+    return `${req.ip}-${email}`;
+  },
   message: {
     success: false,
+    code: "RATE_LIMITED",
     message: "Too many password reset requests. Please try again in an hour.",
   },
 });
 
 export const resetPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
-  max: 5,
+  max: process.env.NODE_ENV === "development" ? 50 : 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = (req.body?.email ?? "").toLowerCase().trim();
+    return `${req.ip}-${email}`;
+  },
   message: {
     success: false,
+    code: "RATE_LIMITED",
     message: "Too many reset attempts. Please try again in an hour.",
   },
 });
 
-const TEN_MINUTES_MS = 10 * 60 * 1000;
-
 export const otpRateLimiter = rateLimit({
   windowMs: TEN_MINUTES_MS,
-  max: 3,
+  max: process.env.NODE_ENV === "development" ? 50 : 3,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

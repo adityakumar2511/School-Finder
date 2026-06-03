@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -20,8 +21,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+const emptyToUndefined = (value: unknown) =>
+  value === "" || value === null || value === undefined ? undefined : value;
+
 // ── Zod Schema ──────────────────────────────────────────────────────────────
-const addSchoolSchema = z.object({
+const addSchoolSchema = z
+  .object({
   // Owner
   ownerEmail: z.string().email("Enter a valid email address"),
   ownerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -47,19 +52,29 @@ const addSchoolSchema = z.object({
   medium: z.enum(["HINDI", "ENGLISH", "BOTH"]),
   classesFrom: z.coerce.number().min(1).max(12),
   classesTo: z.coerce.number().min(1).max(12),
-  establishedYear: z.coerce.number().min(1800).max(new Date().getFullYear()).optional(),
-  totalStudents: z.coerce.number().min(1).optional(),
+  establishedYear: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().min(1800).max(new Date().getFullYear()).optional()
+  ),
+  totalStudents: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().min(1).optional()
+  ),
 
   // Fees
-  admissionFee: z.coerce.number().min(0).optional(),
-  tuitionFeeMonthly: z.coerce.number().min(0).optional(),
-  totalAnnualFee: z.coerce.number().min(0).optional(),
-  transportFee: z.coerce.number().min(0).optional(),
-  hostelFee: z.coerce.number().min(0).optional(),
+  admissionFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+  tuitionFeeMonthly: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+  totalAnnualFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+  transportFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
+  hostelFee: z.preprocess(emptyToUndefined, z.coerce.number().min(0).optional()),
 
   // Description
   description: z.string().optional(),
-});
+})
+  .refine((data) => data.classesFrom <= data.classesTo, {
+    message: "Classes To must be greater than or equal to Classes From",
+    path: ["classesTo"],
+  });
 
 type AddSchoolFormData = z.infer<typeof addSchoolSchema>;
 
@@ -85,14 +100,16 @@ export default function AdminAddSchoolPage() {
   const [step, setStep] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
 
   const {
     register,
     handleSubmit,
     trigger,
+    reset,
     formState: { errors },
   } = useForm<AddSchoolFormData>({
     resolver: zodResolver(addSchoolSchema),
@@ -136,15 +153,44 @@ export default function AdminAddSchoolPage() {
     if (valid) setStep((s) => s + 1);
   }
 
+  function onValidationError(fieldErrors: FieldErrors<AddSchoolFormData>) {
+    const firstMessage = Object.values(fieldErrors)
+      .map((entry) => entry?.message)
+      .find((message): message is string => Boolean(message));
+
+    setErrorMessage(
+      firstMessage ??
+        "Please complete all required fields. Check earlier steps for errors."
+    );
+    setSuccessMessage(null);
+  }
+
+  function buildPayload(data: AddSchoolFormData, logoUrl?: string) {
+    const payload: Record<string, unknown> = { ...data, logoUrl };
+
+    if (!data.ownerPassword?.trim()) {
+      delete payload.ownerPassword;
+    } else {
+      payload.ownerPassword = data.ownerPassword.trim();
+    }
+
+    if (!data.pincode?.trim()) delete payload.pincode;
+    if (!data.email?.trim()) delete payload.email;
+    if (!data.website?.trim()) delete payload.website;
+    if (!data.description?.trim()) delete payload.description;
+
+    return payload;
+  }
+
   // ── Submit ──────────────────────────────────────────────────────────────
   async function onSubmit(data: AddSchoolFormData) {
-    setSubmitting(true);
-    setSubmitError(null);
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
       let logoUrl: string | undefined;
 
-      // Upload logo if provided
       if (logoFile) {
         const formData = new FormData();
         formData.append("file", logoFile);
@@ -152,40 +198,68 @@ export default function AdminAddSchoolPage() {
           method: "POST",
           body: formData,
         });
-        const uploadData = await uploadRes.json().catch(() => ({}));
-        if (uploadRes.ok && uploadData.success && uploadData.url) {
-          logoUrl = uploadData.url;
+        const uploadData = (await uploadRes.json().catch(() => ({}))) as {
+          success?: boolean;
+          url?: string;
+          message?: string;
+        };
+
+        if (!uploadRes.ok || !uploadData.success || !uploadData.url) {
+          setErrorMessage(
+            uploadData.message ?? "Logo upload failed. Try again or continue without a logo."
+          );
+          return;
         }
+
+        logoUrl = uploadData.url;
       }
 
       const res = await fetch("/api/admin/add-school", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ...data, logoUrl }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(data, logoUrl)),
       });
 
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        success?: boolean;
+      };
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
         if (res.status === 401 || res.status === 403) {
-          throw new Error("Session expired. Please log in again as admin.");
+          setErrorMessage(
+            body.message ?? "Session expired. Please log in again as admin."
+          );
+          return;
         }
-        throw new Error(err.message || `Request failed with status ${res.status}`);
+        setErrorMessage(
+          body.message ?? `Unable to add school (error ${res.status}). Please try again.`
+        );
+        return;
       }
 
-      setSuccess(true);
-    } catch (err: unknown) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Something went wrong. Please try again."
-      );
+      const message = body.message ?? "School added successfully";
+      setSuccessMessage(message);
+      setShowSuccessScreen(true);
+    } catch {
+      setErrorMessage("Unable to reach the server. Please try again later.");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
+  function handleAddAnother() {
+    setShowSuccessScreen(false);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setStep(0);
+    setLogoFile(null);
+    setLogoPreview(null);
+    reset();
+  }
+
   // ── Success screen ──────────────────────────────────────────────────────
-  if (success) {
+  if (showSuccessScreen) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-card p-10 max-w-md w-full text-center">
@@ -196,22 +270,19 @@ export default function AdminAddSchoolPage() {
             School added successfully
           </h2>
           <p className="text-gray-400 font-body text-body mb-6">
-            The school was added with approved status and is now live.
+            {successMessage ??
+              "The school was added with approved status and is now live."}
           </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => router.push("/admin/schools")}
+          <div className="flex gap-3 justify-center flex-wrap">
+            <Link
+              href="/admin/schools"
               className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors"
             >
               View schools list
-            </button>
+            </Link>
             <button
-              onClick={() => {
-                setSuccess(false);
-                setStep(0);
-                setLogoFile(null);
-                setLogoPreview(null);
-              }}
+              type="button"
+              onClick={handleAddAnother}
               className="px-5 py-2.5 border border-gray-100 text-gray-800 rounded-xl font-heading text-btn hover:bg-gray-50 transition-colors"
             >
               Add another
@@ -274,7 +345,7 @@ export default function AdminAddSchoolPage() {
 
         {/* Form card */}
         <div className="bg-white rounded-2xl shadow-card p-6 md:p-8">
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit, onValidationError)}>
 
             {/* ── STEP 0: Owner Info ─────────────────────────────────── */}
             {step === 0 && (
@@ -632,20 +703,40 @@ export default function AdminAddSchoolPage() {
                   ))}
                 </div>
 
-                {/* Submit error */}
-                {submitError && (
-                  <div className="flex items-center gap-3 p-4 bg-danger-bg rounded-xl border border-danger-text/20">
-                    <AlertCircle className="w-5 h-5 text-danger-text flex-shrink-0" />
-                    <p className="font-body text-body text-danger-text">{submitError}</p>
-                  </div>
-                )}
-
                 {/* Info notice */}
                 <div className="flex items-center gap-3 p-4 bg-info-bg rounded-xl">
                   <CheckCircle className="w-5 h-5 text-info-text flex-shrink-0" />
                   <p className="font-body text-label text-info-text">
                     This school will be added with <strong>Approved</strong> status — no review pending
                   </p>
+                </div>
+              </div>
+            )}
+
+            {errorMessage && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 p-4 mt-6 bg-danger-bg rounded-xl border border-danger-text/20"
+              >
+                <AlertCircle className="w-5 h-5 text-danger-text flex-shrink-0 mt-0.5" />
+                <p className="font-body text-body text-danger-text">{errorMessage}</p>
+              </div>
+            )}
+
+            {successMessage && !showSuccessScreen && (
+              <div
+                role="status"
+                className="flex items-start gap-3 p-4 mt-6 bg-success-bg rounded-xl border border-success-text/20"
+              >
+                <CheckCircle className="w-5 h-5 text-success-text flex-shrink-0 mt-0.5" />
+                <div className="font-body text-body text-success-text">
+                  <p>{successMessage}</p>
+                  <Link
+                    href="/admin/schools"
+                    className="mt-2 inline-block font-heading text-btn text-blue-600 hover:text-blue-800"
+                  >
+                    View schools list →
+                  </Link>
                 </div>
               </div>
             )}
@@ -675,13 +766,13 @@ export default function AdminAddSchoolPage() {
               ) : (
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-amber-400 text-amber-800 rounded-xl font-heading text-btn hover:bg-amber-500 transition-colors shadow-amber disabled:opacity-60"
+                  disabled={isSubmitting}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-amber-400 text-amber-800 rounded-xl font-heading text-btn hover:bg-amber-500 transition-colors shadow-amber disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {submitting ? (
+                  {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Adding...
+                      Adding school...
                     </>
                   ) : (
                     <>

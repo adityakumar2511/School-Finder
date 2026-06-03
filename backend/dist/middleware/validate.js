@@ -17,29 +17,21 @@ function formatZodErrors(error) {
  * Validates and sanitizes `req.body` against a Zod schema.
  * Replaces `req.body` with parsed output on success.
  */
-const validate = (schema) => (req, res, next) => {
+const validate = (schema) => (req, _res, next) => {
     try {
         if (req.body && typeof req.body === "object" && !Array.isArray(req.body)) {
             (0, sanitize_1.sanitizeRequestBody)(req.body);
         }
         const result = schema.safeParse(req.body);
         if (!result.success) {
-            res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: formatZodErrors(result.error),
-            });
+            next(result.error);
             return;
         }
         req.body = result.data;
         next();
     }
-    catch {
-        res.status(400).json({
-            success: false,
-            message: "Validation failed",
-            errors: { body: "Invalid request body" },
-        });
+    catch (error) {
+        next(error);
     }
 };
 exports.validate = validate;

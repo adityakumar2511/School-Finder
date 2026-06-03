@@ -10,6 +10,8 @@ import {
 
   forgotPassword,
 
+  verifyResetOtp,
+
   sendOtp,
 
   verifyOtp,
@@ -39,6 +41,8 @@ import {
   registerSchoolSchema,
 
   forgotPasswordSchema,
+
+  verifyResetOtpSchema,
 
   sendOtpSchema,
 
@@ -88,6 +92,13 @@ router.post(
   forgotPasswordRateLimiter,
   validate(forgotPasswordSchema),
   asyncHandler(forgotPassword)
+);
+
+router.post(
+  "/verify-reset-otp",
+  resetPasswordRateLimiter,
+  validate(verifyResetOtpSchema),
+  asyncHandler(verifyResetOtp)
 );
 
 router.post(

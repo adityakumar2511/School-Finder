@@ -9,6 +9,7 @@ const prisma_1 = __importDefault(require("../lib/prisma"));
 const AppError_1 = require("../utils/AppError");
 const account_status_1 = require("../lib/account-status");
 const pagination_1 = require("../lib/pagination");
+const cache_1 = require("../lib/cache");
 const schools_1 = require("../lib/queries/schools");
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"];
 const generateSlug = async (name) => {
@@ -19,7 +20,7 @@ const generateSlug = async (name) => {
         .replace(/-+/g, "-")
         .trim();
     if (!base) {
-        throw new AppError_1.AppError(400, "School name is required");
+        throw AppError_1.Errors.BadRequest("School name is required");
     }
     let slug = base;
     let count = 1;
@@ -31,24 +32,26 @@ const generateSlug = async (name) => {
 };
 // GET /api/admin/stats
 const getStats = async (_req, res) => {
-    const [totalSchools, pendingSchools, approvedSchools, rejectedSchools, totalInquiries, totalUsers,] = await Promise.all([
-        prisma_1.default.school.count(),
-        prisma_1.default.school.count({ where: { status: "PENDING" } }),
-        prisma_1.default.school.count({ where: { status: "APPROVED" } }),
-        prisma_1.default.school.count({ where: { status: "REJECTED" } }),
-        prisma_1.default.inquiry.count(),
-        prisma_1.default.user.count(),
-    ]);
-    res.json({
-        stats: {
+    const cacheKey = (0, cache_1.buildCacheKey)("admin:stats", {});
+    const stats = await (0, cache_1.withCache)(cacheKey, cache_1.CACHE_TTL.ADMIN_STATS, async () => {
+        const [totalSchools, pendingSchools, approvedSchools, rejectedSchools, totalInquiries, totalUsers,] = await Promise.all([
+            prisma_1.default.school.count(),
+            prisma_1.default.school.count({ where: { status: "PENDING" } }),
+            prisma_1.default.school.count({ where: { status: "APPROVED" } }),
+            prisma_1.default.school.count({ where: { status: "REJECTED" } }),
+            prisma_1.default.inquiry.count(),
+            prisma_1.default.user.count(),
+        ]);
+        return {
             totalSchools,
             pendingSchools,
             approvedSchools,
             rejectedSchools,
             totalInquiries,
             totalUsers,
-        },
+        };
     });
+    res.json({ stats });
 };
 exports.getStats = getStats;
 // GET /api/admin/schools
@@ -94,6 +97,7 @@ const approveSchoolById = async (req, res) => {
             rejectionReason: null,
         },
     });
+    (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School approved successfully", school });
 };
 exports.approveSchoolById = approveSchoolById;
@@ -110,6 +114,7 @@ const rejectSchoolById = async (req, res) => {
                 : "Rejected by administrator",
         },
     });
+    (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School rejected successfully", school });
 };
 exports.rejectSchoolById = rejectSchoolById;
@@ -117,7 +122,7 @@ exports.rejectSchoolById = rejectSchoolById;
 const approveSchool = async (req, res) => {
     const { schoolId } = req.body;
     if (!schoolId) {
-        throw new AppError_1.AppError(400, "schoolId is required");
+        throw AppError_1.Errors.BadRequest("schoolId is required");
     }
     req.params = { id: schoolId };
     return (0, exports.approveSchoolById)(req, res);
@@ -127,7 +132,7 @@ exports.approveSchool = approveSchool;
 const rejectSchool = async (req, res) => {
     const { schoolId, reason } = req.body;
     if (!schoolId) {
-        throw new AppError_1.AppError(400, "schoolId is required");
+        throw AppError_1.Errors.BadRequest("schoolId is required");
     }
     req.params = { id: schoolId };
     req.body = { reason };
@@ -219,21 +224,21 @@ const updateUserRole = async (req, res) => {
     const targetId = String(req.params.id).trim();
     const { role } = req.body;
     if (!role || !VALID_ROLES.includes(role)) {
-        throw new AppError_1.AppError(400, "Invalid role");
+        throw AppError_1.Errors.BadRequest("Invalid role");
     }
     if (targetId === req.user.id && role !== "ADMIN") {
-        throw new AppError_1.AppError(403, "You cannot demote your own admin account");
+        throw AppError_1.Errors.Forbidden("You cannot demote your own admin account");
     }
     const target = await prisma_1.default.user.findUnique({ where: { id: targetId } });
     if (!target) {
-        throw new AppError_1.AppError(404, "User not found");
+        throw AppError_1.Errors.NotFound("User");
     }
     if (target.id === req.user.id && target.role === "ADMIN" && role !== "ADMIN") {
-        throw new AppError_1.AppError(403, "You cannot demote your own admin account");
+        throw AppError_1.Errors.Forbidden("You cannot demote your own admin account");
     }
     const adminCount = await prisma_1.default.user.count({ where: { role: "ADMIN" } });
     if (target.role === "ADMIN" && role !== "ADMIN" && adminCount <= 1) {
-        throw new AppError_1.AppError(403, "Cannot remove the last administrator");
+        throw AppError_1.Errors.Forbidden("Cannot remove the last administrator");
     }
     const updated = await prisma_1.default.user.update({
         where: { id: targetId },
@@ -261,21 +266,21 @@ const updateUserStatus = async (req, res) => {
     const targetId = String(req.params.id).trim();
     const { status } = req.body;
     if (!status || !["active", "disabled"].includes(status)) {
-        throw new AppError_1.AppError(400, "Invalid status. Use active or disabled.");
+        throw AppError_1.Errors.BadRequest("Invalid status. Use active or disabled.");
     }
     if (targetId === req.user.id) {
-        throw new AppError_1.AppError(403, "You cannot change your own account status");
+        throw AppError_1.Errors.Forbidden("You cannot change your own account status");
     }
     const target = await prisma_1.default.user.findUnique({ where: { id: targetId } });
     if (!target) {
-        throw new AppError_1.AppError(404, "User not found");
+        throw AppError_1.Errors.NotFound("User");
     }
     if (target.role === "ADMIN" && status === "disabled") {
         const adminCount = await prisma_1.default.user.count({
             where: { role: "ADMIN", phone: { not: account_status_1.ACCOUNT_DISABLED_PHONE } },
         });
         if (adminCount <= 1) {
-            throw new AppError_1.AppError(403, "Cannot disable the last active administrator");
+            throw AppError_1.Errors.Forbidden("Cannot disable the last active administrator");
         }
     }
     const updated = await prisma_1.default.user.update({
@@ -304,11 +309,11 @@ exports.updateUserStatus = updateUserStatus;
 // POST /api/admin/add-school
 const addSchoolDirect = async (req, res) => {
     if (!req.user?.id) {
-        throw new AppError_1.AppError(401, "Authentication required");
+        throw AppError_1.Errors.Unauthorized("Authentication required");
     }
     const { ownerEmail, ownerName, name, city, state, address, pincode, board, schoolType, medium, classesFrom, classesTo, phone, email, website, logoUrl, admissionFee, tuitionFeeMonthly, totalAnnualFee, transportFee, hostelFee, description, totalStudents, establishedYear, } = req.body;
     if (!ownerEmail || !name) {
-        throw new AppError_1.AppError(400, "ownerEmail and school name are required");
+        throw AppError_1.Errors.BadRequest("ownerEmail and school name are required");
     }
     let owner = await prisma_1.default.user.findUnique({
         where: { email: ownerEmail },

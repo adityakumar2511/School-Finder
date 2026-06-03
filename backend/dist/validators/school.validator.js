@@ -19,7 +19,7 @@ const schoolBodyFields = {
     medium: mediumSchema,
     classesFrom: zod_1.z.coerce.number().int().min(1).max(12),
     classesTo: zod_1.z.coerce.number().int().min(1).max(12),
-    phone: zod_1.z.preprocess(sanitize_1.preprocessTrim, zod_1.z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number")),
+    phone: zod_1.z.preprocess(sanitize_1.preprocessIndianPhone, zod_1.z.string().regex(/^\d{10}$/, "Enter a valid phone number (+91XXXXXXXXXX or 10 digits)")),
     email: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().email("Enter a valid email address").optional()),
     website: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().url("Enter a valid website URL").optional()),
     logoUrl: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().url().optional()),

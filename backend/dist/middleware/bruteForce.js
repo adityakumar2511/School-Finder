@@ -35,7 +35,7 @@ function assertLoginAllowed(req, email) {
     const key = getClientKey(req, email);
     const record = attempts.get(key);
     if (record?.blockedUntil && record.blockedUntil > Date.now()) {
-        throw new AppError_1.AppError(429, "Too many login attempts. Please try again later.");
+        throw AppError_1.Errors.RateLimited();
     }
 }
 function recordFailedLogin(req, email) {

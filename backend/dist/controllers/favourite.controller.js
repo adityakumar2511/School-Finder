@@ -3,9 +3,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeFavourite = exports.addFavourite = exports.getFavourites = void 0;
+exports.removeFavourite = exports.addFavourite = exports.getFavourites = exports.LEGACY_FAVOURITES_DEPRECATION = void 0;
+exports.setLegacyFavouritesDeprecationHeader = setLegacyFavouritesDeprecationHeader;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const AppError_1 = require("../utils/AppError");
+const favourites_1 = require("../lib/favourites");
+exports.LEGACY_FAVOURITES_DEPRECATION = "Use /api/parent/favourites instead";
+function setLegacyFavouritesDeprecationHeader(res) {
+    res.setHeader("Deprecation", exports.LEGACY_FAVOURITES_DEPRECATION);
+}
 // GET /api/favourites
 const getFavourites = async (req, res) => {
     const favourites = await prisma_1.default.favourite.findMany({
@@ -31,6 +37,7 @@ const getFavourites = async (req, res) => {
             },
         },
     });
+    setLegacyFavouritesDeprecationHeader(res);
     res.json(favourites);
 };
 exports.getFavourites = getFavourites;
@@ -38,21 +45,10 @@ exports.getFavourites = getFavourites;
 const addFavourite = async (req, res) => {
     const { schoolId } = req.body;
     if (!schoolId) {
-        throw new AppError_1.AppError(400, "schoolId is required");
+        throw AppError_1.Errors.BadRequest("schoolId is required");
     }
-    const favourite = await prisma_1.default.favourite.upsert({
-        where: {
-            parentId_schoolId: {
-                parentId: req.user.id,
-                schoolId,
-            },
-        },
-        update: {},
-        create: {
-            parentId: req.user.id,
-            schoolId,
-        },
-    });
+    const favourite = await (0, favourites_1.addFavouriteForUser)(req.user.id, schoolId);
+    setLegacyFavouritesDeprecationHeader(res);
     res.status(200).json(favourite);
 };
 exports.addFavourite = addFavourite;
@@ -60,27 +56,13 @@ exports.addFavourite = addFavourite;
 const removeFavourite = async (req, res) => {
     const { schoolId } = req.query;
     if (!schoolId) {
-        throw new AppError_1.AppError(400, "schoolId is required");
+        throw AppError_1.Errors.BadRequest("schoolId is required");
     }
-    const existing = await prisma_1.default.favourite.findUnique({
-        where: {
-            parentId_schoolId: {
-                parentId: req.user.id,
-                schoolId: schoolId,
-            },
-        },
-    });
-    if (!existing) {
-        throw new AppError_1.AppError(404, "Favourite not found");
+    const removed = await (0, favourites_1.removeFavouriteForUser)(req.user.id, schoolId);
+    if (removed === 0) {
+        throw AppError_1.Errors.NotFound("Favourite");
     }
-    await prisma_1.default.favourite.delete({
-        where: {
-            parentId_schoolId: {
-                parentId: req.user.id,
-                schoolId: schoolId,
-            },
-        },
-    });
+    setLegacyFavouritesDeprecationHeader(res);
     res.json({ message: "Favourite removed successfully" });
 };
 exports.removeFavourite = removeFavourite;

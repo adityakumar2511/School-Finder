@@ -117,12 +117,32 @@ export const verifyOtpSchema = z.object({
     .regex(/^\d{6}$/, "OTP must be 6 digits"),
 });
 
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Reset token is required"),
-  newPassword: z.string().min(8),
-  confirmPassword: z.string().min(8).optional(),
+export const verifyResetOtpSchema = z.object({
+  email: z.preprocess(
+    preprocessEmail,
+    z.string().min(1, "Email is required").email("Enter a valid email address")
+  ),
+  otp: z
+    .string()
+    .length(6)
+    .regex(/^\d{6}$/, "OTP must be 6 digits"),
   expectedRole: expectedRoleSchema.optional(),
 });
+
+export const resetPasswordSchema = z
+  .object({
+    email: z.preprocess(
+      preprocessEmail,
+      z.string().min(1, "Email is required").email("Enter a valid email address")
+    ),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+    expectedRole: expectedRoleSchema.optional(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -130,4 +150,5 @@ export type RegisterSchoolInput = z.infer<typeof registerSchoolSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type VerifyResetOtpInput = z.infer<typeof verifyResetOtpSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordSchema = exports.verifyOtpSchema = exports.forgotPasswordSchema = exports.registerSchoolSchema = exports.loginSchema = exports.registerParentSchema = exports.expectedRoleSchema = void 0;
+exports.resetPasswordSchema = exports.verifyResetOtpSchema = exports.verifyOtpSchema = exports.sendOtpSchema = exports.forgotPasswordSchema = exports.registerSchoolSchema = exports.loginSchema = exports.registerParentSchema = exports.expectedRoleSchema = void 0;
 const zod_1 = require("zod");
 const sanitize_1 = require("../lib/sanitize");
 const phonePattern = /^[\d\s+\-()]{7,20}$/;
@@ -60,13 +60,38 @@ exports.registerSchoolSchema = zod_1.z
 }));
 exports.forgotPasswordSchema = zod_1.z.object({
     email: zod_1.z.preprocess(sanitize_1.preprocessEmail, zod_1.z.string().min(1, "Email is required").email("Enter a valid email address")),
+    expectedRole: exports.expectedRoleSchema.optional(),
+});
+exports.sendOtpSchema = zod_1.z.object({
+    phone: zod_1.z
+        .string()
+        .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
 });
 exports.verifyOtpSchema = zod_1.z.object({
-    email: zod_1.z.string().email(),
-    otp: zod_1.z.string().length(6),
+    phone: zod_1.z
+        .string()
+        .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+    otp: zod_1.z
+        .string()
+        .length(6)
+        .regex(/^\d{6}$/, "OTP must be 6 digits"),
 });
-exports.resetPasswordSchema = zod_1.z.object({
-    email: zod_1.z.string().email(),
-    newPassword: zod_1.z.string().min(8),
-    confirmPassword: zod_1.z.string().min(8),
+exports.verifyResetOtpSchema = zod_1.z.object({
+    email: zod_1.z.preprocess(sanitize_1.preprocessEmail, zod_1.z.string().min(1, "Email is required").email("Enter a valid email address")),
+    otp: zod_1.z
+        .string()
+        .length(6)
+        .regex(/^\d{6}$/, "OTP must be 6 digits"),
+    expectedRole: exports.expectedRoleSchema.optional(),
+});
+exports.resetPasswordSchema = zod_1.z
+    .object({
+    email: zod_1.z.preprocess(sanitize_1.preprocessEmail, zod_1.z.string().min(1, "Email is required").email("Enter a valid email address")),
+    newPassword: zod_1.z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: zod_1.z.string().min(8, "Password must be at least 8 characters"),
+    expectedRole: exports.expectedRoleSchema.optional(),
+})
+    .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
 });

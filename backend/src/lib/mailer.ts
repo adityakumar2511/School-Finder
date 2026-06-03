@@ -50,33 +50,43 @@ export async function sendPasswordResetEmail(
   }
 }
 
-export async function sendOtpEmail(
-  email: string,
-  otp: string,
-  name?: string
-): Promise<void | EmailNotConfigured> {
-  const notConfigured = ensureEmailConfigured();
-  if (notConfigured) {
-    return notConfigured;
-  }
+// Preserved Resend OTP email implementation (replaced by Brevo stub below)
+// export async function sendOtpEmailResend(
+//   email: string,
+//   otp: string,
+//   name?: string
+// ): Promise<void | EmailNotConfigured> {
+//   const notConfigured = ensureEmailConfigured();
+//   if (notConfigured) {
+//     return notConfigured;
+//   }
+//
+//   console.log(
+//     `[OTP] Email: ${email} | OTP: ${otp} | Time: ${new Date().toISOString()}`
+//   );
+//
+//   try {
+//     await getResendClient().emails.send({
+//       from: process.env.EMAIL_FROM!,
+//       to: email,
+//       subject: "Your SchoolFinder Password Reset OTP",
+//       html: `<div style="font-family:sans-serif;text-align:center;padding:40px">
+//                   <h2>Password Reset OTP</h2>
+//                   <p>Use this OTP to reset your password. It expires in 10 minutes.</p>
+//                   <div style="font-size:48px;font-weight:bold;letter-spacing:12px;margin:32px 0">${otp}</div>
+//                   <p style="color:#888">If you did not request this, ignore this email.</p>
+//                 </div>`,
+//     });
+//   } catch (error) {
+//     console.error("[OTP] Failed to send email:", error);
+//   }
+// }
 
+export async function sendOtpEmail(to: string, otp: string): Promise<void> {
+  // TODO: Brevo email integration — uncomment when BREVO_API_KEY is configured
+  // const client = new Brevo.TransactionalEmailsApi()
+  // ... Brevo implementation here
   console.log(
-    `[OTP] Email: ${email} | OTP: ${otp} | Time: ${new Date().toISOString()}`
+    `[sendOtpEmail] Would send OTP ${otp} to ${to} — email disabled, using terminal only`
   );
-
-  try {
-    await getResendClient().emails.send({
-      from: process.env.EMAIL_FROM!,
-      to: email,
-      subject: "Your SchoolFinder Password Reset OTP",
-      html: `<div style="font-family:sans-serif;text-align:center;padding:40px">
-                  <h2>Password Reset OTP</h2>
-                  <p>Use this OTP to reset your password. It expires in 10 minutes.</p>
-                  <div style="font-size:48px;font-weight:bold;letter-spacing:12px;margin:32px 0">${otp}</div>
-                  <p style="color:#888">If you did not request this, ignore this email.</p>
-                </div>`,
-    });
-  } catch (error) {
-    console.error("[OTP] Failed to send email:", error);
-  }
 }

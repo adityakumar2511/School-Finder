@@ -10,8 +10,6 @@ import { z } from "zod";
 import {
   ArrowRight,
   CheckCircle2,
-  Eye,
-  EyeOff,
   GraduationCap,
   Lock,
   Mail,
@@ -21,6 +19,7 @@ import {
 import AuthRoleGuard from "@/components/auth/AuthRoleGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAdminApiBase } from "@/lib/admin-auth";
@@ -50,8 +49,6 @@ type ParentRegisterForm = z.infer<typeof parentRegisterSchema>;
 
 export default function ParentRegisterPage() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -220,26 +217,17 @@ export default function ParentRegisterPage() {
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <Input
+                    <PasswordInput
                       id="password"
-                      type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       placeholder="At least 8 characters"
-                      className={`pl-10 pr-10 h-11 rounded-xl border font-body text-body text-gray-800 placeholder:text-gray-400 focus-visible:ring-blue-400 transition-colors ${
+                      className={`pl-10 h-11 rounded-xl border font-body text-body text-gray-800 placeholder:text-gray-400 focus-visible:ring-blue-400 transition-colors ${
                         errors.password
                           ? "border-danger-text bg-danger-bg/30"
                           : "border-gray-100 bg-gray-50 focus:bg-white"
                       }`}
                       {...register("password")}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
                   </div>
                   {errors.password && (
                     <p className="font-body text-meta text-danger-text">
@@ -254,30 +242,17 @@ export default function ParentRegisterPage() {
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    <Input
+                    <PasswordInput
                       id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
                       autoComplete="new-password"
                       placeholder="Repeat your password"
-                      className={`pl-10 pr-10 h-11 rounded-xl border font-body text-body text-gray-800 placeholder:text-gray-400 focus-visible:ring-blue-400 transition-colors ${
+                      className={`pl-10 h-11 rounded-xl border font-body text-body text-gray-800 placeholder:text-gray-400 focus-visible:ring-blue-400 transition-colors ${
                         errors.confirmPassword
                           ? "border-danger-text bg-danger-bg/30"
                           : "border-gray-100 bg-gray-50 focus:bg-white"
                       }`}
                       {...register("confirmPassword")}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
                   </div>
                   {errors.confirmPassword && (
                     <p className="font-body text-meta text-danger-text">

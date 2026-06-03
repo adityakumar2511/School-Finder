@@ -5,11 +5,11 @@ const AppError_1 = require("../utils/AppError");
 const requireRole = (...roles) => {
     return (req, _res, next) => {
         if (!req.user) {
-            next(new AppError_1.AppError(401, "Authentication required"));
+            next(AppError_1.Errors.Unauthorized("Authentication required"));
             return;
         }
         if (!roles.includes(req.user.role)) {
-            next(new AppError_1.AppError(403, "Access denied — insufficient permissions"));
+            next(AppError_1.Errors.Forbidden("Access denied — insufficient permissions"));
             return;
         }
         next();

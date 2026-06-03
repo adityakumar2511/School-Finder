@@ -6,9 +6,10 @@ import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Shield, Eye, EyeOff } from "lucide-react";
+import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getAdminApiBase } from "@/lib/admin-auth";
@@ -27,7 +28,6 @@ type AdminLoginForm = z.infer<typeof adminLoginSchema>;
  */
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -145,26 +145,16 @@ export default function AdminLoginPage() {
                 <Label htmlFor="password" className="text-slate-300 font-heading text-sm">
                   Password
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    className={`h-11 pr-10 rounded-lg bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-500 ${
-                      errors.password ? "border-red-800" : ""
-                    }`}
-                    {...register("password")}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+                <PasswordInput
+                  id="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  className={`h-11 rounded-lg bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-500 focus-visible:ring-slate-500 ${
+                    errors.password ? "border-red-800" : ""
+                  }`}
+                  toggleClassName="text-slate-500 hover:text-slate-300"
+                  {...register("password")}
+                />
                 {errors.password && (
                   <p className="text-xs text-red-400">{errors.password.message}</p>
                 )}

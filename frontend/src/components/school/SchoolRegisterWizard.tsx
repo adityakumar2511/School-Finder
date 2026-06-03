@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -619,9 +620,8 @@ export default function SchoolRegisterWizard() {
                     <Label htmlFor="ownerPassword" className="font-heading text-label text-gray-800">
                       Password <span className="text-danger-text">*</span>
                     </Label>
-                    <Input
+                    <PasswordInput
                       id="ownerPassword"
-                      type="password"
                       autoComplete="new-password"
                       placeholder="Minimum 8 characters"
                       className={`${inputClass} ${errors.ownerPassword ? inputErrorClass : ""}`}

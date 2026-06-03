@@ -3,13 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authRateLimiter = exports.generalRateLimiter = exports.corsMiddleware = exports.helmetMiddleware = void 0;
+exports.otpRateLimiter = exports.resetPasswordRateLimiter = exports.forgotPasswordRateLimiter = exports.authRateLimiter = exports.generalRateLimiter = exports.corsMiddleware = exports.helmetMiddleware = void 0;
 exports.corsMethodGuard = corsMethodGuard;
 exports.applySecurityMiddleware = applySecurityMiddleware;
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 const ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"];
 exports.helmetMiddleware = (0, helmet_1.default)({
     contentSecurityPolicy: {
@@ -28,6 +29,10 @@ exports.helmetMiddleware = (0, helmet_1.default)({
     },
     crossOriginEmbedderPolicy: { policy: "credentialless" },
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    strictTransportSecurity: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+    },
     xXssProtection: true,
     frameguard: { action: "deny" },
     hidePoweredBy: true,
@@ -93,6 +98,38 @@ exports.authRateLimiter = (0, express_rate_limit_1.default)({
     message: {
         success: false,
         message: "Too many requests. Please try again later.",
+    },
+});
+exports.forgotPasswordRateLimiter = (0, express_rate_limit_1.default)({
+    windowMs: ONE_HOUR_MS,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: "Too many password reset requests. Please try again in an hour.",
+    },
+});
+exports.resetPasswordRateLimiter = (0, express_rate_limit_1.default)({
+    windowMs: ONE_HOUR_MS,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: "Too many reset attempts. Please try again in an hour.",
+    },
+});
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+exports.otpRateLimiter = (0, express_rate_limit_1.default)({
+    windowMs: TEN_MINUTES_MS,
+    max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        success: false,
+        code: "RATE_LIMITED",
+        message: "Too many OTP requests. Please wait before requesting again.",
     },
 });
 function applySecurityMiddleware(app) {

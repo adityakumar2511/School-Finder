@@ -13,10 +13,10 @@ async function assertSchoolInquiryAccess(schoolId, userId, role) {
         select: { id: true, ownerId: true },
     });
     if (!school) {
-        throw new AppError_1.AppError(404, "School not found");
+        throw AppError_1.Errors.NotFound("School");
     }
     if (role === "SCHOOL_ADMIN" && school.ownerId !== userId) {
-        throw new AppError_1.AppError(403, "You do not have permission to access inquiries for this school");
+        throw AppError_1.Errors.Forbidden("You do not have permission to access inquiries for this school");
     }
     return school;
 }
@@ -38,11 +38,11 @@ function buildInquiryWhere(schoolId, status, search) {
 const createInquiry = async (req, res) => {
     const { schoolId, message } = req.body;
     if (!schoolId || !message) {
-        throw new AppError_1.AppError(400, "schoolId and message are required");
+        throw AppError_1.Errors.BadRequest("schoolId and message are required");
     }
     const school = await prisma_1.default.school.findUnique({ where: { id: schoolId } });
     if (!school || school.status !== "APPROVED") {
-        throw new AppError_1.AppError(404, "School not found");
+        throw AppError_1.Errors.NotFound("School");
     }
     const inquiry = await prisma_1.default.inquiry.create({
         data: {
@@ -142,18 +142,18 @@ const updateInquiryStatus = async (req, res) => {
     const id = String(req.params.id);
     const { status } = req.body;
     if (!VALID_STATUSES.includes(status)) {
-        throw new AppError_1.AppError(400, "Invalid status");
+        throw AppError_1.Errors.BadRequest("Invalid status");
     }
     const inquiry = await prisma_1.default.inquiry.findUnique({
         where: { id },
         include: { school: { select: { ownerId: true } } },
     });
     if (!inquiry) {
-        throw new AppError_1.AppError(404, "Inquiry not found");
+        throw AppError_1.Errors.NotFound("Inquiry");
     }
     if (req.user.role === "SCHOOL_ADMIN" &&
         inquiry.school.ownerId !== req.user.id) {
-        throw new AppError_1.AppError(403, "You do not have permission to update this inquiry");
+        throw AppError_1.Errors.Forbidden("You do not have permission to update this inquiry");
     }
     const updated = await prisma_1.default.inquiry.update({
         where: { id },
