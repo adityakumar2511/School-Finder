@@ -2,7 +2,6 @@ import Link from "next/link";
 import Image from "next/image";
 import type { InquiryStatus } from "@/lib/types/database";
 import { ChevronLeft, ChevronRight, MessageSquare, BookOpen, ArrowRight } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { getAdminApiBase } from "@/lib/admin-auth";
 import { getBackendToken } from "@/lib/api/server";
 import { Button } from "@/components/ui/button";
@@ -82,15 +81,9 @@ function messagePreview(message: string): string {
 }
 
 export default async function ParentInquiriesPage({ searchParams }: Props) {
-  const session = await auth();
-  const user = session!.user!;
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
 
-  const result = await fetchMyInquiries(page, {
-    id: user.id,
-    role: user.role,
-    email: user.email ?? "",
-  });
+  const result = await fetchMyInquiries(page);
 
   const inquiries = result?.data ?? [];
   const pagination = result?.pagination ?? {

@@ -16,7 +16,7 @@ export function optimizeCloudinaryUrl(
     if (markerIndex === -1) return url;
 
     const prefix = parsed.pathname.slice(0, markerIndex + marker.length);
-    let remainder = parsed.pathname.slice(markerIndex + marker.length);
+    const  remainder = parsed.pathname.slice(markerIndex + marker.length);
 
     if (/^(q_auto|f_auto|w_\d)/.test(remainder)) {
       return url;

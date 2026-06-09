@@ -2,6 +2,7 @@ import type { SchoolStatus } from "@/lib/types/database";
 import { Badge } from "@/components/ui/badge";
 
 const VARIANT: Record<SchoolStatus, "warning" | "success" | "danger"> = {
+  DRAFT: "warning",
   PENDING: "warning",
   APPROVED: "success",
   REJECTED: "danger",

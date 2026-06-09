@@ -169,7 +169,6 @@ export default function SchoolRegisterWizard() {
     handleSubmit,
     trigger,
     control,
-    watch,
     reset,
     getValues,
     formState: { errors },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -794,7 +795,7 @@ export default function AdminAddSchoolPage() {
                   </label>
                   <div className="flex items-center gap-4">
                     {logoPreview ? (
-                      <img
+                      <Image
                         src={logoPreview}
                         alt="Logo preview"
                         className="w-16 h-16 rounded-xl object-cover border border-gray-100"
