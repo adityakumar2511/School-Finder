@@ -11,7 +11,9 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
+const TEN_MINUTES_MS = 10 * 60 * 1000;
 const ALLOWED_METHODS = ["GET", "POST", "PATCH", "DELETE"];
+const IS_DEV = process.env.NODE_ENV === "development";
 exports.helmetMiddleware = (0, helmet_1.default)({
     contentSecurityPolicy: {
         directives: {
@@ -80,6 +82,17 @@ function corsMethodGuard(req, res, next) {
     }
     next();
 }
+/**
+ * Normalise the client IP so the key is always a non-empty string.
+ * In development, Express may report "::1" (IPv6 loopback) or undefined
+ * when trust proxy is off — we collapse both to "127.0.0.1".
+ */
+function normaliseIp(req) {
+    const raw = req.ip ?? req.socket?.remoteAddress ?? "";
+    if (!raw || raw === "::1" || raw === "::ffff:127.0.0.1")
+        return "127.0.0.1";
+    return raw;
+}
 exports.generalRateLimiter = (0, express_rate_limit_1.default)({
     windowMs: FIFTEEN_MINUTES_MS,
     max: 100,
@@ -87,6 +100,7 @@ exports.generalRateLimiter = (0, express_rate_limit_1.default)({
     legacyHeaders: false,
     message: {
         success: false,
+        code: "RATE_LIMITED",
         message: "Too many requests. Please try again later.",
     },
 });
@@ -97,35 +111,52 @@ exports.authRateLimiter = (0, express_rate_limit_1.default)({
     legacyHeaders: false,
     message: {
         success: false,
+        code: "RATE_LIMITED",
         message: "Too many requests. Please try again later.",
     },
 });
 exports.forgotPasswordRateLimiter = (0, express_rate_limit_1.default)({
     windowMs: ONE_HOUR_MS,
-    max: 3,
+    // Production: 3 attempts/hour per IP+email. Development: 50 (effectively unlimited for testing).
+    max: IS_DEV ? 50 : 3,
     standardHeaders: true,
     legacyHeaders: false,
+    // Skip rate limiting entirely in development so testing is never blocked.
+    skip: () => IS_DEV,
+    keyGenerator: (req) => {
+        const ip = normaliseIp(req);
+        const email = (req.body?.email ?? "").toLowerCase().trim();
+        return `fgpw-${ip}-${email}`;
+    },
     message: {
         success: false,
+        code: "RATE_LIMITED",
         message: "Too many password reset requests. Please try again in an hour.",
     },
 });
 exports.resetPasswordRateLimiter = (0, express_rate_limit_1.default)({
     windowMs: ONE_HOUR_MS,
-    max: 5,
+    max: IS_DEV ? 50 : 5,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: () => IS_DEV,
+    keyGenerator: (req) => {
+        const ip = normaliseIp(req);
+        const email = (req.body?.email ?? "").toLowerCase().trim();
+        return `rspw-${ip}-${email}`;
+    },
     message: {
         success: false,
+        code: "RATE_LIMITED",
         message: "Too many reset attempts. Please try again in an hour.",
     },
 });
-const TEN_MINUTES_MS = 10 * 60 * 1000;
 exports.otpRateLimiter = (0, express_rate_limit_1.default)({
     windowMs: TEN_MINUTES_MS,
-    max: 3,
+    max: IS_DEV ? 50 : 3,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: () => IS_DEV,
     message: {
         success: false,
         code: "RATE_LIMITED",

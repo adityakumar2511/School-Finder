@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { getOwnedSchool } from "@/lib/school/data";
 import SchoolDashboardNav from "@/components/school/SchoolDashboardNav";
 
 export const metadata: Metadata = {
@@ -20,6 +21,12 @@ export default async function SchoolDashboardLayout({
 
   if (session.user.role !== "SCHOOL_ADMIN") {
     redirect("/");
+  }
+
+  const school = await getOwnedSchool();
+
+  if (school?.status === "DRAFT") {
+    redirect("/school-complete-registration");
   }
 
   return (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { ADMIN_TOKEN_COOKIE, getAdminApiBase } from "@/lib/admin-auth";
+import { revalidateSchoolsCache } from "@/lib/revalidate-schools";
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
   });
 
   const data = await backendRes.json().catch(() => ({}));
+
+  if (backendRes.ok) {
+    revalidateSchoolsCache();
+  }
 
   return NextResponse.json(data, { status: backendRes.status });
 }

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addSchoolDirect = exports.updateUserStatus = exports.updateUserRole = exports.getAdminInquiries = exports.getAdminUsers = exports.rejectSchool = exports.approveSchool = exports.rejectSchoolById = exports.approveSchoolById = exports.getAdminSchools = exports.getStats = void 0;
+exports.checkOwnerEmail = exports.addSchoolDirect = exports.updateUserStatus = exports.updateUserRole = exports.getAdminInquiries = exports.getAdminUsers = exports.rejectSchool = exports.approveSchool = exports.rejectSchoolById = exports.approveSchoolById = exports.getAdminSchools = exports.getStats = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const AppError_1 = require("../utils/AppError");
@@ -233,7 +233,9 @@ const updateUserRole = async (req, res) => {
     if (!target) {
         throw AppError_1.Errors.NotFound("User");
     }
-    if (target.id === req.user.id && target.role === "ADMIN" && role !== "ADMIN") {
+    if (target.id === req.user.id &&
+        target.role === "ADMIN" &&
+        role !== "ADMIN") {
         throw AppError_1.Errors.Forbidden("You cannot demote your own admin account");
     }
     const adminCount = await prisma_1.default.user.count({ where: { role: "ADMIN" } });
@@ -315,19 +317,68 @@ const addSchoolDirect = async (req, res) => {
     if (!ownerEmail || !name) {
         throw AppError_1.Errors.BadRequest("ownerEmail and school name are required");
     }
+    const normalizedName = name.trim();
+    const existingSchool = await prisma_1.default.school.findFirst({
+        where: { name: { equals: normalizedName, mode: "insensitive" } },
+        select: { id: true },
+    });
+    if (existingSchool) {
+        throw AppError_1.Errors.Conflict("A school with this name already exists");
+    }
     let owner = await prisma_1.default.user.findUnique({
         where: { email: ownerEmail },
+        include: {
+            ownedSchools: { select: { id: true }, take: 1 },
+        },
     });
+    if (owner) {
+        if (owner.role === "SCHOOL_ADMIN" && owner.ownedSchools.length > 0) {
+            throw AppError_1.Errors.Conflict("This email is already associated with a school");
+        }
+        if (owner.role === "ADMIN") {
+            throw AppError_1.Errors.BadRequest("Cannot assign a platform admin as school owner");
+        }
+        if (owner.role === "PARENT") {
+            owner = await prisma_1.default.user.update({
+                where: { id: owner.id },
+                data: { role: "SCHOOL_ADMIN" },
+                include: {
+                    ownedSchools: { select: { id: true }, take: 1 },
+                },
+            });
+        }
+    }
     if (!owner) {
-        const tempPassword = await bcryptjs_1.default.hash(Math.random().toString(36).slice(-8), parseInt(process.env.BCRYPT_ROUNDS || "12", 10));
+        // const tempPassword = await bcrypt.hash(
+        //   Math.random().toString(36).slice(-8),
+        //   parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
+        // );
+        // owner = await prisma.user.create({
+        //   data: {
+        //     name: ownerName || ownerEmail.split("@")[0],
+        //     email: ownerEmail,
+        //     password: tempPassword,
+        //     role: "SCHOOL_ADMIN",
+        //   },
+        // });
+        // NAYA — ownerPassword use karo agar diya ho
+        const { ownerPassword } = req.body;
+        const passwordToHash = ownerPassword?.trim() || Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcryptjs_1.default.hash(passwordToHash, parseInt(process.env.BCRYPT_ROUNDS || "12", 10));
         owner = await prisma_1.default.user.create({
             data: {
                 name: ownerName || ownerEmail.split("@")[0],
                 email: ownerEmail,
-                password: tempPassword,
+                password: hashedPassword,
                 role: "SCHOOL_ADMIN",
             },
+            include: {
+                ownedSchools: { select: { id: true }, take: 1 },
+            },
         });
+    }
+    if (!owner) {
+        throw new AppError_1.AppError("Failed to resolve school owner", 500, "INTERNAL_ERROR");
     }
     const slug = name
         .toLowerCase()
@@ -337,7 +388,7 @@ const addSchoolDirect = async (req, res) => {
         Math.random().toString(36).slice(2, 7);
     const school = await prisma_1.default.school.create({
         data: {
-            name,
+            name: normalizedName,
             slug,
             description: description ?? null,
             address,
@@ -354,7 +405,9 @@ const addSchoolDirect = async (req, res) => {
             website: website ?? null,
             logoUrl: logoUrl ?? null,
             admissionFee: admissionFee ? parseFloat(admissionFee) : null,
-            tuitionFeeMonthly: tuitionFeeMonthly ? parseFloat(tuitionFeeMonthly) : null,
+            tuitionFeeMonthly: tuitionFeeMonthly
+                ? parseFloat(tuitionFeeMonthly)
+                : null,
             totalAnnualFee: totalAnnualFee ? parseFloat(totalAnnualFee) : null,
             transportFee: transportFee ? parseFloat(transportFee) : null,
             hostelFee: hostelFee ? parseFloat(hostelFee) : null,
@@ -364,9 +417,55 @@ const addSchoolDirect = async (req, res) => {
             ownerId: owner.id,
         },
     });
+    (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({
         message: "School added successfully",
         school,
     });
 };
 exports.addSchoolDirect = addSchoolDirect;
+// GET /api/admin/check-owner?email=xxx
+const checkOwnerEmail = async (req, res) => {
+    const email = req.query.email?.trim().toLowerCase();
+    if (!email) {
+        throw AppError_1.Errors.BadRequest("Email is required");
+    }
+    const user = await prisma_1.default.user.findUnique({
+        where: { email },
+        select: {
+            id: true,
+            name: true,
+            role: true,
+            ownedSchools: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    status: true,
+                },
+                orderBy: { createdAt: "asc" },
+                take: 1,
+            },
+        },
+    });
+    if (!user) {
+        return res.json({ exists: false });
+    }
+    if (user.role !== "SCHOOL_ADMIN") {
+        return res.json({
+            exists: true,
+            role: user.role,
+            hasSchool: false,
+            school: null,
+        });
+    }
+    const school = user.ownedSchools[0] ?? null;
+    return res.json({
+        exists: true,
+        role: user.role,
+        name: user.name,
+        hasSchool: school !== null,
+        school,
+    });
+};
+exports.checkOwnerEmail = checkOwnerEmail;

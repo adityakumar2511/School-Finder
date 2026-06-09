@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/api/proxy";
+import { revalidateSchoolsCache } from "@/lib/revalidate-schools";
 
 export async function PATCH(
   request: NextRequest,
@@ -7,8 +8,14 @@ export async function PATCH(
 ) {
   const { id } = await context.params;
   const body = await request.text();
-  return proxyToBackend(`/api/admin/schools/${id}/reject`, {
+  const response = await proxyToBackend(`/api/admin/schools/${id}/reject`, {
     method: "PATCH",
     body,
   }, { useAdminCookie: true });
+
+  if (response.status >= 200 && response.status < 300) {
+    revalidateSchoolsCache();
+  }
+
+  return response;
 }

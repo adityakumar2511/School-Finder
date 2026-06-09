@@ -1,26 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyToBackend } from "@/lib/api/proxy";
 import { getAdminApiBase } from "@/lib/admin-auth";
-import { mintBackendJwt } from "@/lib/backend-jwt";
-import { auth } from "@/lib/auth";
-
-async function getSchoolAdminToken(): Promise<string | null> {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.email) return null;
-
-  if (typeof session.backendAccessToken === "string" && session.backendAccessToken.length > 0) {
-    return session.backendAccessToken;
-  }
-
-  return mintBackendJwt({
-    id: session.user.id,
-    role: session.user.role,
-    email: session.user.email,
-  });
-}
+import { getBackendToken } from "@/lib/api/server";
+import { revalidateSchoolsCache } from "@/lib/revalidate-schools";
 
 export async function PATCH(request: NextRequest) {
-  const token = await getSchoolAdminToken();
+  const token = await getBackendToken();
   if (!token) {
     return NextResponse.json(
       { success: false, message: "Authentication required" },
@@ -43,8 +28,14 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.text();
-  return proxyToBackend(`/api/schools/${schoolJson.data.id}`, {
+  const response = await proxyToBackend(`/api/schools/${schoolJson.data.id}`, {
     method: "PATCH",
     body,
   });
+
+  if (response.status >= 200 && response.status < 300) {
+    revalidateSchoolsCache();
+  }
+
+  return response;
 }

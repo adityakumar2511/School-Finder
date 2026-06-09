@@ -13,6 +13,7 @@ const AppError_1 = require("../utils/AppError");
 const bruteForce_1 = require("../middleware/bruteForce");
 const account_status_1 = require("../lib/account-status");
 const otp_1 = require("../lib/otp");
+const mailer_1 = require("../lib/mailer");
 const slugify = (value) => value
     .trim()
     .toLowerCase()
@@ -202,15 +203,13 @@ const clearOtpAndResetFields = {
 // POST /api/auth/forgot-password
 const forgotPassword = async (req, res) => {
     const { email, expectedRole } = req.body;
-    const respondGeneric = () => {
-        res.status(200).json({
-            success: true,
-            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
-        });
-    };
     const user = await prisma_1.default.user.findUnique({ where: { email } });
     if (!user || (expectedRole && user.role !== expectedRole)) {
-        respondGeneric();
+        res.status(200).json({
+            success: true,
+            otpSent: false,
+            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+        });
         return;
     }
     const { code, hashedCode, expiresAt } = (0, otp_1.generateOtp)();
@@ -222,9 +221,30 @@ const forgotPassword = async (req, res) => {
             otpVerified: false,
         },
     });
-    console.log(`[OTP] Email: ${email} | OTP: ${code} | Expires: ${expiresAt.toISOString()}`);
-    // await sendOtpEmail(email, code);
-    respondGeneric();
+    const emailResult = await (0, mailer_1.sendOtpEmail)(email, code, user.name ?? undefined);
+    if (emailResult.success !== true) {
+        await prisma_1.default.user.update({
+            where: { id: user.id },
+            data: clearOtpAndResetFields,
+        });
+        if (emailResult.reason === "send_failed") {
+            console.error(`[ForgotPassword] Failed to deliver OTP email to ${email}`);
+        }
+        else if (emailResult.reason === "email_not_configured") {
+            console.error("[ForgotPassword] Email service not configured (RESEND_API_KEY / EMAIL_FROM)");
+        }
+        res.status(200).json({
+            success: true,
+            otpSent: false,
+            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+        });
+        return;
+    }
+    res.status(200).json({
+        success: true,
+        otpSent: true,
+        message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+    });
 };
 exports.forgotPassword = forgotPassword;
 // POST /api/auth/verify-reset-otp

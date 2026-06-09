@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -21,6 +22,18 @@ import { validateStartupEnv } from "./config/production";
 const app = express();
 
 applySecurityMiddleware(app);
+
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  })
+);
 
 app.use(
   express.json({

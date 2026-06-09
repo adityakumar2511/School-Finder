@@ -96,15 +96,34 @@ export async function getRecentModerationActivity(limit = 5) {
     }));
 }
 
+// AdminSchoolRow type mein yeh fields add karo:
 export type AdminSchoolRow = {
   id: string;
   name: string;
   slug: string;
   city: string;
+  state: string;        // ADD
+  address: string;      // ADD
   board: string;
+  schoolType: string;   // ADD
+  medium: string;       // ADD
+  classesFrom: number;  // ADD
+  classesTo: number;    // ADD
+  phone: string;        // ADD
+  email: string | null; // ADD
+  website: string | null; // ADD
+  description: string | null; // ADD
   status: SchoolStatus;
   createdAt: string;
   rejectionReason: string | null;
+  totalStudents: number | null;   // ADD
+  establishedYear: number | null; // ADD
+  admissionFee: number | null;    // ADD
+  tuitionFeeMonthly: number | null; // ADD
+  totalAnnualFee: number | null;  // ADD
+  transportFee: number | null;    // ADD
+  hostelFee: number | null;       // ADD
+  logoUrl: string | null;         // ADD
   owner: { name: string | null; email: string };
 };
 

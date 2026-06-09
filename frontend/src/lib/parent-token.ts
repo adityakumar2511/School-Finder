@@ -10,3 +10,8 @@ export function clearParentBackendToken(): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(PARENT_BACKEND_TOKEN_KEY);
 }
+
+export function getParentBackendToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(PARENT_BACKEND_TOKEN_KEY);
+}

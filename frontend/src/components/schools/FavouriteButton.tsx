@@ -13,16 +13,6 @@ type ApiErrorBody = {
   message?: string;
 };
 
-function getParentToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem("sf_parent_token");
-}
-
-function clearParentToken(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem("sf_parent_token");
-}
-
 export default function FavouriteButton({ schoolId, initialFavourited }: Props) {
   const { data: session, status } = useSession();
   const [favourited, setFavourited] = useState(initialFavourited);
@@ -62,34 +52,20 @@ export default function FavouriteButton({ schoolId, initialFavourited }: Props) 
     setLoading(true);
 
     try {
-      const token = getParentToken();
-      if (!token) {
-        showMessage(
-          "Please sign out and sign in again to refresh your session.",
-          "error"
-        );
-        return;
-      }
-
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
       const isRemoving = favourited;
 
       const response = await fetch(
         isRemoving
-          ? `${apiBase}/api/favourites?schoolId=${encodeURIComponent(schoolId)}`
-          : `${apiBase}/api/favourites`,
+          ? `/api/parent/favourites?schoolId=${encodeURIComponent(schoolId)}`
+          : "/api/parent/favourites",
         {
           method: isRemoving ? "DELETE" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: isRemoving ? undefined : JSON.stringify({ schoolId }),
         }
       );
 
       if (response.status === 401) {
-        clearParentToken();
         showMessage("Session expired. Please sign out and sign in again.", "error");
         return;
       }

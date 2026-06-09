@@ -72,6 +72,22 @@ export default function SchoolLoginContent() {
         return;
       }
 
+      if (!body.token) {
+        setError("Sign in failed. No session token received.");
+        return;
+      }
+
+      const sessionRes = await fetch("/api/school/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: body.token }),
+      });
+
+      if (!sessionRes.ok) {
+        setError("Sign in failed. Could not persist session.");
+        return;
+      }
+
       const nextAuthResult = await signIn("credentials", {
         email: data.email,
         password: data.password,

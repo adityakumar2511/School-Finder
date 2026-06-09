@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { backendFetch } from "@/lib/api/server";
 import { fetchSchoolBySlug } from "@/lib/data/schools-public";
 import { IMAGE_BLUR_DATA_URL } from "@/lib/image-placeholder";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-url";
 import JsonLd from "@/components/seo/JsonLd";
 import InquiryModal from "@/components/schools/InquiryModal";
 import FavouriteButton from "@/components/schools/FavouriteButton";
@@ -196,6 +197,8 @@ export default async function SchoolDetailPage({
     ]),
   ];
 
+  const optimizedLogoUrl = optimizeCloudinaryUrl(school.logoUrl, { width: 160 });
+
   return (
     <div className="min-h-screen bg-gray-50 font-body">
       <JsonLd data={structuredData} />
@@ -213,9 +216,9 @@ export default async function SchoolDetailPage({
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             {/* Logo */}
             <div className="flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
-              {school.logoUrl ? (
+              {optimizedLogoUrl ? (
                 <Image
-                  src={school.logoUrl}
+                  src={optimizedLogoUrl}
                   alt={`${school.name} logo`}
                   width={80}
                   height={80}
@@ -408,13 +411,15 @@ export default async function SchoolDetailPage({
                 Photo Gallery
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {school.images.map((img) => (
+                {school.images.map((img) => {
+                  const galleryUrl = optimizeCloudinaryUrl(img.url, { width: 640 });
+                  return (
                   <div
                     key={img.id}
                     className="relative aspect-video rounded-xl overflow-hidden bg-blue-50 border border-gray-100"
                   >
                     <Image
-                      src={img.url}
+                      src={galleryUrl ?? img.url}
                       alt={img.caption || `${school.name} photo`}
                       fill
                       sizes="(max-width: 640px) 50vw, 33vw"
@@ -429,7 +434,8 @@ export default async function SchoolDetailPage({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}

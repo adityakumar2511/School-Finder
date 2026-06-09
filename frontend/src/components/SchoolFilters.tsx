@@ -10,9 +10,9 @@ import { SlidersHorizontal, X, ChevronDown, ChevronUp } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type BoardType    = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
-type SchoolType   = "BOYS" | "GIRLS" | "CO_ED";
-type MediumType   = "HINDI" | "ENGLISH" | "BOTH";
+type BoardType  = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
+type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
+type MediumType = "HINDI" | "ENGLISH" | "BOTH";
 
 interface FilterGroup<T extends string> {
   label: string;
@@ -26,10 +26,10 @@ const BOARD_OPTIONS: FilterGroup<BoardType> = {
   label: "Board",
   param: "board",
   options: [
-    { value: "CBSE",     label: "CBSE"      },
-    { value: "ICSE",     label: "ICSE"      },
-    { value: "UP_BOARD", label: "UP Board"  },
-    { value: "OTHER",    label: "Other"     },
+    { value: "CBSE",     label: "CBSE"     },
+    { value: "ICSE",     label: "ICSE"     },
+    { value: "UP_BOARD", label: "UP Board" },
+    { value: "OTHER",    label: "Other"    },
   ],
 };
 
@@ -37,9 +37,9 @@ const TYPE_OPTIONS: FilterGroup<SchoolType> = {
   label: "School Type",
   param: "schoolType",
   options: [
-    { value: "BOYS",   label: "Boys"       },
-    { value: "GIRLS",  label: "Girls"      },
-    { value: "CO_ED",  label: "Co-Ed"      },
+    { value: "BOYS",  label: "Boys"  },
+    { value: "GIRLS", label: "Girls" },
+    { value: "CO_ED", label: "Co-Ed" },
   ],
 };
 
@@ -47,9 +47,9 @@ const MEDIUM_OPTIONS: FilterGroup<MediumType> = {
   label: "Medium",
   param: "medium",
   options: [
-    { value: "HINDI",   label: "Hindi"         },
-    { value: "ENGLISH", label: "English"       },
-    { value: "BOTH",    label: "Hindi + English"},
+    { value: "HINDI",   label: "Hindi"          },
+    { value: "ENGLISH", label: "English"        },
+    { value: "BOTH",    label: "Hindi + English" },
   ],
 };
 
@@ -71,7 +71,6 @@ function buildUrl(
     existing.filter((v) => v !== value).forEach((v) => next.append(param, v));
   }
 
-  // Reset to page 1 on filter change
   next.delete("page");
 
   const qs = next.toString();
@@ -142,7 +141,7 @@ function CheckboxFilter<T extends string>({
                   className="sr-only"
                 />
                 <div
-                  className={`w-4.5 h-4.5 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-all ${
+                  className={`w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-all ${
                     checked
                       ? "bg-blue-600 border-blue-600"
                       : "bg-white border-gray-300 group-hover:border-blue-400"
@@ -167,7 +166,9 @@ function CheckboxFilter<T extends string>({
               </div>
               <span
                 className={`text-body font-body transition-colors ${
-                  checked ? "text-blue-700 font-medium" : "text-gray-600 group-hover:text-gray-800"
+                  checked
+                    ? "text-blue-700 font-medium"
+                    : "text-gray-600 group-hover:text-gray-800"
                 }`}
               >
                 {opt.label}
@@ -235,13 +236,10 @@ function ActiveChips({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function SchoolFilters() {
-  const router      = useRouter();
-  const rawParams   = useSearchParams();
+export default function SchoolFilters({ cities = [] }: { cities?: string[] }) {
+  const router    = useRouter();
+  const rawParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // City text state (local — committed on Enter or blur)
-  const [cityInput, setCityInput] = useState(rawParams.get("city") ?? "");
 
   const navigate = useCallback(
     (url: string) => router.push(url),
@@ -252,20 +250,19 @@ export default function SchoolFilters() {
     navigate(buildUrl(rawParams, param, value, checked));
   }
 
-  function handleCityCommit() {
+  function handleCityChange(city: string) {
     const next = new URLSearchParams(rawParams.toString());
-    if (cityInput.trim()) {
-      next.set("city", cityInput.trim());
+    if (city) {
+      next.set("city", city);
     } else {
       next.delete("city");
     }
     next.delete("page");
-    navigate(`/schools?${next.toString()}`);
+    navigate(next.toString() ? `/schools?${next.toString()}` : "/schools");
   }
 
   function handleRemoveChip(param: string, value: string) {
     if (param === "city") {
-      setCityInput("");
       const next = new URLSearchParams(rawParams.toString());
       next.delete("city");
       next.delete("page");
@@ -276,23 +273,25 @@ export default function SchoolFilters() {
   }
 
   function handleClearAll() {
-    setCityInput("");
     navigate("/schools");
   }
 
   const filtersContent = (
     <div className="space-y-0">
-      {/* City search */}
+      {/* City dropdown */}
       <CollapsibleSection title="City">
-        <input
-          type="text"
-          placeholder="e.g. Varanasi, Lucknow…"
-          value={cityInput}
-          onChange={(e) => setCityInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCityCommit()}
-          onBlur={handleCityCommit}
-          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-body font-body text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition bg-gray-50"
-        />
+        <select
+          value={rawParams.get("city") ?? ""}
+          onChange={(e) => handleCityChange(e.target.value)}
+          className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-body font-body text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition bg-gray-50"
+        >
+          <option value="">All Cities</option>
+          {cities.map((city) => (
+            <option key={city} value={city}>
+              {city}
+            </option>
+          ))}
+        </select>
       </CollapsibleSection>
 
       <CheckboxFilter

@@ -6,6 +6,8 @@ import {
 
   searchSchools,
 
+  getCities,
+
   getSchool,
 
   createSchool,
@@ -47,6 +49,8 @@ const router = Router();
 router.get("/", asyncHandler(getSchools));
 
 router.get("/search", asyncHandler(searchSchools));
+
+router.get("/cities", asyncHandler(getCities));
 
 router.post(
   "/my-school/images",

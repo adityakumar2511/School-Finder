@@ -1,6 +1,6 @@
   # SchoolFinder — Backend Documentation
 
-  > Last updated: June 3, 2026 — verified against codebase
+  > Last updated: June 9, 2026
 
   > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Resend · Fast2SMS · Cloudinary  
   > **Default port:** `4000` · **Repository path:** `backend/`  
@@ -21,7 +21,7 @@
   9. [Lib Modules](#9-lib-modules)
   10. [Error Handling](#10-error-handling)
   11. [Deployment](#11-deployment)
-  12. [Known Limitations & Stubs](#12-known-limitations--stubs)
+  
 
   ---
 
@@ -55,11 +55,10 @@
   | Zod | 4.x request validation |
   | bcryptjs | Password hashing |
   | Resend | Existing reset flow, partially retained |
-  | Brevo | Planned for OTP emails — **not yet active** |
+  | Resend | Password reset OTP email (`sendOtpEmail` in `mailer.ts`) |
   | Fast2SMS | Phone OTP SMS (`POST /api/auth/send-otp`) |
   | Helmet + express-rate-limit | Security |
-  | Cloudinary SDK | **(stub)** — lib only, no upload route |
-
+  
   **Unused dependency:** `nodemailer` is in `package.json` but not imported in `src/`.
 
   ---
@@ -67,60 +66,117 @@
   ## 3. Folder Structure
 
   ```
-  backend/
-  ├── prisma/
-  │   ├── schema.prisma
-  │   └── migrations/
-  │       └── 20250602120000_restructure_schema_add_indexes_reset_token/
-  ├── generated/prisma/          # Prisma client output
-  ├── render.yaml
-  ├── .env.example
-  └── src/
-      ├── server.ts
-      ├── config/
-      │   └── production.ts      # validateStartupEnv()
-      ├── controllers/
-      │   ├── admin.controller.ts
-      │   ├── auth.controller.ts
-      │   ├── favourite.controller.ts   # legacy /api/favourites
-      │   ├── inquiry.controller.ts
-      │   ├── parent.controller.ts      # preferred /api/parent/*
-      │   └── schools.controller.ts
-      ├── routes/
-      │   ├── admin.routes.ts
-      │   ├── auth.routes.ts
-      │   ├── favourite.routes.ts
-      │   ├── inquiry.routes.ts
-      │   ├── parent.routes.ts
-      │   └── schools.routes.ts
-      ├── middleware/
-      │   ├── auth.ts            # JWT sign/verify, jti blacklist check
-      │   ├── bruteForce.ts
-      │   ├── errorHandler.ts
-      │   ├── roleCheck.ts
-      │   ├── security.ts        # Helmet, CORS, rate limiters
-      │   ├── upload.ts          # (stub) Multer — not mounted on any route
-      │   └── validate.ts
-      ├── validators/
-      │   ├── auth.validator.ts
-      │   └── school.validator.ts
-      ├── lib/
-      │   ├── account-status.ts
-      │   ├── cache.ts
-      │   ├── cloudinary.ts      # (stub) not called from routes
-      │   ├── favourites.ts      # shared favourite logic
-      │   ├── mailer.ts          # Resend reset (existing); sendOtpEmail terminal-only (Brevo TODO)
-      │   ├── otp.ts             # Fast2SMS + SHA-256 OTP
-      │   ├── pagination.ts
-      │   ├── prisma.ts
-      │   ├── sanitize.ts
-      │   ├── tokenBlacklist.ts
-      │   └── queries/schools.ts
-      ├── scripts/
-      │   └── seed-admin.ts
-      └── utils/
-          ├── AppError.ts        # Errors.* factory
-          └── asyncHandler.ts
+  ./backend
+  ./backend/.env
+  ./backend/.env.example
+  ./backend/.gitignore
+  ./backend/Backend.md
+  ./backend/dist
+  ./backend/dist/config
+  ./backend/dist/config/production.js
+  ./backend/dist/controllers
+  ./backend/dist/controllers/admin.controller.js
+  ./backend/dist/controllers/auth.controller.js
+  ./backend/dist/controllers/favourite.controller.js
+  ./backend/dist/controllers/inquiry.controller.js
+  ./backend/dist/controllers/parent.controller.js
+  ./backend/dist/controllers/schools.controller.js
+  ./backend/dist/lib
+  ./backend/dist/lib/account-status.js
+  ./backend/dist/lib/cache.js
+  ./backend/dist/lib/cloudinary.js
+  ./backend/dist/lib/favourites.js
+  ./backend/dist/lib/mailer.js
+  ./backend/dist/lib/otp.js
+  ./backend/dist/lib/pagination.js
+  ./backend/dist/lib/prisma.js
+  ./backend/dist/lib/queries
+  ./backend/dist/lib/queries/schools.js
+  ./backend/dist/lib/sanitize.js
+  ./backend/dist/lib/tokenBlacklist.js
+  ./backend/dist/middleware
+  ./backend/dist/middleware/auth.js
+  ./backend/dist/middleware/bruteForce.js
+  ./backend/dist/middleware/errorHandler.js
+  ./backend/dist/middleware/roleCheck.js
+  ./backend/dist/middleware/security.js
+  ./backend/dist/middleware/upload.js
+  ./backend/dist/middleware/validate.js
+  ./backend/dist/routes
+  ./backend/dist/routes/admin.routes.js
+  ./backend/dist/routes/auth.routes.js
+  ./backend/dist/routes/favourite.routes.js
+  ./backend/dist/routes/inquiry.routes.js
+  ./backend/dist/routes/parent.routes.js
+  ./backend/dist/routes/schools.routes.js
+  ./backend/dist/scripts
+  ./backend/dist/scripts/seed-admin.js
+  ./backend/dist/server.js
+  ./backend/dist/utils
+  ./backend/dist/utils/AppError.js
+  ./backend/dist/utils/asyncHandler.js
+  ./backend/dist/validators
+  ./backend/dist/validators/auth.validator.js
+  ./backend/dist/validators/school.validator.js
+  ./backend/package.json
+  ./backend/package-lock.json
+  ./backend/prisma
+  ./backend/prisma.config.ts
+  ./backend/prisma/migrations
+  ./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token
+  ./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token/migration.sql
+  ./backend/prisma/migrations/20260608172242_add_draft_status
+  ./backend/prisma/migrations/20260608172242_add_draft_status/migration.sql
+  ./backend/prisma/migrations/migration_lock.toml
+  ./backend/prisma/schema.prisma
+  ./backend/render.yaml
+  ./backend/scripts
+  ./backend/src
+  ./backend/src/config
+  ./backend/src/config/production.ts
+  ./backend/src/controllers
+  ./backend/src/controllers/admin.controller.ts
+  ./backend/src/controllers/auth.controller.ts
+  ./backend/src/controllers/favourite.controller.ts
+  ./backend/src/controllers/inquiry.controller.ts
+  ./backend/src/controllers/parent.controller.ts
+  ./backend/src/controllers/schools.controller.ts
+  ./backend/src/lib
+  ./backend/src/lib/account-status.ts
+  ./backend/src/lib/cache.ts
+  ./backend/src/lib/favourites.ts
+  ./backend/src/lib/mailer.ts
+  ./backend/src/lib/otp.ts
+  ./backend/src/lib/pagination.ts
+  ./backend/src/lib/prisma.ts
+  ./backend/src/lib/queries
+  ./backend/src/lib/queries/schools.ts
+  ./backend/src/lib/sanitize.ts
+  ./backend/src/lib/tokenBlacklist.ts
+  ./backend/src/middleware
+  ./backend/src/middleware/auth.ts
+  ./backend/src/middleware/bruteForce.ts
+  ./backend/src/middleware/errorHandler.ts
+  ./backend/src/middleware/roleCheck.ts
+  ./backend/src/middleware/security.ts
+  ./backend/src/middleware/validate.ts
+  ./backend/src/routes
+  ./backend/src/routes/admin.routes.ts
+  ./backend/src/routes/auth.routes.ts
+  ./backend/src/routes/favourite.routes.ts
+  ./backend/src/routes/inquiry.routes.ts
+  ./backend/src/routes/parent.routes.ts
+  ./backend/src/routes/schools.routes.ts
+  ./backend/src/scripts
+  ./backend/src/scripts/seed-admin.ts
+  ./backend/src/server.ts
+  ./backend/src/utils
+  ./backend/src/utils/AppError.ts
+  ./backend/src/utils/asyncHandler.ts
+  ./backend/src/validators
+  ./backend/src/validators/auth.validator.ts
+  ./backend/src/validators/school.validator.ts
+  ./backend/tsconfig.json
   ```
 
   ---
@@ -144,10 +200,10 @@
   | Flow | Endpoint | Notes |
   |------|----------|-------|
   | Register parent | `POST /api/auth/register-parent` | Returns JWT |
-  | Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT |
+  | Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT; role-specific duplicate email error; school name uniqueness check inside Prisma transaction |
   | Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard |
   | Logout | `POST /api/auth/logout` | Blacklists `jti` |
-  | Forgot password | `POST /api/auth/forgot-password` | Email + optional `expectedRole`; 6-digit OTP (SHA-256, 10 min); terminal log only; generic 200 if no match / role mismatch |
+  | Forgot password | `POST /api/auth/forgot-password` | Email + optional `expectedRole`; 6-digit OTP via `sendOtpEmail` (Resend); generic 200 if no match / role mismatch |
   | Verify reset OTP | `POST /api/auth/verify-reset-otp` | Email + 6-digit OTP + optional `expectedRole`; sets `otpVerified` |
   | Reset password | `POST /api/auth/reset-password` | Email + passwords + optional `expectedRole`; requires `otpVerified` + valid `otpExpiry` |
   | Send OTP | `POST /api/auth/send-otp` | Phone `+91[6-9]#########`; Fast2SMS; always 200 generic |
@@ -183,7 +239,7 @@
   | POST | `/register-parent` | auth + bruteForce | `registerParent` |
   | POST | `/register-school` | auth + bruteForce | `registerSchool` |
   | POST | `/login` | auth + bruteForce | `login` |
-  | POST | `/forgot-password` | forgotPassword (3/h) | `forgotPassword` — email OTP (terminal log; Brevo planned) |
+  | POST | `/forgot-password` | forgotPassword (3/h) | `forgotPassword` — email OTP via Resend (`sendOtpEmail`) |
   | POST | `/verify-reset-otp` | resetPassword (5/h) | `verifyResetOtp` |
   | POST | `/send-otp` | otp (3/10min) | `sendOtp` |
   | POST | `/verify-otp` | auth | `verifyOtp` |
@@ -193,12 +249,21 @@
   | PATCH | `/me` | auth | `updateMe` |
   | POST | `/google-sync` | auth | `syncGoogleUser` |
 
+  **`POST /register-school`** — Public school self-registration (validated by `registerSchoolSchema`).
+
+  - Creates `SCHOOL_ADMIN` user + school with `status: PENDING`.
+  - **Duplicate email:** role-specific conflict message (`SCHOOL_ADMIN` → sign in instead; other roles → use different email).
+  - **Duplicate school name:** case-insensitive uniqueness check inside Prisma `$transaction`.
+  - **Fields:** `establishedYear`, `totalStudents`, `transportFee`, `hostelFee` (plus existing fee and profile fields).
+  - Returns JWT for immediate frontend sign-in.
+
   ### `/api/schools`
 
   | Method | Path | Auth | Handler |
   |--------|------|------|---------|
-  | GET | `/` | Public | `getSchools` |
+  | GET | `/` | Public | `getSchools` — filters: `city`, `board` (multi-value), `schoolType`, `medium`, `search`, `status` |
   | GET | `/search` | Public | `searchSchools` |
+  | GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
   | GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` |
   | POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` (JSON `{ url }`) |
   | DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
@@ -212,7 +277,8 @@
   | Method | Path | Handler |
   |--------|------|---------|
   | GET | `/stats` | `getStats` |
-  | GET | `/schools` | `getAdminSchools` |
+  | GET | `/schools` | `getAdminSchools` — paginated list; query: `page`, `limit`, `status`, `search` |
+  | GET | `/check-owner` | `checkOwnerEmail` — query: `email` |
   | GET | `/users` | `getAdminUsers` |
   | GET | `/inquiries` | `getAdminInquiries` |
   | PATCH | `/schools/:id/approve` | `approveSchoolById` |
@@ -222,6 +288,12 @@
   | POST | `/add-school` | `addSchoolDirect` |
   | PATCH | `/users/:id/role` | `updateUserRole` |
   | PATCH | `/users/:id/status` | `updateUserStatus` |
+
+  **Admin add-school support endpoints**
+
+  - **`GET /schools`** — `search` filters with case-insensitive `contains` on school `name`, `city`, and owner `email`. Used by the frontend add-school wizard (via BFF) to detect duplicate names; the client applies an exact case-insensitive name match on the returned rows.
+  - **`GET /check-owner?email=`** — Returns `{ exists: false }` or `{ exists: true, role, name?, hasSchool?, school? }`. Blocks wizard advance when the email is already a `SCHOOL_ADMIN` with an existing school.
+  - **`POST /add-school`** — Creates or reuses owner by `ownerEmail`; optional `ownerPassword` for new accounts (random password if omitted). Creates school with `status: APPROVED` immediately. Required body fields include `ownerEmail`, `name`, `city`, `state`, `address`, `board`, `schoolType`, `medium`, `classesFrom`, `classesTo`, `phone`; fees and other fields optional.
 
   ### `/api/inquiries`
 
@@ -283,7 +355,7 @@
   | Enum | Values |
   |------|--------|
   | `Role` | `PARENT`, `SCHOOL_ADMIN`, `ADMIN` |
-  | `SchoolStatus` | `PENDING`, `APPROVED`, `REJECTED` |
+  | `SchoolStatus` | `DRAFT`, `PENDING`, `APPROVED`, `REJECTED` |
   | `BoardType` | `CBSE`, `ICSE`, `UP_BOARD`, `OTHER` |
   | `SchoolType` | `BOYS`, `GIRLS`, `CO_ED` |
   | `MediumType` | `HINDI`, `ENGLISH`, `BOTH` |
@@ -334,7 +406,6 @@
   | `CLOUDINARY_API_SECRET` | Yes (startup) | |
   | `RESEND_API_KEY` | Warn if missing | Password reset email (existing Resend flow) |
   | `EMAIL_FROM` | Warn if missing | Verified Resend sender |
-  | `BREVO_API_KEY` | Optional (planned) | OTP email via Brevo — **not active yet** (`sendOtpEmail` commented out) |
   | `FAST2SMS_API_KEY` | Optional | SMS OTP; dev logs OTP to console if unset |
   | `ADMIN_EMAIL` | Seeder only | `npm run seed:admin` |
   | `ADMIN_PASSWORD` | Seeder only | |
@@ -351,7 +422,7 @@
   |--------|------|
   | `prisma.ts` | DB client + SSL pool |
   | `otp.ts` | Generate/verify OTP hash; Fast2SMS send |
-  | `mailer.ts` | Resend password reset (existing). `sendOtpEmail` added: currently terminal-only; Brevo integration commented out (TODO) |
+  | `mailer.ts` | Resend password reset OTP via `sendOtpEmail` |
   | `tokenBlacklist.ts` | In-memory jti blacklist (max 10k) |
   | `favourites.ts` | Shared add/remove/list for both favourite APIs |
   | `cache.ts` | In-memory TTL (list 60s, detail 300s, stats 30s) |
@@ -359,7 +430,6 @@
   | `queries/schools.ts` | Selects, filters, cursor pagination |
   | `sanitize.ts` | Input sanitization |
   | `account-status.ts` | Disabled account sentinel |
-  | `cloudinary.ts` | **(stub)** Upload helpers — no route uses them |
 
   ---
 
@@ -404,21 +474,6 @@
   **Not in render.yaml:** `RESEND_API_KEY`, `EMAIL_FROM`, `FAST2SMS_API_KEY` — set manually in dashboard.
 
   ---
-
-  ## 12. Known Limitations & Stubs
-
-  | Item | Status |
-  |------|--------|
-  | Backend multipart upload route | **Not implemented** — `middleware/upload.ts` unused |
-  | `lib/cloudinary.ts` | **Stub** — no controller imports |
-  | School gallery | Client uploads to frontend Cloudinary; backend stores URL only |
-  | JWT blacklist | In-memory; resets on restart |
-  | Cache | In-memory; not Redis |
-  | `/api/favourites` | Legacy; returns `Deprecation` header |
-  | `mailer.sendOtpEmail` | **Terminal-only** — forgot-password OTP logged to console; Brevo integration prepared but commented out (TODO) |
-  | `nodemailer` package | **Unused** |
-  | Phone OTP login | Backend API only — **no frontend UI** for `/send-otp` |
-  | NextAuth DB tables | In schema; frontend uses JWT-only NextAuth |
 
   ---
 

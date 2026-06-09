@@ -107,7 +107,7 @@ async function SchoolsTable({ searchParams }: { searchParams: SearchParams }) {
                     <TableCell>{formatDate(school.createdAt)}</TableCell>
                     <TableCell>
                       <SchoolModerationActions
-                        schoolId={school.id}
+                        school={school}
                         currentStatus={school.status}
                       />
                     </TableCell>
@@ -143,7 +143,9 @@ export default async function AdminSchoolsPage({
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl text-blue-800">Schools management</h1>
+        <h1 className="font-heading font-bold text-2xl text-blue-800">
+          Schools management
+        </h1>
         <p className="mt-1 font-body text-sm text-gray-500">
           Search, filter, and moderate school listings.
         </p>
@@ -164,7 +166,7 @@ export default async function AdminSchoolsPage({
                 "rounded-lg px-4 py-2 text-sm font-heading font-semibold",
                 isActive
                   ? "bg-blue-600 text-white"
-                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50",
               )}
             >
               {tab.label}

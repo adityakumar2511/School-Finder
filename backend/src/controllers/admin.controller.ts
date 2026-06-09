@@ -2,7 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
-import { Errors } from "../utils/AppError";
+import { Errors, AppError } from "../utils/AppError";
 import {
   ACCOUNT_DISABLED_PHONE,
   isAccountDisabled,
@@ -418,9 +418,40 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     throw Errors.BadRequest("ownerEmail and school name are required");
   }
 
+  const normalizedName = name.trim();
+  const existingSchool = await prisma.school.findFirst({
+    where: { name: { equals: normalizedName, mode: "insensitive" } },
+    select: { id: true },
+  });
+
+  if (existingSchool) {
+    throw Errors.Conflict("A school with this name already exists");
+  }
+
   let owner = await prisma.user.findUnique({
     where: { email: ownerEmail },
+    include: {
+      ownedSchools: { select: { id: true }, take: 1 },
+    },
   });
+
+  if (owner) {
+    if (owner.role === "SCHOOL_ADMIN" && owner.ownedSchools.length > 0) {
+      throw Errors.Conflict("This email is already associated with a school");
+    }
+    if (owner.role === "ADMIN") {
+      throw Errors.BadRequest("Cannot assign a platform admin as school owner");
+    }
+    if (owner.role === "PARENT") {
+      owner = await prisma.user.update({
+        where: { id: owner.id },
+        data: { role: "SCHOOL_ADMIN" },
+        include: {
+          ownedSchools: { select: { id: true }, take: 1 },
+        },
+      });
+    }
+  }
 
   if (!owner) {
     // const tempPassword = await bcrypt.hash(
@@ -455,7 +486,14 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
         password: hashedPassword,
         role: "SCHOOL_ADMIN",
       },
+      include: {
+        ownedSchools: { select: { id: true }, take: 1 },
+      },
     });
+  }
+
+  if (!owner) {
+    throw new AppError("Failed to resolve school owner", 500, "INTERNAL_ERROR");
   }
 
   const slug =
@@ -468,7 +506,7 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
 
   const school = await prisma.school.create({
     data: {
-      name,
+      name: normalizedName,
       slug,
       description: description ?? null,
       address,
@@ -498,6 +536,8 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  invalidateSchoolCache();
+
   res.status(201).json({
     message: "School added successfully",
     school,
@@ -518,13 +558,15 @@ export const checkOwnerEmail = async (req: AuthRequest, res: Response) => {
       id: true,
       name: true,
       role: true,
-      school: {
+      ownedSchools: {
         select: {
           id: true,
           name: true,
           slug: true,
           status: true,
         },
+        orderBy: { createdAt: "asc" },
+        take: 1,
       },
     },
   });
@@ -542,13 +584,13 @@ export const checkOwnerEmail = async (req: AuthRequest, res: Response) => {
     });
   }
 
-  const school = (user as any).school ?? null;
+  const school = user.ownedSchools[0] ?? null;
 
   return res.json({
     exists: true,
     role: user.role,
     name: user.name,
-    hasSchool: !!school,
-    school: school ?? null,
+    hasSchool: school !== null,
+    school,
   });
 };

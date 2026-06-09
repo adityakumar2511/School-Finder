@@ -11,6 +11,7 @@ router.get("/stats", (0, asyncHandler_1.asyncHandler)(admin_controller_1.getStat
 router.get("/schools", (0, asyncHandler_1.asyncHandler)(admin_controller_1.getAdminSchools));
 router.get("/users", (0, asyncHandler_1.asyncHandler)(admin_controller_1.getAdminUsers));
 router.get("/inquiries", (0, asyncHandler_1.asyncHandler)(admin_controller_1.getAdminInquiries));
+router.get("/check-owner", (0, asyncHandler_1.asyncHandler)(admin_controller_1.checkOwnerEmail));
 router.patch("/schools/:id/approve", (0, asyncHandler_1.asyncHandler)(admin_controller_1.approveSchoolById));
 router.patch("/schools/:id/reject", (0, asyncHandler_1.asyncHandler)(admin_controller_1.rejectSchoolById));
 router.post("/approve", (0, asyncHandler_1.asyncHandler)(admin_controller_1.approveSchool));

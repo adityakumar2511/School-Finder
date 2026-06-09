@@ -18,15 +18,9 @@ export function validateStartupEnv(): void {
   const production = isProduction();
   const missing: string[] = [];
 
-  const alwaysRequired = [
-    "DATABASE_URL",
-    "JWT_SECRET",
-    "CLOUDINARY_CLOUD_NAME",
-    "CLOUDINARY_API_KEY",
-    "CLOUDINARY_API_SECRET",
-  ] as const;
+  const alwaysRequired = ["DATABASE_URL", "JWT_SECRET"] as const;
 
-  const productionRequired = ["FRONTEND_URL"] as const;
+  const productionRequired = ["FRONTEND_URL", "RESEND_API_KEY", "EMAIL_FROM"] as const;
 
   for (const key of alwaysRequired) {
     if (isEnvMissing(key)) {

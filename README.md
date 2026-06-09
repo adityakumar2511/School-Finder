@@ -1,6 +1,6 @@
 # SchoolFinder
 
-> Last updated: June 3, 2026 — verified against codebase
+> Last updated: June 9, 2026
 
 A full-stack school discovery and inquiry platform built for **Tier-2 and Tier-3 cities in India**. Parents can search and compare schools; school administrators manage listings and inquiries; platform administrators verify listings and maintain quality.
 
@@ -31,8 +31,7 @@ This repository is a **monorepo** with a Next.js frontend and an Express API. **
 10. [Deployment Guide](#10-deployment-guide)
 11. [Security Features](#11-security-features)
 12. [SEO and Performance](#12-seo-and-performance)
-13. [Future Roadmap](#13-future-roadmap)
-14. [License and Contribution](#14-license-and-contribution)
+13. [License and Contribution](#13-license-and-contribution)
 
 ---
 
@@ -119,31 +118,367 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 ## 3. Monorepo Structure
 
 ```
-.
-├── README.md                 # This file — ecosystem overview
-├── frontend/                 # Next.js application (UI, auth, SEO)
-│   ├── src/app/              # App Router pages and BFF API routes
-│   ├── src/components/       # UI and feature components
-│   ├── src/lib/              # Auth, API clients, data fetchers, SEO
-│   ├── Frontend.md           # Frontend architecture documentation
-│   └── vercel.json           # Vercel build configuration
-│
-└── backend/                  # Express REST API + database owner
-    ├── prisma/
-    │   ├── schema.prisma     # Database schema (source of truth)
-    │   └── migrations/       # Prisma migration history
-    ├── generated/prisma/     # Generated Prisma client
-    ├── src/controllers/      # Business logic
-    ├── src/routes/           # HTTP route definitions
-    ├── src/middleware/       # Auth, security, validation
-    ├── Backend.md            # Backend architecture documentation
-    └── render.yaml           # Render deployment blueprint
+./backend
+./backend/.env
+./backend/.env.example
+./backend/.gitignore
+./backend/Backend.md
+./backend/dist
+./backend/dist/config
+./backend/dist/config/production.js
+./backend/dist/controllers
+./backend/dist/controllers/admin.controller.js
+./backend/dist/controllers/auth.controller.js
+./backend/dist/controllers/favourite.controller.js
+./backend/dist/controllers/inquiry.controller.js
+./backend/dist/controllers/parent.controller.js
+./backend/dist/controllers/schools.controller.js
+./backend/dist/lib
+./backend/dist/lib/account-status.js
+./backend/dist/lib/cache.js
+./backend/dist/lib/cloudinary.js
+./backend/dist/lib/favourites.js
+./backend/dist/lib/mailer.js
+./backend/dist/lib/otp.js
+./backend/dist/lib/pagination.js
+./backend/dist/lib/prisma.js
+./backend/dist/lib/queries
+./backend/dist/lib/queries/schools.js
+./backend/dist/lib/sanitize.js
+./backend/dist/lib/tokenBlacklist.js
+./backend/dist/middleware
+./backend/dist/middleware/auth.js
+./backend/dist/middleware/bruteForce.js
+./backend/dist/middleware/errorHandler.js
+./backend/dist/middleware/roleCheck.js
+./backend/dist/middleware/security.js
+./backend/dist/middleware/upload.js
+./backend/dist/middleware/validate.js
+./backend/dist/routes
+./backend/dist/routes/admin.routes.js
+./backend/dist/routes/auth.routes.js
+./backend/dist/routes/favourite.routes.js
+./backend/dist/routes/inquiry.routes.js
+./backend/dist/routes/parent.routes.js
+./backend/dist/routes/schools.routes.js
+./backend/dist/scripts
+./backend/dist/scripts/seed-admin.js
+./backend/dist/server.js
+./backend/dist/utils
+./backend/dist/utils/AppError.js
+./backend/dist/utils/asyncHandler.js
+./backend/dist/validators
+./backend/dist/validators/auth.validator.js
+./backend/dist/validators/school.validator.js
+./backend/package.json
+./backend/package-lock.json
+./backend/prisma
+./backend/prisma.config.ts
+./backend/prisma/migrations
+./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token
+./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token/migration.sql
+./backend/prisma/migrations/20260608172242_add_draft_status
+./backend/prisma/migrations/20260608172242_add_draft_status/migration.sql
+./backend/prisma/migrations/migration_lock.toml
+./backend/prisma/schema.prisma
+./backend/render.yaml
+./backend/scripts
+./backend/src
+./backend/src/config
+./backend/src/config/production.ts
+./backend/src/controllers
+./backend/src/controllers/admin.controller.ts
+./backend/src/controllers/auth.controller.ts
+./backend/src/controllers/favourite.controller.ts
+./backend/src/controllers/inquiry.controller.ts
+./backend/src/controllers/parent.controller.ts
+./backend/src/controllers/schools.controller.ts
+./backend/src/lib
+./backend/src/lib/account-status.ts
+./backend/src/lib/cache.ts
+./backend/src/lib/favourites.ts
+./backend/src/lib/mailer.ts
+./backend/src/lib/otp.ts
+./backend/src/lib/pagination.ts
+./backend/src/lib/prisma.ts
+./backend/src/lib/queries
+./backend/src/lib/queries/schools.ts
+./backend/src/lib/sanitize.ts
+./backend/src/lib/tokenBlacklist.ts
+./backend/src/middleware
+./backend/src/middleware/auth.ts
+./backend/src/middleware/bruteForce.ts
+./backend/src/middleware/errorHandler.ts
+./backend/src/middleware/roleCheck.ts
+./backend/src/middleware/security.ts
+./backend/src/middleware/validate.ts
+./backend/src/routes
+./backend/src/routes/admin.routes.ts
+./backend/src/routes/auth.routes.ts
+./backend/src/routes/favourite.routes.ts
+./backend/src/routes/inquiry.routes.ts
+./backend/src/routes/parent.routes.ts
+./backend/src/routes/schools.routes.ts
+./backend/src/scripts
+./backend/src/scripts/seed-admin.ts
+./backend/src/server.ts
+./backend/src/utils
+./backend/src/utils/AppError.ts
+./backend/src/utils/asyncHandler.ts
+./backend/src/validators
+./backend/src/validators/auth.validator.ts
+./backend/src/validators/school.validator.ts
+./backend/tsconfig.json
+./docs
+./docs/generate-audit-pdf.js
+./docs/package.json
+./docs/package-lock.json
+./docs/SchoolFinder-Codebase-Audit.md
+./docs/SchoolFinder-Codebase-Audit.pdf
+./frontend
+./frontend/.env
+./frontend/.env.example
+./frontend/.eslintrc.json
+./frontend/.gitignore
+./frontend/Frontend.md
+./frontend/middleware.ts
+./frontend/next.config.js
+./frontend/next.config.mjs
+./frontend/next-env.d.ts
+./frontend/package.json
+./frontend/package-lock.json
+./frontend/postcss.config.mjs
+./frontend/src
+./frontend/src/app
+./frontend/src/app/admin
+./frontend/src/app/admin/add-school
+./frontend/src/app/admin/add-school/page.tsx
+./frontend/src/app/admin/inquiries
+./frontend/src/app/admin/inquiries/page.tsx
+./frontend/src/app/admin/layout.tsx
+./frontend/src/app/admin/page.tsx
+./frontend/src/app/admin/schools
+./frontend/src/app/admin/schools/page.tsx
+./frontend/src/app/admin/users
+./frontend/src/app/admin/users/page.tsx
+./frontend/src/app/admin-login
+./frontend/src/app/admin-login/layout.tsx
+./frontend/src/app/admin-login/page.tsx
+./frontend/src/app/api
+./frontend/src/app/api/admin
+./frontend/src/app/api/admin/add-school
+./frontend/src/app/api/admin/add-school/route.ts
+./frontend/src/app/api/admin/check-owner
+./frontend/src/app/api/admin/check-owner/route.ts
+./frontend/src/app/api/admin/schools
+./frontend/src/app/api/admin/schools/[id]
+./frontend/src/app/api/admin/schools/[id]/approve
+./frontend/src/app/api/admin/schools/[id]/approve/route.ts
+./frontend/src/app/api/admin/schools/[id]/reject
+./frontend/src/app/api/admin/schools/[id]/reject/route.ts
+./frontend/src/app/api/admin/schools/route.ts
+./frontend/src/app/api/admin/session
+./frontend/src/app/api/admin/session/route.ts
+./frontend/src/app/api/admin/users
+./frontend/src/app/api/admin/users/[id]
+./frontend/src/app/api/admin/users/[id]/role
+./frontend/src/app/api/admin/users/[id]/role/route.ts
+./frontend/src/app/api/admin/users/[id]/status
+./frontend/src/app/api/admin/users/[id]/status/route.ts
+./frontend/src/app/api/auth
+./frontend/src/app/api/auth/[...nextauth]
+./frontend/src/app/api/auth/[...nextauth]/route.ts
+./frontend/src/app/api/auth/logout
+./frontend/src/app/api/auth/logout/route.ts
+./frontend/src/app/api/parent
+./frontend/src/app/api/parent/favourites
+./frontend/src/app/api/parent/favourites/route.ts
+./frontend/src/app/api/parent/profile
+./frontend/src/app/api/parent/profile/route.ts
+./frontend/src/app/api/school
+./frontend/src/app/api/school/gallery
+./frontend/src/app/api/school/gallery/[id]
+./frontend/src/app/api/school/gallery/[id]/route.ts
+./frontend/src/app/api/school/gallery/route.ts
+./frontend/src/app/api/school/inquiries
+./frontend/src/app/api/school/inquiries/[id]
+./frontend/src/app/api/school/inquiries/[id]/status
+./frontend/src/app/api/school/inquiries/[id]/status/route.ts
+./frontend/src/app/api/school/profile
+./frontend/src/app/api/school/profile/route.ts
+./frontend/src/app/api/school/session
+./frontend/src/app/api/school/session/route.ts
+./frontend/src/app/api/upload
+./frontend/src/app/api/upload/route.ts
+./frontend/src/app/dashboard
+./frontend/src/app/dashboard/school
+./frontend/src/app/dashboard/school/inquiries
+./frontend/src/app/dashboard/school/inquiries/page.tsx
+./frontend/src/app/dashboard/school/layout.tsx
+./frontend/src/app/dashboard/school/page.tsx
+./frontend/src/app/dashboard/school/profile
+./frontend/src/app/dashboard/school/profile/page.tsx
+./frontend/src/app/error.tsx
+./frontend/src/app/favicon.ico
+./frontend/src/app/fonts
+./frontend/src/app/fonts/GeistMonoVF.woff
+./frontend/src/app/fonts/GeistVF.woff
+./frontend/src/app/forgot-password
+./frontend/src/app/forgot-password/page.tsx
+./frontend/src/app/global-error.tsx
+./frontend/src/app/globals.css
+./frontend/src/app/layout.tsx
+./frontend/src/app/login
+./frontend/src/app/login/page.tsx
+./frontend/src/app/not-found.tsx
+./frontend/src/app/page.tsx
+./frontend/src/app/parent
+./frontend/src/app/parent/favourites
+./frontend/src/app/parent/favourites/FavouritesPagination.tsx
+./frontend/src/app/parent/favourites/loading.tsx
+./frontend/src/app/parent/favourites/page.tsx
+./frontend/src/app/parent/favourites/RemoveFavouriteButton.tsx
+./frontend/src/app/parent/inquiries
+./frontend/src/app/parent/inquiries/page.tsx
+./frontend/src/app/parent/layout.tsx
+./frontend/src/app/parent/page.tsx
+./frontend/src/app/parent/profile
+./frontend/src/app/parent/profile/page.tsx
+./frontend/src/app/providers.tsx
+./frontend/src/app/register
+./frontend/src/app/register/page.tsx
+./frontend/src/app/reset-password
+./frontend/src/app/reset-password/page.tsx
+./frontend/src/app/robots.ts
+./frontend/src/app/school-complete-registration
+./frontend/src/app/school-complete-registration/page.tsx
+./frontend/src/app/school-login
+./frontend/src/app/school-login/layout.tsx
+./frontend/src/app/school-login/page.tsx
+./frontend/src/app/school-register
+./frontend/src/app/school-register/page.tsx
+./frontend/src/app/schools
+./frontend/src/app/schools/[slug]
+./frontend/src/app/schools/[slug]/loading.tsx
+./frontend/src/app/schools/[slug]/page.tsx
+./frontend/src/app/schools/loading.tsx
+./frontend/src/app/schools/page.tsx
+./frontend/src/app/sitemap.ts
+./frontend/src/app/template.tsx
+./frontend/src/components
+./frontend/src/components/admin
+./frontend/src/components/admin/AdminNav.tsx
+./frontend/src/components/admin/AdminPagination.tsx
+./frontend/src/components/admin/AdminSearchBar.tsx
+./frontend/src/components/admin/RoleBadge.tsx
+./frontend/src/components/admin/SchoolDetailModal.tsx
+./frontend/src/components/admin/SchoolModerationActions.tsx
+./frontend/src/components/admin/SchoolStatusBadge.tsx
+./frontend/src/components/admin/UserManagementActions.tsx
+./frontend/src/components/auth
+./frontend/src/components/auth/AuthRoleGuard.tsx
+./frontend/src/components/auth/ParentLoginContent.tsx
+./frontend/src/components/auth/SchoolLoginContent.tsx
+./frontend/src/components/Footer.tsx
+./frontend/src/components/HideOnAdminLogin.tsx
+./frontend/src/components/home
+./frontend/src/components/home/FeaturedSchools.tsx
+./frontend/src/components/home/FeaturedSchoolsSkeleton.tsx
+./frontend/src/components/home/HomeHero.tsx
+./frontend/src/components/home/HomeStats.tsx
+./frontend/src/components/motion
+./frontend/src/components/motion/fade-in.tsx
+./frontend/src/components/motion/stagger-grid.tsx
+./frontend/src/components/Navbar.tsx
+./frontend/src/components/parent
+./frontend/src/components/parent/ParentNav.tsx
+./frontend/src/components/parent/ProfileForm.tsx
+./frontend/src/components/parent/RecentViewedSchools.tsx
+./frontend/src/components/parent/TrackSchoolView.tsx
+./frontend/src/components/school
+./frontend/src/components/school/InquiryFilters.tsx
+./frontend/src/components/school/InquiryPagination.tsx
+./frontend/src/components/school/InquiryStatusBadge.tsx
+./frontend/src/components/school/InquiryStatusSelect.tsx
+./frontend/src/components/school/SchoolDashboardNav.tsx
+./frontend/src/components/school/SchoolGalleryManager.tsx
+./frontend/src/components/school/SchoolProfileForm.tsx
+./frontend/src/components/school/SchoolRegisterWizard.tsx
+./frontend/src/components/school/SchoolStatusCard.tsx
+./frontend/src/components/SchoolCard.tsx
+./frontend/src/components/SchoolFilters.tsx
+./frontend/src/components/schools
+./frontend/src/components/schools/FavouriteButton.tsx
+./frontend/src/components/schools/InquiryModal.tsx
+./frontend/src/components/schools/SchoolCardSkeleton.tsx
+./frontend/src/components/schools/SchoolGridSkeleton.tsx
+./frontend/src/components/seo
+./frontend/src/components/seo/JsonLd.tsx
+./frontend/src/components/SessionHeartbeat.tsx
+./frontend/src/components/ui
+./frontend/src/components/ui/badge.tsx
+./frontend/src/components/ui/button.tsx
+./frontend/src/components/ui/card.tsx
+./frontend/src/components/ui/dialog.tsx
+./frontend/src/components/ui/empty-state.tsx
+./frontend/src/components/ui/input.tsx
+./frontend/src/components/ui/label.tsx
+./frontend/src/components/ui/PasswordInput.tsx
+./frontend/src/components/ui/select.tsx
+./frontend/src/components/ui/skeleton.tsx
+./frontend/src/components/ui/stat-card.tsx
+./frontend/src/components/ui/table.tsx
+./frontend/src/components/ui/textarea.tsx
+./frontend/src/components/upload
+./frontend/src/components/upload/ImageUploadField.tsx
+./frontend/src/lib
+./frontend/src/lib/admin
+./frontend/src/lib/admin/constants.ts
+./frontend/src/lib/admin/data.ts
+./frontend/src/lib/admin/session.ts
+./frontend/src/lib/admin-auth.ts
+./frontend/src/lib/api
+./frontend/src/lib/api/pagination.ts
+./frontend/src/lib/api/proxy.ts
+./frontend/src/lib/api/resolve-backend-token.ts
+./frontend/src/lib/api/server.ts
+./frontend/src/lib/auth.ts
+./frontend/src/lib/auth-config.ts
+./frontend/src/lib/backend-jwt.ts
+./frontend/src/lib/cloudinary.ts
+./frontend/src/lib/cloudinary-url.ts
+./frontend/src/lib/data
+./frontend/src/lib/data/schools-public.ts
+./frontend/src/lib/image-placeholder.ts
+./frontend/src/lib/logout.ts
+./frontend/src/lib/middleware-auth.ts
+./frontend/src/lib/motion.ts
+./frontend/src/lib/parent
+./frontend/src/lib/parent/data.ts
+./frontend/src/lib/parent/recent-schools.ts
+./frontend/src/lib/parent-token.ts
+./frontend/src/lib/revalidate-schools.ts
+./frontend/src/lib/school
+./frontend/src/lib/school/data.ts
+./frontend/src/lib/school/gallery.ts
+./frontend/src/lib/school-auth.ts
+./frontend/src/lib/seo.ts
+./frontend/src/lib/types
+./frontend/src/lib/types/database.ts
+./frontend/src/lib/upload-client.ts
+./frontend/src/lib/upload-security.ts
+./frontend/src/lib/utils.ts
+./frontend/tailwind.config.ts
+./frontend/tsconfig.json
+./frontend/vercel.json
+./README.md
 ```
 
 | Folder | Responsibility |
 |--------|----------------|
-| `frontend/` | User interface, NextAuth sessions, middleware route protection, SEO, image upload route, BFF proxies to backend |
-| `backend/` | All REST APIs, JWT issuance, Prisma/database access, admin moderation, inquiries, favourites, parent APIs |
+| `frontend/` | Next.js UI, NextAuth, middleware, BFF proxies, Cloudinary upload route |
+| `backend/` | Express REST API, Prisma schema, JWT auth, all database access |
+| `docs/` | Codebase audit artifacts |
 
 ---
 
@@ -178,8 +513,6 @@ In many Tier-2 and Tier-3 cities, school information is fragmented across websit
 | bcryptjs | Password hashing |
 | Resend | Password reset emails |
 | Fast2SMS | Phone OTP SMS (`POST /api/auth/send-otp`) |
-| Cloudinary SDK | **(stub on backend)** — lib only; uploads happen on frontend |
-| Multer | **(stub)** — `middleware/upload.ts` not mounted on any route |
 
 ### Database
 
@@ -200,7 +533,7 @@ Authentication is **split by role**. There is no single shared login page for al
 | **NextAuth JWT** | Frontend session for middleware and UI | 30 minutes |
 | **Backend Bearer JWT** | API authorization on Express | 7 days (configurable) |
 
-Parents receive a backend token on login (`backendAccessToken` in session). School admins and admins receive tokens from backend login; admins also store JWT in HTTP-only cookie `sf_admin_token`. When no backend token is in session, the frontend can mint a short-lived compatible JWT using shared `JWT_SECRET`.
+Parents receive a backend token on login (`backendAccessToken` in session). School admins use `session.backendAccessToken` with synchronous `mintBackendJwt()` fallback (`jsonwebtoken` HS256, issuer `schoolfinder-api`). Admins store JWT in HTTP-only cookie `sf_admin_token`.
 
 ### Parent (`PARENT`)
 
@@ -210,24 +543,26 @@ Parents receive a backend token on login (`backendAccessToken` in session). Scho
 | `/register` | Create parent account |
 | `/forgot-password?role=PARENT` or `?role=SCHOOL_ADMIN` | 3-step OTP password reset (email → OTP → new password), role-isolated via `expectedRole` |
 
-Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password`, `POST /api/auth/verify-reset-otp`, `POST /api/auth/reset-password` (all with optional `expectedRole` where applicable). **OTP is terminal-only for now** — the backend logs the 6-digit code to the console; Brevo email is prepared but not active.
+Backend: `POST /api/auth/register-parent`, `POST /api/auth/login` (`expectedRole: "PARENT"`), `POST /api/auth/google-sync`, `POST /api/auth/forgot-password`, `POST /api/auth/verify-reset-otp`, `POST /api/auth/reset-password`. Password reset OTP uses `sendOtpEmail` (Resend) when configured; Brevo is not used.
 
 ### School administrator (`SCHOOL_ADMIN`)
 
 | Route | Purpose |
 |-------|---------|
 | `/school-login` | School admin sign-in |
-| `/school-register` | Register school + owner (status `PENDING` until approved) |
+| `/school-register` | 4-step wizard with localStorage draft (`sf_school_draft_{email}`) and auto sign-in; creates `PENDING` school |
+| `/school-complete-registration` | Page for schools with `DRAFT` status |
 
-Backend: `POST /api/auth/register-school`, `POST /api/auth/login` with `expectedRole: "SCHOOL_ADMIN"`.
+Backend: `POST /api/auth/register-school` (role-specific duplicate email errors, school name uniqueness check in transaction), `POST /api/auth/login` with `expectedRole: "SCHOOL_ADMIN"`.
 
 ### Platform administrator (`ADMIN`)
 
 | Route | Purpose |
 |-------|---------|
 | `/admin-login` | Hidden route (not linked in public navigation) |
+| `/admin/add-school` | Multi-step wizard to add a school directly as `APPROVED` |
 
-Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie `sf_admin_token` → NextAuth session sync for middleware.
+Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie `sf_admin_token` → NextAuth session sync for middleware. Client-side admin mutations (add school, approve/reject, duplicate checks) go through BFF routes under `/api/admin/*` so the browser never reads the HTTP-only cookie.
 
 ### Role Separation and Protection
 
@@ -250,22 +585,24 @@ Flow: backend login with `expectedRole: "ADMIN"` → JWT in HTTP-only cookie `sf
 
 ### Parents
 
-- Search and filter schools (city, board, medium, school type, text search)
+- Search and filter schools: dynamic city dropdown (`GET /api/schools/cities`), board multi-select, school type, medium, text search
 - View school detail pages (fees, facilities, gallery, contact)
-- Save schools to **favourites** (toggle on school detail pages)
+- Save schools to **favourites** via BFF `/api/parent/favourites` (`FavouriteButton`)
 - Send **inquiries** to approved schools
 - **Parent dashboard** (`/parent`): profile, favourites, recently viewed, sent inquiries
 
 ### Schools
 
-- **Registration wizard** with profile, academics, and fees
+- **Registration wizard** (`SchoolRegisterWizard`): 4 steps with localStorage draft (`sf_school_draft_{email}`), fields `establishedYear`, `totalStudents`, `transportFee`, `hostelFee`, auto sign-in via `signIn("credentials")`
+- **DRAFT flow**: `dashboard/school/layout.tsx` redirects `DRAFT` schools to `/school-complete-registration`
 - **School dashboard**: inquiry list with status (`NEW`, `CONTACTED`, `CLOSED`)
 - **Profile management**: update listing, logo, gallery
-- **Status visibility**: pending / approved / rejected with moderation messaging
+- **Status visibility**: `DRAFT`, `PENDING`, `APPROVED`, `REJECTED`
 
 ### Administrators
 
-- **School moderation**: approve, reject, direct add school
+- **School moderation**: approve, reject, search and filter listings
+- **Add school wizard** (`/admin/add-school`): 4-step form (owner → school info → academic → fees) with per-step React Hook Form validation; owner email check and duplicate school name check before advancing; submits via BFF `POST /api/admin/add-school` using HTTP-only `sf_admin_token` (school created as `APPROVED`)
 - **User management**: roles, disable accounts
 - **Inquiry monitoring** across the platform
 - **Overview stats** on the admin dashboard
@@ -328,8 +665,7 @@ Only `NEXT_PUBLIC_*` variables are exposed to the browser.
 | `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
 | `FRONTEND_URL` | CORS allowlist (comma-separated for multiple origins) |
 | `CLOUDINARY_*` | Image upload utilities |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Password reset emails (Resend; existing flow) |
-| `BREVO_API_KEY` | OTP email via Brevo — **optional (planned)**; not active yet |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Password reset OTP email via Resend (`sendOtpEmail`) |
 | `FAST2SMS_API_KEY` | Phone OTP SMS (optional; dev logs OTP if unset) |
 | `BCRYPT_ROUNDS` | Password hashing cost (default `12`) |
 | `TRUST_PROXY` | Behind reverse proxy in production |
@@ -495,26 +831,7 @@ See [frontend/Frontend.md](frontend/Frontend.md) for the full production checkli
 
 ---
 
-## 13. Future Roadmap
-
-| Area | Direction |
-|------|-----------|
-| **Brevo OTP email** | Infrastructure ready in `mailer.ts`; needs API key and activation (currently terminal-only) |
-| **Phone OTP login UI** | Backend API exists (`send-otp` / `verify-otp` via Fast2SMS); no frontend pages yet |
-| **Backend image upload route** | Mount Multer + Cloudinary on Express (currently frontend-only upload) |
-| **Migrate FavouriteButton** | Use `/api/parent/favourites` instead of legacy `/api/favourites` |
-| **Inquiry notifications** | Email or WhatsApp for inquiry status and school approval updates |
-| **Multilingual** | Hindi and regional language UI |
-| **AI recommendations** | School suggestions from parent preferences |
-| **Fee comparison** | Side-by-side fee tables across saved schools |
-| **Analytics** | School and platform engagement dashboards |
-| **Reviews** | Moderated parent reviews post-verification |
-| **Mobile app** | React Native or Expo consuming the same API |
-| **Redis** | Replace in-memory cache and JWT blacklist on the backend |
-
----
-
-## 14. License and Contribution
+## 13. License and Contribution
 
 ### License
 

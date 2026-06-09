@@ -1,11 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
-import { headers } from "next/headers";
-import { encode } from "@auth/core/jwt";
 import type { InquiryStatus } from "@/lib/types/database";
 import { ChevronLeft, ChevronRight, MessageSquare, BookOpen, ArrowRight } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getAdminApiBase } from "@/lib/admin-auth";
+import { getBackendToken } from "@/lib/api/server";
 import { Button } from "@/components/ui/button";
 
 const PAGE_SIZE = 10;
@@ -48,47 +47,10 @@ type Props = {
   searchParams: { page?: string };
 };
 
-async function resolveBearerToken(
-  user: { id: string; role: string; email: string }
-): Promise<string | null> {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  const protocol = headerList.get("x-forwarded-proto") ?? "http";
-
-  if (host) {
-    const sessionResponse = await fetch(`${protocol}://${host}/api/auth/session`, {
-      headers: { cookie: headerList.get("cookie") ?? "" },
-      cache: "no-store",
-    });
-    const sessionData = (await sessionResponse.json().catch(() => ({}))) as {
-      accessToken?: string;
-      backendAccessToken?: string;
-    };
-
-    if (sessionData.accessToken) return sessionData.accessToken;
-    if (sessionData.backendAccessToken) return sessionData.backendAccessToken;
-  }
-
-  const secret = process.env.JWT_SECRET;
-  if (!secret || !user.email) return null;
-
-  return encode({
-    token: {
-      id: user.id,
-      role: user.role,
-      email: user.email,
-    },
-    secret,
-    salt: secret,
-    maxAge: 60 * 30,
-  });
-}
-
 async function fetchMyInquiries(
-  page: number,
-  user: { id: string; role: string; email: string }
+  page: number
 ): Promise<MyInquiriesResponse | null> {
-  const token = await resolveBearerToken(user);
+  const token = await getBackendToken();
   if (!token) return null;
 
   const apiBase = getAdminApiBase();

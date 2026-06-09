@@ -181,7 +181,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
 
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account, profile, trigger }) {
+      // --- CASE 1: Google OAuth login ---
       if (account?.provider === "google" && profile?.email) {
         const synced = await syncGoogleViaBackend({
           email: profile.email.trim().toLowerCase(),
@@ -199,6 +200,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
+      // --- CASE 2: Fresh credentials login (authorize() just ran) ---
       if (user) {
         token.id = user.id;
         token.role = (user as AuthUserWithBackendToken).role ?? "PARENT";
@@ -206,12 +208,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if ((user as AuthUserWithBackendToken).backendToken) {
           token.backendAccessToken = (user as AuthUserWithBackendToken).backendToken;
         }
+
+        // Don't refresh on fresh login — token is already current
+        if (token.role !== "PARENT") {
+          token.backendAccessToken = undefined;
+        }
+
+        return token;
       }
 
+      // --- CASE 3: Subsequent requests — refresh role from backend ---
+      // Only refresh if we have a valid backend token and it's not a
+      // manual session update trigger (avoids loop on sign-in)
       const accessToken =
         typeof token.backendAccessToken === "string" ? token.backendAccessToken : null;
 
-      if (accessToken) {
+      if (accessToken && trigger !== "update") {
         const refreshed = await refreshUserFromBackend(accessToken);
         if (!refreshed) {
           return { ...token, id: undefined, role: undefined, backendAccessToken: undefined };

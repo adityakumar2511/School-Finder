@@ -5,7 +5,7 @@ import SchoolFilters from "@/components/SchoolFilters";
 import SchoolGridSkeleton from "@/components/schools/SchoolGridSkeleton";
 import { GraduationCap, ServerOff } from "lucide-react";
 import { buildPageMetadata } from "@/lib/seo";
-import { fetchSchoolList } from "@/lib/data/schools-public";
+import { fetchSchoolList, fetchCities  } from "@/lib/data/schools-public";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Browse Schools — CBSE, ICSE & State Board Listings",
@@ -25,7 +25,7 @@ interface PageProps {
   searchParams: {
     search?: string;
     city?: string;
-    board?: string;
+    board?: string;       
     schoolType?: string;
     medium?: string;
     page?: string;
@@ -178,7 +178,8 @@ async function SchoolGrid({ searchParams }: PageProps) {
   );
 }
 
-export default function SchoolsPage({ searchParams }: PageProps) {
+export default async function SchoolsPage({ searchParams }: PageProps) {
+  const cities = await fetchCities();
   const hasFilters =
     searchParams.search ||
     searchParams.city ||
@@ -224,7 +225,7 @@ export default function SchoolsPage({ searchParams }: PageProps) {
                 />
               }
             >
-              <SchoolFilters />
+              <SchoolFilters cities={cities} />
             </Suspense>
           </aside>
 

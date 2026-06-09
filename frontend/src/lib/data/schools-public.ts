@@ -1,4 +1,7 @@
-import { parsePaginatedResponse, type PaginationMeta } from "@/lib/api/pagination";
+import {
+  parsePaginatedResponse,
+  type PaginationMeta,
+} from "@/lib/api/pagination";
 import type { SchoolCardProps } from "@/components/SchoolCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -9,8 +12,8 @@ export type SchoolListResult = {
 };
 
 export async function fetchSchoolList(
-  params: Record<string, string | undefined>,
-  options: { revalidate?: number } = { revalidate: 60 }
+  params: Record<string, string | string[] | undefined>,
+  options: { revalidate?: number } = { revalidate: 60 },
 ): Promise<SchoolListResult> {
   if (!API_BASE) {
     return {
@@ -24,8 +27,13 @@ export async function fetchSchoolList(
   query.set("limit", "12");
 
   for (const [key, value] of Object.entries(params)) {
-    if (value) query.set(key, value);
+  if (!value) continue;
+  if (Array.isArray(value)) {
+    value.forEach((v) => query.append(key, v));
+  } else {
+    query.set(key, value);
   }
+}
 
   try {
     const res = await fetch(`${API_BASE}/api/schools?${query.toString()}`, {
@@ -45,7 +53,7 @@ export async function fetchSchoolList(
     const json = await res.json();
     const { items, pagination } = parsePaginatedResponse<SchoolCardProps>(
       json,
-      "schools"
+      "schools",
     );
 
     return { schools: items, pagination };
@@ -58,11 +66,11 @@ export async function fetchSchoolList(
 }
 
 export async function fetchFeaturedSchools(
-  limit = 6
+  limit = 6,
 ): Promise<SchoolCardProps[]> {
   const { schools } = await fetchSchoolList(
     { limit: String(limit) },
-    { revalidate: 3600 }
+    { revalidate: 3600 },
   );
   return schools;
 }
@@ -84,5 +92,19 @@ export async function fetchSchoolBySlug(slug: string) {
     return json.data ?? json.school ?? json ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function fetchCities(): Promise<string[]> {
+  if (!API_BASE) return [];
+  try {
+    const res = await fetch(`${API_BASE}/api/schools/cities`, {
+      next: { revalidate: 3600, tags: ["schools"] },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return Array.isArray(json.data) ? (json.data as string[]) : [];
+  } catch {
+    return [];
   }
 }

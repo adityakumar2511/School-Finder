@@ -2,177 +2,132 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import type { SchoolStatus } from "@/lib/types/database";
+import SchoolDetailModal from "./SchoolDetailModal";
 
-type Props = {
-  schoolId: string;
-  currentStatus: string;
+type SchoolDetail = {
+  id: string;
+  name: string;
+  slug: string;
+  city: string;
+  state: string;
+  address: string;
+  board: string;
+  schoolType: string;
+  medium: string;
+  classesFrom: number;
+  classesTo: number;
+  phone: string;
+  email: string | null;
+  website: string | null;
+  description: string | null;
+  status: SchoolStatus;
+  rejectionReason: string | null;
+  totalStudents: number | null;
+  establishedYear: number | null;
+  admissionFee: number | null;
+  tuitionFeeMonthly: number | null;
+  totalAnnualFee: number | null;
+  transportFee: number | null;
+  hostelFee: number | null;
+  logoUrl: string | null;
+  owner: { name: string | null; email: string };
+  createdAt: string;
 };
 
-export default function SchoolModerationActions({
-  schoolId,
-  currentStatus,
-}: Props) {
-  const router = useRouter();
-  const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [confirmApproveOpen, setConfirmApproveOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+type Props = {
+  school: SchoolDetail;
+  currentStatus: SchoolStatus;
+};
 
-  async function approve() {
+export default function SchoolModerationActions({ school, currentStatus }: Props) {
+  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
+
+  async function handleApprove(id: string) {
     setLoading("approve");
-    setError(null);
-    setSuccess(null);
     try {
-      const res = await fetch(`/api/admin/schools/${schoolId}/approve`, {
-        method: "PATCH",
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message ?? "Approval failed");
-      setSuccess("School approved");
-      setConfirmApproveOpen(false);
+      await fetch(`/api/admin/schools/${id}/approve`, { method: "PATCH" });
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed");
     } finally {
       setLoading(null);
     }
   }
 
-  async function reject() {
-    if (!reason.trim()) return;
+  async function handleReject(id: string, reason: string) {
     setLoading("reject");
-    setError(null);
-    setSuccess(null);
     try {
-      const res = await fetch(`/api/admin/schools/${schoolId}/reject`, {
+      await fetch(`/api/admin/schools/${id}/reject`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message ?? "Rejection failed");
-      setSuccess("School rejected");
-      setRejectOpen(false);
-      setReason("");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Rejection failed");
     } finally {
       setLoading(null);
     }
-  }
-
-  if (currentStatus === "APPROVED") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-success-text/20 bg-success-bg px-2 py-1 text-xs font-medium text-success-text">
-        <CheckCircle className="h-3 w-3" />
-        Approved
-      </span>
-    );
-  }
-
-  if (currentStatus === "REJECTED") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-danger-text/20 bg-danger-bg px-2 py-1 text-xs font-medium text-danger-text">
-        <XCircle className="h-3 w-3" />
-        Rejected
-      </span>
-    );
   }
 
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-2">
+    <>
+      <div className="flex items-center gap-2">
         <Button
           size="sm"
-          className="h-8"
-          disabled={loading !== null}
-          onClick={() => setConfirmApproveOpen(true)}
+          variant="outline"
+          onClick={() => setModalOpen(true)}
+          className="h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
         >
-          Approve
+          <Eye className="h-3.5 w-3.5 mr-1" />
+          View
         </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          className="h-8"
-          disabled={loading !== null}
-          onClick={() => setRejectOpen(true)}
-        >
-          Reject
-        </Button>
-      </div>
-      {success && <p className="text-xs text-success-text">{success}</p>}
-      {error && <p className="text-xs text-danger-text">{error}</p>}
 
-      <Dialog open={confirmApproveOpen} onOpenChange={setConfirmApproveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Approve school?</DialogTitle>
-            <DialogDescription>
-              This school will be published on SchoolFinder for parents to discover.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmApproveOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={loading === "approve"} onClick={approve}>
+        {currentStatus === "PENDING" && (
+          <>
+            <Button
+              size="sm"
+              disabled={loading !== null}
+              onClick={() => handleApprove(school.id)}
+              className="h-8 px-3 bg-green-600 hover:bg-green-700 font-heading text-xs rounded-lg"
+            >
               {loading === "approve" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                "Confirm approve"
+                <>
+                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                  Approve
+                </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject school</DialogTitle>
-            <DialogDescription>
-              Provide a reason. The school owner will see this on their dashboard.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for rejection…"
-            rows={4}
-          />
-          {error && <p className="text-sm text-danger-text">{error}</p>}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>
-              Cancel
             </Button>
             <Button
-              variant="destructive"
-              disabled={!reason.trim() || loading === "reject"}
-              onClick={reject}
+              size="sm"
+              disabled={loading !== null}
+              onClick={() => setModalOpen(true)}
+              variant="outline"
+              className="h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 font-heading text-xs rounded-lg"
             >
               {loading === "reject" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                "Confirm reject"
+                <>
+                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                  Reject
+                </>
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </>
+        )}
+      </div>
+
+      <SchoolDetailModal
+        school={school}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
+    </>
   );
 }

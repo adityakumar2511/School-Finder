@@ -1,6 +1,8 @@
-import { encode } from "@auth/core/jwt";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
 
-const BACKEND_JWT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const BACKEND_JWT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const JWT_ISSUER = "schoolfinder-api";
 
 export type BackendJwtPayload = {
   id: string;
@@ -9,23 +11,27 @@ export type BackendJwtPayload = {
 };
 
 /**
- * Mint a backend-compatible JWT (same secret/payload shape as Express login).
- * Used for Google OAuth parents who never call POST /api/auth/login.
+ * Mint a backend-compatible HS256 JWT using jsonwebtoken (same as Express signAccessToken).
+ * Replaces the jose SignJWT which was producing JWE tokens the backend cannot verify.
  */
-export async function mintBackendJwt(
+export function mintBackendJwt(
   payload: BackendJwtPayload
-): Promise<string | null> {
+): string | null {
   const secret = process.env.JWT_SECRET?.trim();
   if (!secret || !payload.email) return null;
 
-  return encode({
-    token: {
+  return jwt.sign(
+    {
       id: payload.id,
       role: payload.role,
       email: payload.email,
+      jti: crypto.randomUUID(),
     },
     secret,
-    salt: secret,
-    maxAge: BACKEND_JWT_MAX_AGE_SECONDS,
-  });
+    {
+      algorithm: "HS256",
+      issuer: JWT_ISSUER,
+      expiresIn: BACKEND_JWT_MAX_AGE_SECONDS,
+    }
+  );
 }

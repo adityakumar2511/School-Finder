@@ -1,37 +1,15 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { auth } from "@/lib/auth";
-import { ADMIN_TOKEN_COOKIE, getAdminApiBase } from "@/lib/admin-auth";
-import { mintBackendJwt } from "@/lib/backend-jwt";
-
-async function resolveToken(useAdminCookie = false): Promise<string | null> {
-  if (useAdminCookie) {
-    const cookieStore = await cookies();
-    return cookieStore.get(ADMIN_TOKEN_COOKIE)?.value ?? null;
-  }
-
-  const session = await auth();
-  if (!session?.user?.id || !session.user.email) {
-    return null;
-  }
-
-  if (typeof session.backendAccessToken === "string" && session.backendAccessToken.length > 0) {
-    return session.backendAccessToken;
-  }
-
-  return mintBackendJwt({
-    id: session.user.id,
-    role: session.user.role,
-    email: session.user.email,
-  });
-}
+import { getAdminApiBase } from "@/lib/admin-auth";
+import { resolveBackendToken } from "@/lib/api/resolve-backend-token";
 
 export async function proxyToBackend(
   path: string,
   init: RequestInit = {},
   options: { useAdminCookie?: boolean } = {}
 ) {
-  const token = await resolveToken(options.useAdminCookie);
+  const token = await resolveBackendToken({
+    adminCookieOnly: options.useAdminCookie,
+  });
 
   if (!token) {
     return NextResponse.json(

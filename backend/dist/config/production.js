@@ -18,14 +18,8 @@ function isEnvMissing(key) {
 function validateStartupEnv() {
     const production = isProduction();
     const missing = [];
-    const alwaysRequired = [
-        "DATABASE_URL",
-        "JWT_SECRET",
-        "CLOUDINARY_CLOUD_NAME",
-        "CLOUDINARY_API_KEY",
-        "CLOUDINARY_API_SECRET",
-    ];
-    const productionRequired = ["FRONTEND_URL"];
+    const alwaysRequired = ["DATABASE_URL", "JWT_SECRET"];
+    const productionRequired = ["FRONTEND_URL", "RESEND_API_KEY", "EMAIL_FROM"];
     for (const key of alwaysRequired) {
         if (isEnvMissing(key)) {
             missing.push(key);

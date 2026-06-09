@@ -75,7 +75,7 @@ export const getSchools = async (req: Request, res: Response) => {
     status: status as string | undefined,
     search: search as string | undefined,
     city: city as string | undefined,
-    board: board as string | undefined,
+    board: typeof board === "string" ? [board] : (board as string[] | undefined),
     schoolType: schoolType as string | undefined,
     medium: medium as string | undefined,
   });
@@ -94,7 +94,7 @@ export const getSchools = async (req: Request, res: Response) => {
       status: String(where.status),
       search: search as string,
       city: city as string,
-      board: board as string,
+      board: Array.isArray(board) ? (board as string[]).join(",") : (board as string),
       schoolType: schoolType as string,
       medium: medium as string,
     });
@@ -141,7 +141,7 @@ export const getSchools = async (req: Request, res: Response) => {
     status: String(where.status),
     search: search as string,
     city: city as string,
-    board: board as string,
+    board: Array.isArray(board) ? (board as string[]).join(",") : (board as string),
     schoolType: schoolType as string,
     medium: medium as string,
   });
@@ -388,4 +388,25 @@ export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
   await prisma.schoolImage.delete({ where: { id: imageId } });
   invalidateSchoolCache();
   res.json({ message: "Image deleted successfully" });
+};
+
+
+
+// GET /api/schools/cities — distinct approved cities
+export const getCities = async (_req: Request, res: Response) => {
+  const cacheKey = "schools:cities";
+
+  const cities = await withCache(
+    cacheKey,
+    CACHE_TTL.SCHOOL_LIST,
+    () =>
+      prisma.school.findMany({
+        where: { status: "APPROVED" },
+        select: { city: true },
+        distinct: ["city"],
+        orderBy: { city: "asc" },
+      })
+  );
+
+  res.json({ data: cities.map((s) => s.city) });
 };

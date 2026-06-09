@@ -104,13 +104,41 @@ const STEPS = [
 ];
 
 const STEP_FIELDS: Record<number, (keyof AddSchoolFormData)[]> = {
-  0: ["ownerEmail", "ownerName"],
-  1: ["name", "city", "state", "address", "phone"],
-  2: ["board", "schoolType", "medium", "classesFrom", "classesTo"],
-  3: [],
+  0: ["ownerEmail", "ownerName", "ownerPassword"],
+  1: [
+    "name",
+    "city",
+    "state",
+    "address",
+    "pincode",
+    "phone",
+    "email",
+    "website",
+    "description",
+  ],
+  2: [
+    "board",
+    "schoolType",
+    "medium",
+    "classesFrom",
+    "classesTo",
+    "establishedYear",
+    "totalStudents",
+  ],
+  3: [
+    "admissionFee",
+    "tuitionFeeMonthly",
+    "totalAnnualFee",
+    "transportFee",
+    "hostelFee",
+  ],
 };
 
-// Existing school info dikhane ke liye
+const DUPLICATE_NAME_MESSAGE =
+  "A school with this name already exists. Please verify before adding.";
+
+const LAST_STEP = STEPS.length - 1; // 3
+
 type OwnerCheckResult = {
   exists: boolean;
   role?: string;
@@ -145,6 +173,7 @@ export default function AdminAddSchoolPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [isCheckingSchool, setIsCheckingSchool] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
@@ -156,6 +185,8 @@ export default function AdminAddSchoolPage() {
     trigger,
     reset,
     getValues,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<AddSchoolFormData>({
     resolver: zodResolver(addSchoolSchema),
@@ -190,41 +221,97 @@ export default function AdminAddSchoolPage() {
     reader.readAsDataURL(file);
   }
 
-  // ── Step 0 Next — email check + validation ──────────────────────────────
+  // ── Step 0 Next — owner email check ───────────────────────────────────────
+  async function handleStep0Next() {
+    const valid = await trigger(STEP_FIELDS[0]);
+    if (!valid) return;
+
+    const email = getValues("ownerEmail").trim().toLowerCase();
+    setIsCheckingEmail(true);
+    setErrorMessage(null);
+    setOwnerCheck(null);
+
+    try {
+      const res = await fetch(
+        `/api/admin/check-owner?email=${encodeURIComponent(email)}`
+      );
+
+      if (!res.ok) {
+        setErrorMessage("Unable to verify email. Please try again.");
+        return;
+      }
+
+      const data: OwnerCheckResult = await res
+        .json()
+        .catch(() => ({ exists: false }));
+
+      // Already a SCHOOL_ADMIN with an existing school → block
+      if (data.exists && data.role === "SCHOOL_ADMIN" && data.hasSchool) {
+        setOwnerCheck(data);
+        return;
+      }
+
+      setOwnerCheck(null);
+      setStep(1);
+    } catch {
+      setErrorMessage("Unable to verify email. Please try again.");
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  }
+
+  async function handleStep1Next() {
+    const valid = await trigger(STEP_FIELDS[1]);
+    if (!valid) return;
+
+    const name = getValues("name").trim();
+    setIsCheckingSchool(true);
+    setErrorMessage(null);
+    clearErrors("name");
+
+    try {
+      const res = await fetch(
+        `/api/admin/schools?search=${encodeURIComponent(name)}&limit=50`
+      );
+      const data = await res.json().catch(() => ({}));
+
+      const schools: Array<{ name: string }> =
+        (data as { schools?: Array<{ name: string }> }).schools ??
+        (data as { data?: Array<{ name: string }> }).data ??
+        [];
+
+      const hasExactNameMatch = schools.some(
+        (school) => school.name.trim().toLowerCase() === name.toLowerCase()
+      );
+
+      if (hasExactNameMatch) {
+        setError("name", { type: "manual", message: DUPLICATE_NAME_MESSAGE });
+        return;
+      }
+
+      setStep(2);
+    } catch (err) {
+      console.error("School duplicate check failed:", err);
+      setStep(2);
+    } finally {
+      setIsCheckingSchool(false);
+    }
+  }
+
   async function handleNext() {
+    if (step === 0) {
+      await handleStep0Next();
+      return;
+    }
+    if (step === 1) {
+      await handleStep1Next();
+      return;
+    }
+
+    // Steps 2+: just validate and advance
     const fields = STEP_FIELDS[step];
     const valid = await trigger(fields);
     if (!valid) return;
-
-    // Step 0 pe email check
-    if (step === 0) {
-      const email = getValues("ownerEmail").trim().toLowerCase();
-      setIsCheckingEmail(true);
-      setErrorMessage(null);
-      setOwnerCheck(null);
-
-      try {
-        const res = await fetch(
-          `/api/admin/check-owner?email=${encodeURIComponent(email)}`
-        );
-        const data: OwnerCheckResult = await res.json().catch(() => ({ exists: false }));
-
-        // Already registered SCHOOL_ADMIN with a school → block
-        if (data.exists && data.role === "SCHOOL_ADMIN" && data.hasSchool) {
-          setOwnerCheck(data);
-          return; // Step nahi badhega — error card dikhega
-        }
-
-        // Koi aur case — allow karo aage jaane do
-        setOwnerCheck(null);
-        setStep((s) => s + 1);
-      } catch {
-        setErrorMessage("Unable to verify email. Please try again.");
-      } finally {
-        setIsCheckingEmail(false);
-      }
-      return;
-    }
 
     setStep((s) => s + 1);
   }
@@ -241,39 +328,9 @@ export default function AdminAddSchoolPage() {
     setSuccessMessage(null);
   }
 
-  function buildPayload(data: AddSchoolFormData, logoUrl?: string) {
-    const payload: Record<string, unknown> = { ...data, logoUrl };
-
-    if (!data.ownerPassword?.trim()) {
-      delete payload.ownerPassword;
-    } else {
-      payload.ownerPassword = data.ownerPassword.trim();
-    }
-
-    // Empty optional fields clean karo
-    const optionalStrings = ["pincode", "email", "website", "description"] as const;
-    for (const key of optionalStrings) {
-      if (!data[key]?.toString().trim()) delete payload[key];
-    }
-
-    // Empty fee fields clean karo
-    const feeFields = [
-      "admissionFee",
-      "tuitionFeeMonthly",
-      "totalAnnualFee",
-      "transportFee",
-      "hostelFee",
-    ] as const;
-    for (const key of feeFields) {
-      if (payload[key] === undefined || payload[key] === null) {
-        delete payload[key];
-      }
-    }
-
-    return payload;
-  }
-
   async function onSubmit(data: AddSchoolFormData) {
+    if (step !== LAST_STEP) return;
+
     setIsSubmitting(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -339,6 +396,36 @@ export default function AdminAddSchoolPage() {
     }
   }
 
+  function buildPayload(data: AddSchoolFormData, logoUrl?: string) {
+    const payload: Record<string, unknown> = { ...data, logoUrl };
+
+    if (!data.ownerPassword?.trim()) {
+      delete payload.ownerPassword;
+    } else {
+      payload.ownerPassword = data.ownerPassword.trim();
+    }
+
+    const optionalStrings = ["pincode", "email", "website", "description"] as const;
+    for (const key of optionalStrings) {
+      if (!data[key]?.toString().trim()) delete payload[key];
+    }
+
+    const feeFields = [
+      "admissionFee",
+      "tuitionFeeMonthly",
+      "totalAnnualFee",
+      "transportFee",
+      "hostelFee",
+    ] as const;
+    for (const key of feeFields) {
+      if (payload[key] === undefined || payload[key] === null) {
+        delete payload[key];
+      }
+    }
+
+    return payload;
+  }
+
   function handleAddAnother() {
     setShowSuccessScreen(false);
     setSuccessMessage(null);
@@ -392,6 +479,7 @@ export default function AdminAddSchoolPage() {
         {/* Header */}
         <div className="mb-8">
           <button
+            type="button"
             onClick={() => router.push("/admin")}
             className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-body text-body mb-4 transition-colors"
           >
@@ -436,7 +524,14 @@ export default function AdminAddSchoolPage() {
 
         {/* Form card */}
         <div className="bg-white rounded-2xl shadow-card p-6 md:p-8">
-          <form onSubmit={handleSubmit(onSubmit, onValidationError)}>
+          <form
+            onSubmit={handleSubmit(onSubmit, onValidationError)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && step !== LAST_STEP) {
+                e.preventDefault();
+              }
+            }}
+          >
 
             {/* ── STEP 0: Owner Info ─────────────────────────────────── */}
             {step === 0 && (
@@ -454,7 +549,6 @@ export default function AdminAddSchoolPage() {
                     type="email"
                     placeholder="owner@school.com"
                     onChange={() => {
-                      // Email change hone par purana check clear karo
                       if (ownerCheck) setOwnerCheck(null);
                       if (errorMessage) setErrorMessage(null);
                     }}
@@ -522,7 +616,6 @@ export default function AdminAddSchoolPage() {
                         </div>
                       </div>
 
-                      {/* Existing school detail */}
                       <div className="bg-white rounded-lg border border-amber-100 p-3 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-heading text-label font-semibold text-gray-800">
@@ -569,6 +662,9 @@ export default function AdminAddSchoolPage() {
                     {...register("name")}
                     type="text"
                     placeholder="Full school name"
+                    onChange={() => {
+                      if (errors.name?.type === "manual") clearErrors("name");
+                    }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
                   />
                   {errors.name && (
@@ -733,6 +829,7 @@ export default function AdminAddSchoolPage() {
                     className="w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition resize-none"
                   />
                 </div>
+
               </div>
             )}
 
@@ -922,14 +1019,14 @@ export default function AdminAddSchoolPage() {
                 <div />
               )}
 
-              {step < STEPS.length - 1 ? (
+              {step < LAST_STEP ? (
                 <button
                   type="button"
                   onClick={handleNext}
-                  disabled={isCheckingEmail}
+                  disabled={isCheckingEmail || isCheckingSchool}
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-heading text-btn hover:bg-blue-700 transition-colors shadow-btn disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {isCheckingEmail ? (
+                  {isCheckingEmail || isCheckingSchool ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Checking...

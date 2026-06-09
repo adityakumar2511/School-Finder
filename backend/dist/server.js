@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const compression_1 = __importDefault(require("compression"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
@@ -19,6 +20,15 @@ const security_1 = require("./middleware/security");
 const production_1 = require("./config/production");
 const app = (0, express_1.default)();
 (0, security_1.applySecurityMiddleware)(app);
+app.use((0, compression_1.default)({
+    threshold: 1024,
+    filter: (req, res) => {
+        if (req.headers["x-no-compression"]) {
+            return false;
+        }
+        return compression_1.default.filter(req, res);
+    },
+}));
 app.use(express_1.default.json({
     limit: "2mb",
 }));

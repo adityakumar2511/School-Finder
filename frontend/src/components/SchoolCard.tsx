@@ -7,6 +7,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, MapPin } from "lucide-react";
 import { fadeInUp } from "@/lib/motion";
 import { IMAGE_BLUR_DATA_URL } from "@/lib/image-placeholder";
+import { optimizeCloudinaryUrl } from "@/lib/cloudinary-url";
 import { cn } from "@/lib/utils";
 
 export interface SchoolCardProps {
@@ -71,6 +72,7 @@ function SchoolCardComponent({
   index = 0,
 }: SchoolCardProps) {
   const reduceMotion = useReducedMotion();
+  const optimizedLogoUrl = optimizeCloudinaryUrl(logoUrl, { width: 128 });
 
   const card = (
     <Link
@@ -86,9 +88,9 @@ function SchoolCardComponent({
       <div className="p-5">
         <div className="flex items-start gap-4 mb-4">
           <div className="relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm flex items-center justify-center ring-2 ring-white">
-            {logoUrl ? (
+            {optimizedLogoUrl ? (
               <Image
-                src={logoUrl}
+                src={optimizedLogoUrl}
                 alt=""
                 width={64}
                 height={64}

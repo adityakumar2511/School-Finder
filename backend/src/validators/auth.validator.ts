@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { preprocessEmail, preprocessOptionalString, preprocessTrim } from "../lib/sanitize";
+import {
+  preprocessEmail,
+  preprocessOptionalString,
+  preprocessTrim,
+} from "../lib/sanitize";
 
 const phonePattern = /^[\d\s+\-()]{7,20}$/;
 const mobilePattern = /^\d{10}$/;
@@ -8,18 +12,21 @@ export const expectedRoleSchema = z.enum(["PARENT", "SCHOOL_ADMIN", "ADMIN"]);
 
 export const registerParentSchema = z.object({
   name: z.preprocess(preprocessTrim, z.string().min(1, "Name is required")),
-  email: z.preprocess(preprocessEmail, z.string().email("Enter a valid email address")),
+  email: z.preprocess(
+    preprocessEmail,
+    z.string().email("Enter a valid email address"),
+  ),
   password: z.string().min(8, "Password must be at least 8 characters"),
   phone: z.preprocess(
     preprocessOptionalString,
-    z.string().regex(phonePattern, "Enter a valid phone number").optional()
+    z.string().regex(phonePattern, "Enter a valid phone number").optional(),
   ),
 });
 
 export const loginSchema = z.object({
   email: z.preprocess(
     preprocessEmail,
-    z.string().min(1, "Email is required").email("Enter a valid email address")
+    z.string().min(1, "Email is required").email("Enter a valid email address"),
   ),
   password: z.string().min(1, "Password is required"),
   expectedRole: expectedRoleSchema.optional(),
@@ -30,32 +37,39 @@ const schoolTypeSchema = z.enum(["BOYS", "GIRLS", "CO_ED"]);
 const mediumSchema = z.enum(["HINDI", "ENGLISH", "BOTH"]);
 
 const optionalFee = z.preprocess(
-  (value) => (value === "" || value === null || value === undefined ? undefined : value),
-  z.coerce.number().nonnegative().optional()
+  (value) =>
+    value === "" || value === null || value === undefined ? undefined : value,
+  z.coerce.number().nonnegative().optional(),
 );
 
 export const registerSchoolSchema = z
   .object({
     schoolName: z.preprocess(
       preprocessOptionalString,
-      z.string().min(3, "School name must be at least 3 characters").optional()
+      z.string().min(3, "School name must be at least 3 characters").optional(),
     ),
     name: z.preprocess(
       preprocessOptionalString,
-      z.string().min(3, "School name must be at least 3 characters").optional()
+      z.string().min(3, "School name must be at least 3 characters").optional(),
     ),
     ownerEmail: z.preprocess(
       preprocessEmail,
-      z.string().email("Enter a valid owner email address")
+      z.string().email("Enter a valid owner email address"),
     ),
     ownerPassword: z.string().min(8, "Password must be at least 8 characters"),
     ownerName: z.preprocess(preprocessOptionalString, z.string().optional()),
     city: z.preprocess(preprocessTrim, z.string().min(2, "City is required")),
     state: z.preprocess(preprocessTrim, z.string().min(2, "State is required")),
-    address: z.preprocess(preprocessTrim, z.string().min(5, "Address is required")),
+    address: z.preprocess(
+      preprocessTrim,
+      z.string().min(5, "Address is required"),
+    ),
     pincode: z.preprocess(
       preprocessOptionalString,
-      z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional()
+      z
+        .string()
+        .regex(/^\d{6}$/, "Enter a valid 6-digit pincode")
+        .optional(),
     ),
     board: boardSchema,
     schoolType: schoolTypeSchema,
@@ -64,18 +78,39 @@ export const registerSchoolSchema = z
     classesTo: z.coerce.number().int().min(1).max(12),
     phone: z.preprocess(
       preprocessTrim,
-      z.string().regex(mobilePattern, "Enter a valid 10-digit mobile number")
+      z.string().regex(mobilePattern, "Enter a valid 10-digit mobile number"),
     ),
     email: z.preprocess(
       preprocessOptionalString,
-      z.string().email("Enter a valid school email address").optional()
+      z.string().email("Enter a valid school email address").optional(),
     ),
     website: z.preprocess(
       preprocessOptionalString,
-      z.string().url("Enter a valid website URL").optional()
+      z.string().url("Enter a valid website URL").optional(),
     ),
-    description: z.preprocess(preprocessOptionalString, z.string().max(10000).optional()),
-    logoUrl: z.preprocess(preprocessOptionalString, z.string().url().optional()),
+    description: z.preprocess(
+      preprocessOptionalString,
+      z.string().max(10000).optional(),
+    ),
+    establishedYear: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : v),
+      z.coerce
+        .number()
+        .int()
+        .min(1800)
+        .max(new Date().getFullYear())
+        .optional(),
+    ),
+    totalStudents: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : v),
+      z.coerce.number().int().nonnegative().optional(),
+    ),
+    transportFee: optionalFee,
+    hostelFee: optionalFee,
+    logoUrl: z.preprocess(
+      preprocessOptionalString,
+      z.string().url().optional(),
+    ),
     admissionFee: optionalFee,
     tuitionFeeMonthly: optionalFee,
     totalAnnualFee: optionalFee,
@@ -96,21 +131,17 @@ export const registerSchoolSchema = z
 export const forgotPasswordSchema = z.object({
   email: z.preprocess(
     preprocessEmail,
-    z.string().min(1, "Email is required").email("Enter a valid email address")
+    z.string().min(1, "Email is required").email("Enter a valid email address"),
   ),
   expectedRole: expectedRoleSchema.optional(),
 });
 
 export const sendOtpSchema = z.object({
-  phone: z
-    .string()
-    .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+  phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
 });
 
 export const verifyOtpSchema = z.object({
-  phone: z
-    .string()
-    .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+  phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
   otp: z
     .string()
     .length(6)
@@ -120,7 +151,7 @@ export const verifyOtpSchema = z.object({
 export const verifyResetOtpSchema = z.object({
   email: z.preprocess(
     preprocessEmail,
-    z.string().min(1, "Email is required").email("Enter a valid email address")
+    z.string().min(1, "Email is required").email("Enter a valid email address"),
   ),
   otp: z
     .string()
@@ -133,10 +164,15 @@ export const resetPasswordSchema = z
   .object({
     email: z.preprocess(
       preprocessEmail,
-      z.string().min(1, "Email is required").email("Enter a valid email address")
+      z
+        .string()
+        .min(1, "Email is required")
+        .email("Enter a valid email address"),
     ),
     newPassword: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters"),
     expectedRole: expectedRoleSchema.optional(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {

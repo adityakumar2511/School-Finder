@@ -26,6 +26,7 @@ import {
   sendOtpViaSms,
   verifyOtpCode,
 } from "../lib/otp";
+import { sendOtpEmail } from "../lib/mailer";
 
 type SchoolDelegate = Pick<typeof prisma, "school">;
 
@@ -129,12 +130,20 @@ export const registerSchool = async (req: Request, res: Response) => {
     totalAnnualFee,
   } = body;
 
+  // FIX 1: Role-specific duplicate email check
   const existingUser = await prisma.user.findUnique({
     where: { email: ownerEmail },
   });
 
   if (existingUser) {
-    throw Errors.Conflict("This email is already registered");
+    if (existingUser.role === "SCHOOL_ADMIN") {
+      throw Errors.Conflict(
+        "This email is already registered as a school admin. Please sign in instead."
+      );
+    }
+    throw Errors.Conflict(
+      "This email is already registered. Please use a different email."
+    );
   }
 
   const hashedPassword = await bcrypt.hash(
@@ -143,6 +152,22 @@ export const registerSchool = async (req: Request, res: Response) => {
   );
 
   const result = await prisma.$transaction(async (tx) => {
+    // FIX 2: School name duplicate check inside transaction
+    const existingSchool = await tx.school.findFirst({
+      where: {
+        name: {
+          equals: name,
+          mode: "insensitive",
+        },
+      },
+    });
+
+    if (existingSchool) {
+      throw Errors.Conflict(
+        "A school with this name already exists. Please check if your school is already listed."
+      );
+    }
+
     const user = await tx.user.create({
       data: {
         name: ownerName || ownerEmail.split("@")[0],
@@ -284,16 +309,12 @@ const clearOtpAndResetFields = {
 } as const;
 
 // POST /api/auth/forgot-password
-// POST /api/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response) => {
   const { email, expectedRole } = req.body as ForgotPasswordInput;
-
-  console.log(`[ForgotPassword] email=${email} expectedRole=${expectedRole} type=${typeof expectedRole}`);
 
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || (expectedRole && user.role !== expectedRole)) {
-    // ✅ otpSent: false — role mismatch ya user nahi mila
     res.status(200).json({
       success: true,
       otpSent: false,
@@ -313,9 +334,30 @@ export const forgotPassword = async (req: Request, res: Response) => {
     },
   });
 
-  console.log(`[OTP] Email: ${email} | OTP: ${code} | Expires: ${expiresAt.toISOString()}`);
+  const emailResult = await sendOtpEmail(email, code, user.name ?? undefined);
 
-  // ✅ otpSent: true — OTP actually gaya
+  if (emailResult.success !== true) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: clearOtpAndResetFields,
+    });
+
+    if (emailResult.reason === "send_failed") {
+      console.error(`[ForgotPassword] Failed to deliver OTP email to ${email}`);
+    } else if (emailResult.reason === "email_not_configured") {
+      console.error(
+        "[ForgotPassword] Email service not configured (RESEND_API_KEY / EMAIL_FROM)"
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      otpSent: false,
+      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+    });
+    return;
+  }
+
   res.status(200).json({
     success: true,
     otpSent: true,
