@@ -40,10 +40,16 @@ function invalidateCache(pattern) {
     }
     return removed;
 }
-/** Clears public school list/detail/search caches and admin stats */
+/**
+ * Clears all school-related backend caches after any mutation.
+ * Covers: list, cursor list, search, detail, cities, and admin stats.
+ * Call this immediately after create/update/approve/reject/delete/image changes.
+ */
 function invalidateSchoolCache() {
     invalidateCache("sf:schools:*");
     invalidateCache("sf:admin:stats*");
+    // Legacy key used before cities moved to buildCacheKey — clear for safety
+    invalidateCache("schools:cities");
 }
 async function withCache(key, ttlSeconds, fetchFn) {
     const now = Date.now();

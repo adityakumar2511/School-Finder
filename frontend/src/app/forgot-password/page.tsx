@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AUTH_ROUTES } from "@/lib/auth-config";
@@ -15,6 +15,9 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").re
 const OTP_SENT_MESSAGE =
   "If an account exists, an OTP has been sent to your email.";
 
+// Must match backend RESEND_COOLDOWN_MS (2 minutes)
+const RESEND_COOLDOWN_SECONDS = 120;
+
 const ROLE_LABELS: Record<Role, string> = {
   PARENT: "parent",
   SCHOOL_ADMIN: "school admin",
@@ -28,12 +31,11 @@ const ROLE_LOGIN: Record<Role, string> = {
 };
 
 function parseExpectedRole(value: string | null): Role {
-  if (value === "SCHOOL_ADMIN" || value === "ADMIN") {
-    return value;
-  }
+  if (value === "SCHOOL_ADMIN" || value === "ADMIN") return value;
   return "PARENT";
 }
 
+// ─── OTP digit input ──────────────────────────────────────────────────────────
 function OtpDigitInput({
   value,
   onChange,
@@ -70,6 +72,42 @@ function OtpDigitInput({
   );
 }
 
+// ─── Resend countdown hook ────────────────────────────────────────────────────
+function useResendTimer() {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = useCallback((seconds: number) => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setSecondsLeft(seconds);
+    intervalRef.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    },
+    []
+  );
+
+  return { secondsLeft, start, canResend: secondsLeft === 0 };
+}
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+}
+
+// ─── Main form ────────────────────────────────────────────────────────────────
 function ForgotPasswordForm() {
   const searchParams = useSearchParams();
   const expectedRole = parseExpectedRole(searchParams.get("role"));
@@ -80,26 +118,35 @@ function ForgotPasswordForm() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // Role mismatch state — set when backend returns code: "ROLE_MISMATCH"
+  const [roleMismatch, setRoleMismatch] = useState<{
+    label: string;
+    loginHref: string;
+  } | null>(null);
+
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const { secondsLeft, start: startTimer, canResend } = useResendTimer();
 
   const loginHref = ROLE_LOGIN[expectedRole];
   const roleLabel = ROLE_LABELS[expectedRole];
-
   const otpValue = otpDigits.join("");
 
   const focusOtpIndex = useCallback((index: number) => {
     otpRefs.current[index]?.focus();
   }, []);
 
-  // ─── Step 1 ───────────────────────────────────────────────────────────────
+  // ─── Step 1: send OTP ─────────────────────────────────────────────────────
+  // ─── Step 1: send OTP ─────────────────────────────────────────────────────
   async function handleEmailSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setRoleMismatch(null);
 
     const trimmedEmail = email.trim();
 
@@ -110,9 +157,12 @@ function ForgotPasswordForm() {
         body: JSON.stringify({ email: trimmedEmail, expectedRole }),
       });
 
-      // 429 — rate limit hit
       if (res.status === 429) {
-        setError("Too many attempts. Please try again in an hour.");
+        const body = await res.json().catch(() => ({}));
+        const wait = body.retryAfter ?? RESEND_COOLDOWN_SECONDS;
+        setError(
+          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`
+        );
         return;
       }
 
@@ -123,22 +173,78 @@ function ForgotPasswordForm() {
         return;
       }
 
-      // otpSent: false = role mismatch ya user nahi mila
-      if (!body.otpSent) {
+      // Email not registered at all
+      if (!body.otpSent && body.code === "USER_NOT_FOUND") {
         setError(
-          `No ${roleLabel} account found with this email. Please check and try again.`
+          `No ${roleLabel} account found with this email. Please check your email or register a new account.`
         );
         return;
       }
 
-      // OTP actually gaya — step 2 pe jao
-      setError(null);
+      // Account exists but wrong portal
+      if (!body.otpSent && body.code === "ROLE_MISMATCH") {
+        const actualRole = body.actualRole as Role | undefined;
+        if (actualRole && ROLE_LABELS[actualRole] && ROLE_LOGIN[actualRole]) {
+          setRoleMismatch({
+            label: ROLE_LABELS[actualRole],
+            loginHref: ROLE_LOGIN[actualRole],
+          });
+        } else {
+          setError("No account found with this email for this portal.");
+        }
+        return;
+      }
+
+      // OTP sent successfully
       setEmail(trimmedEmail);
       setStep(2);
+      startTimer(RESEND_COOLDOWN_SECONDS);
     } catch {
       setError("Unable to reach the server. Please try again later.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ─── Resend OTP (step 2) ──────────────────────────────────────────────────
+  async function handleResend() {
+    if (!canResend || resendLoading) return;
+    setResendLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, expectedRole }),
+      });
+
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        const wait = body.retryAfter ?? RESEND_COOLDOWN_SECONDS;
+        // Sync frontend timer with backend's actual remaining cooldown
+        startTimer(wait);
+        setError(
+          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`
+        );
+        return;
+      }
+
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(body.message ?? "Could not resend OTP. Please try again.");
+        return;
+      }
+
+      // Resent — restart cooldown, clear old digits
+      startTimer(RESEND_COOLDOWN_SECONDS);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => focusOtpIndex(0), 50);
+    } catch {
+      setError("Unable to reach the server. Please try again later.");
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -147,12 +253,13 @@ function ForgotPasswordForm() {
     const next = [...otpDigits];
     next[index] = digit;
     setOtpDigits(next);
-    if (digit && index < 5) {
-      focusOtpIndex(index + 1);
-    }
+    if (digit && index < 5) focusOtpIndex(index + 1);
   }
 
-  function handleOtpKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+  function handleOtpKeyDown(
+    index: number,
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) {
     if (event.key === "Backspace" && !otpDigits[index] && index > 0) {
       focusOtpIndex(index - 1);
     }
@@ -160,18 +267,18 @@ function ForgotPasswordForm() {
 
   function handleOtpPaste(event: React.ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
-    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const pasted = event.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
     if (!pasted) return;
-
     const next = [...otpDigits];
-    for (let i = 0; i < 6; i++) {
-      next[i] = pasted[i] ?? "";
-    }
+    for (let i = 0; i < 6; i++) next[i] = pasted[i] ?? "";
     setOtpDigits(next);
     focusOtpIndex(Math.min(pasted.length, 5));
   }
 
-  // ─── Step 2 ───────────────────────────────────────────────────────────────
+  // ─── Step 2: verify OTP ───────────────────────────────────────────────────
   async function handleOtpSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -190,7 +297,6 @@ function ForgotPasswordForm() {
         body: JSON.stringify({ email, otp: otpValue, expectedRole }),
       });
 
-      // 429 — rate limit hit
       if (res.status === 429) {
         setError("Too many attempts. Please wait before trying again.");
         return;
@@ -211,7 +317,7 @@ function ForgotPasswordForm() {
     }
   }
 
-  // ─── Step 3 ───────────────────────────────────────────────────────────────
+  // ─── Step 3: reset password ───────────────────────────────────────────────
   async function handlePasswordSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -241,7 +347,6 @@ function ForgotPasswordForm() {
         }),
       });
 
-      // 429 — rate limit hit
       if (res.status === 429) {
         setError("Too many attempts. Please try again in an hour.");
         return;
@@ -303,12 +408,32 @@ function ForgotPasswordForm() {
         </div>
       )}
 
+      {/* Role mismatch card — shown instead of generic error */}
+      {roleMismatch && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="font-body text-label text-amber-800">
+            This email is registered as a{" "}
+            <span className="font-semibold">{roleMismatch.label}</span> account.
+            Please use the{" "}
+            <Link
+              href={roleMismatch.loginHref}
+              className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-700"
+            >
+              {roleMismatch.label} login page
+            </Link>{" "}
+            to reset your password.
+          </p>
+        </div>
+      )}
+
+      {/* Generic error (not role mismatch) */}
       {(error || clientError) && (
         <div className="alert-danger mb-4">
           <p className="font-body text-label">{clientError ?? error}</p>
         </div>
       )}
 
+      {/* ── Step 1 ── */}
       {step === 1 && (
         <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
@@ -321,13 +446,22 @@ function ForgotPasswordForm() {
               autoComplete="email"
               required
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                // Clear role mismatch when user starts typing a new email
+                if (roleMismatch) setRoleMismatch(null);
+                if (error) setError(null);
+              }}
               placeholder="you@example.com"
               className="form-input"
             />
           </div>
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={loading}
+          >
             {loading ? "Sending..." : "Send OTP"}
           </button>
 
@@ -339,6 +473,7 @@ function ForgotPasswordForm() {
         </form>
       )}
 
+      {/* ── Step 2 ── */}
       {step === 2 && (
         <form onSubmit={handleOtpSubmit} className="space-y-4" noValidate>
           <div className="flex justify-center gap-2">
@@ -357,14 +492,32 @@ function ForgotPasswordForm() {
             ))}
           </div>
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={loading}
+          >
             {loading ? "Verifying..." : "Verify OTP"}
           </button>
 
-          <p className="pt-2 text-center font-body text-label text-gray-500">
+          {/* Resend row */}
+          <div className="flex items-center justify-between pt-1">
             <button
               type="button"
-              className="text-blue-600 hover:text-blue-800"
+              onClick={handleResend}
+              disabled={!canResend || resendLoading}
+              className="font-body text-label text-blue-600 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400"
+            >
+              {resendLoading
+                ? "Resending..."
+                : canResend
+                  ? "Resend OTP"
+                  : `Resend in ${formatCountdown(secondsLeft)}`}
+            </button>
+
+            <button
+              type="button"
+              className="font-body text-label text-gray-500 hover:text-gray-700"
               onClick={() => {
                 setStep(1);
                 setError(null);
@@ -373,10 +526,11 @@ function ForgotPasswordForm() {
             >
               Use a different email
             </button>
-          </p>
+          </div>
         </form>
       )}
 
+      {/* ── Step 3 ── */}
       {step === 3 && (
         <form onSubmit={handlePasswordSubmit} className="space-y-4" noValidate>
           <div className="space-y-1.5">
@@ -411,7 +565,11 @@ function ForgotPasswordForm() {
             />
           </div>
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={loading}
+          >
             {loading ? "Resetting..." : "Reset password"}
           </button>
 
@@ -432,7 +590,9 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-8 shadow-card">
         <Suspense
           fallback={
-            <p className="text-center font-body text-body text-gray-500">Loading...</p>
+            <p className="text-center font-body text-body text-gray-500">
+              Loading...
+            </p>
           }
         >
           <ForgotPasswordForm />

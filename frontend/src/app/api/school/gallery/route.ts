@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/api/proxy";
+import { revalidateSchoolsCache } from "@/lib/revalidate-schools";
 
 export async function GET() {
   const schoolResponse = await proxyToBackend("/api/schools/my-school");
@@ -10,8 +11,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
-  return proxyToBackend("/api/schools/my-school/images", {
+  const response = await proxyToBackend("/api/schools/my-school/images", {
     method: "POST",
     body,
   });
+
+  // Invalidate: new gallery image appears on public school detail page
+  if (response.status >= 200 && response.status < 300) {
+    revalidateSchoolsCache();
+  }
+
+  return response;
 }

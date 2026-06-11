@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSchoolImage = exports.addSchoolImage = exports.deleteSchool = exports.updateSchool = exports.createSchool = exports.getSchool = exports.getMySchool = exports.searchSchools = exports.getSchools = void 0;
+exports.getCities = exports.deleteSchoolImage = exports.addSchoolImage = exports.deleteSchool = exports.updateSchool = exports.createSchool = exports.getSchool = exports.getMySchool = exports.searchSchools = exports.getSchools = void 0;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const AppError_1 = require("../utils/AppError");
 const pagination_1 = require("../lib/pagination");
@@ -39,7 +39,7 @@ const getSchools = async (req, res) => {
         status: status,
         search: search,
         city: city,
-        board: board,
+        board: typeof board === "string" ? [board] : board,
         schoolType: schoolType,
         medium: medium,
     });
@@ -55,7 +55,7 @@ const getSchools = async (req, res) => {
             status: String(where.status),
             search: search,
             city: city,
-            board: board,
+            board: Array.isArray(board) ? board.join(",") : board,
             schoolType: schoolType,
             medium: medium,
         });
@@ -91,7 +91,7 @@ const getSchools = async (req, res) => {
         status: String(where.status),
         search: search,
         city: city,
-        board: board,
+        board: Array.isArray(board) ? board.join(",") : board,
         schoolType: schoolType,
         medium: medium,
     });
@@ -209,6 +209,8 @@ const createSchool = async (req, res) => {
             ownerId: req.user.id,
         },
     });
+    // Invalidate: admin stats (pending count), search, cities — new school may affect filters
+    (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({ data: school });
 };
 exports.createSchool = createSchool;
@@ -234,6 +236,7 @@ const updateSchool = async (req, res) => {
         where: { id },
         data: { ...data, ...statusReset },
     });
+    // Invalidate: list, detail, search, cities — profile fields changed on public pages
     (0, cache_1.invalidateSchoolCache)();
     res.json({ data: updated });
 };
@@ -245,6 +248,8 @@ const deleteSchool = async (req, res) => {
         throw AppError_1.Errors.BadRequest("Invalid school identifier");
     }
     await prisma_1.default.school.delete({ where: { id } });
+    // Invalidate: remove deleted school from list, detail, search, cities, admin stats
+    (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School deleted successfully" });
 };
 exports.deleteSchool = deleteSchool;
@@ -268,6 +273,7 @@ const addSchoolImage = async (req, res) => {
             caption: caption?.trim() || null,
         },
     });
+    // Invalidate: gallery images appear on public school detail page
     (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({ data: image });
 };
@@ -283,7 +289,20 @@ const deleteSchoolImage = async (req, res) => {
         throw AppError_1.Errors.NotFound("Image");
     }
     await prisma_1.default.schoolImage.delete({ where: { id: imageId } });
+    // Invalidate: removed image must disappear from public school detail page
     (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "Image deleted successfully" });
 };
 exports.deleteSchoolImage = deleteSchoolImage;
+// GET /api/schools/cities — distinct approved cities
+const getCities = async (_req, res) => {
+    const cacheKey = (0, cache_1.buildCacheKey)("schools:cities", {});
+    const cities = await (0, cache_1.withCache)(cacheKey, cache_1.CACHE_TTL.SCHOOL_LIST, () => prisma_1.default.school.findMany({
+        where: { status: "APPROVED" },
+        select: { city: true },
+        distinct: ["city"],
+        orderBy: { city: "asc" },
+    }));
+    res.json({ data: cities.map((s) => s.city) });
+};
+exports.getCities = getCities;

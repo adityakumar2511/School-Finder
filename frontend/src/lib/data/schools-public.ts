@@ -6,6 +6,9 @@ import type { SchoolCardProps } from "@/components/SchoolCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
+/** Shared Next.js cache tag — invalidated by revalidateSchoolsCache() after mutations */
+const SCHOOLS_CACHE_TAG = "schools" as const;
+
 export type SchoolListResult = {
   schools: SchoolCardProps[];
   pagination: PaginationMeta;
@@ -36,10 +39,11 @@ export async function fetchSchoolList(
 }
 
   try {
+    // Cached for performance; busted via revalidateTag("schools") after mutations
     const res = await fetch(`${API_BASE}/api/schools?${query.toString()}`, {
       next: {
         revalidate: options.revalidate ?? 60,
-        tags: ["schools"],
+        tags: [SCHOOLS_CACHE_TAG],
       },
     });
 
@@ -79,10 +83,11 @@ export async function fetchSchoolBySlug(slug: string) {
   if (!API_BASE) return null;
 
   try {
+    // Cached for performance; busted via revalidateTag("schools") after mutations
     const res = await fetch(`${API_BASE}/api/schools/${slug}`, {
       next: {
         revalidate: 3600,
-        tags: ["schools"],
+        tags: [SCHOOLS_CACHE_TAG],
       },
     });
 
@@ -98,8 +103,9 @@ export async function fetchSchoolBySlug(slug: string) {
 export async function fetchCities(): Promise<string[]> {
   if (!API_BASE) return [];
   try {
+    // Cached for performance; busted via revalidateTag("schools") after mutations
     const res = await fetch(`${API_BASE}/api/schools/cities`, {
-      next: { revalidate: 3600, tags: ["schools"] },
+      next: { revalidate: 3600, tags: [SCHOOLS_CACHE_TAG] },
     });
     if (!res.ok) return [];
     const json = await res.json();

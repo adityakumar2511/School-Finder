@@ -132,6 +132,7 @@ export const approveSchoolById = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  // Invalidate: approved school must appear in public listings, detail, cities, search
   invalidateSchoolCache();
 
   res.json({ message: "School approved successfully", school });
@@ -153,6 +154,7 @@ export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  // Invalidate: rejected school must disappear from public listings and detail
   invalidateSchoolCache();
 
   res.json({ message: "School rejected successfully", school });
@@ -536,6 +538,7 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  // Invalidate: admin-created APPROVED school must appear in public listings immediately
   invalidateSchoolCache();
 
   res.status(201).json({

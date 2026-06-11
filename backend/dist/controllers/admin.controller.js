@@ -97,6 +97,7 @@ const approveSchoolById = async (req, res) => {
             rejectionReason: null,
         },
     });
+    // Invalidate: approved school must appear in public listings, detail, cities, search
     (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School approved successfully", school });
 };
@@ -114,6 +115,7 @@ const rejectSchoolById = async (req, res) => {
                 : "Rejected by administrator",
         },
     });
+    // Invalidate: rejected school must disappear from public listings and detail
     (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School rejected successfully", school });
 };
@@ -417,6 +419,7 @@ const addSchoolDirect = async (req, res) => {
             ownerId: owner.id,
         },
     });
+    // Invalidate: admin-created APPROVED school must appear in public listings immediately
     (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({
         message: "School added successfully",

@@ -10,6 +10,7 @@ const asyncHandler_1 = require("../utils/asyncHandler");
 const router = (0, express_1.Router)();
 router.get("/", (0, asyncHandler_1.asyncHandler)(schools_controller_1.getSchools));
 router.get("/search", (0, asyncHandler_1.asyncHandler)(schools_controller_1.searchSchools));
+router.get("/cities", (0, asyncHandler_1.asyncHandler)(schools_controller_1.getCities));
 router.post("/my-school/images", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN"), (0, asyncHandler_1.asyncHandler)(schools_controller_1.addSchoolImage));
 router.delete("/images/:id", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN"), (0, asyncHandler_1.asyncHandler)(schools_controller_1.deleteSchoolImage));
 router.get("/my-school", auth_1.auth, (0, roleCheck_1.requireRole)("SCHOOL_ADMIN"), (0, asyncHandler_1.asyncHandler)(schools_controller_1.getMySchool));

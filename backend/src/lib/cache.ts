@@ -51,10 +51,16 @@ export function invalidateCache(pattern: string): number {
   return removed;
 }
 
-/** Clears public school list/detail/search caches and admin stats */
+/**
+ * Clears all school-related backend caches after any mutation.
+ * Covers: list, cursor list, search, detail, cities, and admin stats.
+ * Call this immediately after create/update/approve/reject/delete/image changes.
+ */
 export function invalidateSchoolCache(): void {
   invalidateCache("sf:schools:*");
   invalidateCache("sf:admin:stats*");
+  // Legacy key used before cities moved to buildCacheKey — clear for safety
+  invalidateCache("schools:cities");
 }
 
 export async function withCache<T>(

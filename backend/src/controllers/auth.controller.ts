@@ -27,6 +27,7 @@ import {
   verifyOtpCode,
 } from "../lib/otp";
 import { sendOtpEmail } from "../lib/mailer";
+import { invalidateSchoolCache } from "../lib/cache";
 
 type SchoolDelegate = Pick<typeof prisma, "school">;
 
@@ -130,7 +131,7 @@ export const registerSchool = async (req: Request, res: Response) => {
     totalAnnualFee,
   } = body;
 
-  // FIX 1: Role-specific duplicate email check
+  // Role-specific duplicate email check
   const existingUser = await prisma.user.findUnique({
     where: { email: ownerEmail },
   });
@@ -152,7 +153,7 @@ export const registerSchool = async (req: Request, res: Response) => {
   );
 
   const result = await prisma.$transaction(async (tx) => {
-    // FIX 2: School name duplicate check inside transaction
+    // School name duplicate check inside transaction
     const existingSchool = await tx.school.findFirst({
       where: {
         name: {
@@ -207,6 +208,8 @@ export const registerSchool = async (req: Request, res: Response) => {
 
     return { user, school };
   });
+
+  invalidateSchoolCache();
 
   const token = signAccessToken({
     id: result.user.id,
@@ -300,6 +303,13 @@ const GENERIC_FORGOT_PASSWORD_MESSAGE =
 
 const INVALID_RESET_OTP_MESSAGE = "Invalid or expired OTP";
 
+// OTP expiry: 5 minutes
+const OTP_EXPIRY_MS = 5 * 60 * 1000;
+
+// Resend cooldown: 2 minutes
+// User must wait at least this long before requesting a new OTP
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000;
+
 const clearOtpAndResetFields = {
   otpCode: null,
   otpExpiry: null,
@@ -314,16 +324,51 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (!user || (expectedRole && user.role !== expectedRole)) {
+  // User not found — signal frontend so it can show proper error
+  if (!user) {
     res.status(200).json({
       success: true,
       otpSent: false,
+      code: "USER_NOT_FOUND",
       message: GENERIC_FORGOT_PASSWORD_MESSAGE,
     });
     return;
   }
 
-  const { code, hashedCode, expiresAt } = generateOtp();
+  // Role mismatch — account exists but belongs to a different portal
+  if (expectedRole && user.role !== expectedRole) {
+    res.status(200).json({
+      success: true,
+      otpSent: false,
+      code: "ROLE_MISMATCH",
+      actualRole: user.role,
+      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+    });
+    return;
+  }
+
+  // ── Resend cooldown check ──────────────────────────────────────────────────
+  if (user.otpExpiry) {
+    const timeRemainingMs = user.otpExpiry.getTime() - Date.now();
+    const elapsedMs = OTP_EXPIRY_MS - timeRemainingMs;
+
+    if (elapsedMs < RESEND_COOLDOWN_MS) {
+      const retryAfterSeconds = Math.ceil(
+        (RESEND_COOLDOWN_MS - elapsedMs) / 1000
+      );
+      res.status(429).json({
+        success: false,
+        code: "RESEND_TOO_SOON",
+        retryAfter: retryAfterSeconds,
+        message: `Please wait ${retryAfterSeconds} seconds before requesting a new OTP.`,
+      });
+      return;
+    }
+  }
+
+  // ── Generate new OTP — overwrites and invalidates any previous OTP ─────────
+  const { code, hashedCode } = generateOtp();
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
   await prisma.user.update({
     where: { id: user.id },
@@ -336,26 +381,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
   const emailResult = await sendOtpEmail(email, code, user.name ?? undefined);
 
-  if (emailResult.success !== true) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: clearOtpAndResetFields,
-    });
-
-    if (emailResult.reason === "send_failed") {
-      console.error(`[ForgotPassword] Failed to deliver OTP email to ${email}`);
-    } else if (emailResult.reason === "email_not_configured") {
-      console.error(
-        "[ForgotPassword] Email service not configured (RESEND_API_KEY / EMAIL_FROM)"
-      );
-    }
-
-    res.status(200).json({
-      success: true,
-      otpSent: false,
-      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
-    });
-    return;
+  if (!emailResult.success) {
+    console.error(`[ForgotPassword] sendOtpEmail returned failure for ${email}`);
   }
 
   res.status(200).json({

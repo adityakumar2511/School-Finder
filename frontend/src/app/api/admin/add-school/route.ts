@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   const data = await backendRes.json().catch(() => ({}));
 
+  // Invalidate: admin-created APPROVED school must appear in public listings immediately
   if (backendRes.ok) {
     revalidateSchoolsCache();
   }

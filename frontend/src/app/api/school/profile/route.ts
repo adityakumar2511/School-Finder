@@ -33,6 +33,7 @@ export async function PATCH(request: NextRequest) {
     body,
   });
 
+  // Invalidate: profile edits change data shown on public school detail and listings
   if (response.status >= 200 && response.status < 300) {
     revalidateSchoolsCache();
   }

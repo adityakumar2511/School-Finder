@@ -292,6 +292,9 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  // Invalidate: admin stats (pending count), search, cities — new school may affect filters
+  invalidateSchoolCache();
+
   res.status(201).json({ data: school });
 };
 
@@ -325,6 +328,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     data: { ...data, ...statusReset },
   });
 
+  // Invalidate: list, detail, search, cities — profile fields changed on public pages
   invalidateSchoolCache();
 
   res.json({ data: updated });
@@ -339,6 +343,9 @@ export const deleteSchool = async (req: AuthRequest, res: Response) => {
   }
 
   await prisma.school.delete({ where: { id } });
+
+  // Invalidate: remove deleted school from list, detail, search, cities, admin stats
+  invalidateSchoolCache();
 
   res.json({ message: "School deleted successfully" });
 };
@@ -368,6 +375,7 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  // Invalidate: gallery images appear on public school detail page
   invalidateSchoolCache();
   res.status(201).json({ data: image });
 };
@@ -386,6 +394,7 @@ export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
   }
 
   await prisma.schoolImage.delete({ where: { id: imageId } });
+  // Invalidate: removed image must disappear from public school detail page
   invalidateSchoolCache();
   res.json({ message: "Image deleted successfully" });
 };
@@ -394,7 +403,7 @@ export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
 
 // GET /api/schools/cities — distinct approved cities
 export const getCities = async (_req: Request, res: Response) => {
-  const cacheKey = "schools:cities";
+  const cacheKey = buildCacheKey("schools:cities", {});
 
   const cities = await withCache(
     cacheKey,

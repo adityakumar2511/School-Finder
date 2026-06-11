@@ -28,6 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
+    // Cached for performance; busted via revalidateTag("schools") after mutations
     const response = await fetch(
       `${getAdminApiBase().replace(/\/$/, "")}/api/schools?status=APPROVED&limit=1000`,
       { next: { revalidate: 3600, tags: ["schools"] } }

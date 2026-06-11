@@ -119,7 +119,8 @@ function buildSchoolListWhere(filters) {
         where.city = { contains: filters.city, mode: "insensitive" };
     }
     if (filters.board) {
-        where.board = filters.board;
+        const boards = Array.isArray(filters.board) ? filters.board : [filters.board];
+        where.board = { in: boards };
     }
     if (filters.schoolType) {
         where.schoolType = filters.schoolType;
@@ -177,10 +178,28 @@ exports.adminSchoolListSelect = {
     name: true,
     slug: true,
     city: true,
+    state: true, // ADD
+    address: true, // ADD
     board: true,
+    schoolType: true, // ADD
+    medium: true, // ADD
+    classesFrom: true, // ADD
+    classesTo: true, // ADD
+    phone: true, // ADD
+    email: true, // ADD
+    website: true, // ADD
+    description: true, // ADD
     status: true,
     createdAt: true,
     rejectionReason: true,
+    totalStudents: true, // ADD
+    establishedYear: true, // ADD
+    admissionFee: true, // ADD
+    tuitionFeeMonthly: true, // ADD
+    totalAnnualFee: true, // ADD
+    transportFee: true, // ADD
+    hostelFee: true, // ADD
+    logoUrl: true, // ADD
     owner: {
         select: { name: true, email: true },
     },

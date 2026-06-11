@@ -20,7 +20,7 @@ exports.loginSchema = zod_1.z.object({
 const boardSchema = zod_1.z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]);
 const schoolTypeSchema = zod_1.z.enum(["BOYS", "GIRLS", "CO_ED"]);
 const mediumSchema = zod_1.z.enum(["HINDI", "ENGLISH", "BOTH"]);
-const optionalFee = zod_1.z.preprocess((value) => (value === "" || value === null || value === undefined ? undefined : value), zod_1.z.coerce.number().nonnegative().optional());
+const optionalFee = zod_1.z.preprocess((value) => value === "" || value === null || value === undefined ? undefined : value, zod_1.z.coerce.number().nonnegative().optional());
 exports.registerSchoolSchema = zod_1.z
     .object({
     schoolName: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().min(3, "School name must be at least 3 characters").optional()),
@@ -31,7 +31,10 @@ exports.registerSchoolSchema = zod_1.z
     city: zod_1.z.preprocess(sanitize_1.preprocessTrim, zod_1.z.string().min(2, "City is required")),
     state: zod_1.z.preprocess(sanitize_1.preprocessTrim, zod_1.z.string().min(2, "State is required")),
     address: zod_1.z.preprocess(sanitize_1.preprocessTrim, zod_1.z.string().min(5, "Address is required")),
-    pincode: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional()),
+    pincode: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z
+        .string()
+        .regex(/^\d{6}$/, "Enter a valid 6-digit pincode")
+        .optional()),
     board: boardSchema,
     schoolType: schoolTypeSchema,
     medium: mediumSchema,
@@ -41,6 +44,15 @@ exports.registerSchoolSchema = zod_1.z
     email: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().email("Enter a valid school email address").optional()),
     website: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().url("Enter a valid website URL").optional()),
     description: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().max(10000).optional()),
+    establishedYear: zod_1.z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), zod_1.z.coerce
+        .number()
+        .int()
+        .min(1800)
+        .max(new Date().getFullYear())
+        .optional()),
+    totalStudents: zod_1.z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), zod_1.z.coerce.number().int().nonnegative().optional()),
+    transportFee: optionalFee,
+    hostelFee: optionalFee,
     logoUrl: zod_1.z.preprocess(sanitize_1.preprocessOptionalString, zod_1.z.string().url().optional()),
     admissionFee: optionalFee,
     tuitionFeeMonthly: optionalFee,
@@ -63,14 +75,10 @@ exports.forgotPasswordSchema = zod_1.z.object({
     expectedRole: exports.expectedRoleSchema.optional(),
 });
 exports.sendOtpSchema = zod_1.z.object({
-    phone: zod_1.z
-        .string()
-        .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+    phone: zod_1.z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
 });
 exports.verifyOtpSchema = zod_1.z.object({
-    phone: zod_1.z
-        .string()
-        .regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
+    phone: zod_1.z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number"),
     otp: zod_1.z
         .string()
         .length(6)
@@ -86,9 +94,14 @@ exports.verifyResetOtpSchema = zod_1.z.object({
 });
 exports.resetPasswordSchema = zod_1.z
     .object({
-    email: zod_1.z.preprocess(sanitize_1.preprocessEmail, zod_1.z.string().min(1, "Email is required").email("Enter a valid email address")),
+    email: zod_1.z.preprocess(sanitize_1.preprocessEmail, zod_1.z
+        .string()
+        .min(1, "Email is required")
+        .email("Enter a valid email address")),
     newPassword: zod_1.z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: zod_1.z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: zod_1.z
+        .string()
+        .min(8, "Password must be at least 8 characters"),
     expectedRole: exports.expectedRoleSchema.optional(),
 })
     .refine((data) => data.newPassword === data.confirmPassword, {

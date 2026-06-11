@@ -14,6 +14,7 @@ const bruteForce_1 = require("../middleware/bruteForce");
 const account_status_1 = require("../lib/account-status");
 const otp_1 = require("../lib/otp");
 const mailer_1 = require("../lib/mailer");
+const cache_1 = require("../lib/cache");
 const slugify = (value) => value
     .trim()
     .toLowerCase()
@@ -75,14 +76,30 @@ exports.registerParent = registerParent;
 const registerSchool = async (req, res) => {
     const body = req.body;
     const { name, ownerEmail, ownerPassword, ownerName, city, state, address, pincode, board, schoolType, medium, classesFrom, classesTo, phone, email, website, description, logoUrl, admissionFee, tuitionFeeMonthly, totalAnnualFee, } = body;
+    // Role-specific duplicate email check
     const existingUser = await prisma_1.default.user.findUnique({
         where: { email: ownerEmail },
     });
     if (existingUser) {
-        throw AppError_1.Errors.Conflict("This email is already registered");
+        if (existingUser.role === "SCHOOL_ADMIN") {
+            throw AppError_1.Errors.Conflict("This email is already registered as a school admin. Please sign in instead.");
+        }
+        throw AppError_1.Errors.Conflict("This email is already registered. Please use a different email.");
     }
     const hashedPassword = await bcryptjs_1.default.hash(ownerPassword, parseInt(process.env.BCRYPT_ROUNDS || "12"));
     const result = await prisma_1.default.$transaction(async (tx) => {
+        // School name duplicate check inside transaction
+        const existingSchool = await tx.school.findFirst({
+            where: {
+                name: {
+                    equals: name,
+                    mode: "insensitive",
+                },
+            },
+        });
+        if (existingSchool) {
+            throw AppError_1.Errors.Conflict("A school with this name already exists. Please check if your school is already listed.");
+        }
         const user = await tx.user.create({
             data: {
                 name: ownerName || ownerEmail.split("@")[0],
@@ -119,6 +136,7 @@ const registerSchool = async (req, res) => {
         });
         return { user, school };
     });
+    (0, cache_1.invalidateSchoolCache)();
     const token = (0, auth_1.signAccessToken)({
         id: result.user.id,
         role: result.user.role,
@@ -193,6 +211,11 @@ exports.login = login;
 const getBcryptRounds = () => parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
 const GENERIC_FORGOT_PASSWORD_MESSAGE = "If an account exists, an OTP has been sent.";
 const INVALID_RESET_OTP_MESSAGE = "Invalid or expired OTP";
+// OTP expiry: 5 minutes
+const OTP_EXPIRY_MS = 5 * 60 * 1000;
+// Resend cooldown: 2 minutes
+// User must wait at least this long before requesting a new OTP
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000;
 const clearOtpAndResetFields = {
     otpCode: null,
     otpExpiry: null,
@@ -204,7 +227,8 @@ const clearOtpAndResetFields = {
 const forgotPassword = async (req, res) => {
     const { email, expectedRole } = req.body;
     const user = await prisma_1.default.user.findUnique({ where: { email } });
-    if (!user || (expectedRole && user.role !== expectedRole)) {
+    // User not found — generic response, never reveal account existence
+    if (!user) {
         res.status(200).json({
             success: true,
             otpSent: false,
@@ -212,7 +236,39 @@ const forgotPassword = async (req, res) => {
         });
         return;
     }
-    const { code, hashedCode, expiresAt } = (0, otp_1.generateOtp)();
+    // Role mismatch — signal frontend with actualRole so it can show
+    // a helpful "go to correct portal" message, without revealing anything else
+    if (expectedRole && user.role !== expectedRole) {
+        res.status(200).json({
+            success: true,
+            otpSent: false,
+            code: "ROLE_MISMATCH",
+            actualRole: user.role, // "PARENT" | "SCHOOL_ADMIN" | "ADMIN"
+            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
+        });
+        return;
+    }
+    // ── Resend cooldown check ──────────────────────────────────────────────────
+    // otpExpiry is set to (sendTime + OTP_EXPIRY_MS).
+    // Time since last send = OTP_EXPIRY_MS - timeRemainingMs.
+    // If that elapsed time < RESEND_COOLDOWN_MS → too soon, return 429.
+    if (user.otpExpiry) {
+        const timeRemainingMs = user.otpExpiry.getTime() - Date.now();
+        const elapsedMs = OTP_EXPIRY_MS - timeRemainingMs;
+        if (elapsedMs < RESEND_COOLDOWN_MS) {
+            const retryAfterSeconds = Math.ceil((RESEND_COOLDOWN_MS - elapsedMs) / 1000);
+            res.status(429).json({
+                success: false,
+                code: "RESEND_TOO_SOON",
+                retryAfter: retryAfterSeconds,
+                message: `Please wait ${retryAfterSeconds} seconds before requesting a new OTP.`,
+            });
+            return;
+        }
+    }
+    // ── Generate new OTP — overwrites and invalidates any previous OTP ─────────
+    const { code, hashedCode } = (0, otp_1.generateOtp)();
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
     await prisma_1.default.user.update({
         where: { id: user.id },
         data: {
@@ -222,23 +278,8 @@ const forgotPassword = async (req, res) => {
         },
     });
     const emailResult = await (0, mailer_1.sendOtpEmail)(email, code, user.name ?? undefined);
-    if (emailResult.success !== true) {
-        await prisma_1.default.user.update({
-            where: { id: user.id },
-            data: clearOtpAndResetFields,
-        });
-        if (emailResult.reason === "send_failed") {
-            console.error(`[ForgotPassword] Failed to deliver OTP email to ${email}`);
-        }
-        else if (emailResult.reason === "email_not_configured") {
-            console.error("[ForgotPassword] Email service not configured (RESEND_API_KEY / EMAIL_FROM)");
-        }
-        res.status(200).json({
-            success: true,
-            otpSent: false,
-            message: GENERIC_FORGOT_PASSWORD_MESSAGE,
-        });
-        return;
+    if (!emailResult.success) {
+        console.error(`[ForgotPassword] sendOtpEmail returned failure for ${email}`);
     }
     res.status(200).json({
         success: true,

@@ -11,6 +11,7 @@ export async function PATCH(
     method: "PATCH",
   }, { useAdminCookie: true });
 
+  // Invalidate: approved school must appear in public listings and detail immediately
   if (response.status >= 200 && response.status < 300) {
     revalidateSchoolsCache();
   }
