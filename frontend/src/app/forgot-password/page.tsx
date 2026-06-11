@@ -7,10 +7,9 @@ import { AUTH_ROUTES } from "@/lib/auth-config";
 import type { Role } from "@/lib/types/database";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(
-  /\/$/,
-  ""
-);
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+).replace(/\/$/, "");
 
 const OTP_SENT_MESSAGE =
   "If an account exists, an OTP has been sent to your email.";
@@ -95,7 +94,7 @@ function useResendTimer() {
     () => () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     },
-    []
+    [],
   );
 
   return { secondsLeft, start, canResend: secondsLeft === 0 };
@@ -161,7 +160,7 @@ function ForgotPasswordForm() {
         const body = await res.json().catch(() => ({}));
         const wait = body.retryAfter ?? RESEND_COOLDOWN_SECONDS;
         setError(
-          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`
+          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`,
         );
         return;
       }
@@ -176,15 +175,25 @@ function ForgotPasswordForm() {
       // Email not registered at all
       if (!body.otpSent && body.code === "USER_NOT_FOUND") {
         setError(
-          `No ${roleLabel} account found with this email. Please check your email or register a new account.`
+          `No ${roleLabel} account found with this email. Please check your email or register a new account.`,
         );
         return;
       }
 
       // Account exists but wrong portal
+      // Account exists but wrong portal
       if (!body.otpSent && body.code === "ROLE_MISMATCH") {
         const actualRole = body.actualRole as Role | undefined;
-        if (actualRole && ROLE_LABELS[actualRole] && ROLE_LOGIN[actualRole]) {
+
+        // ADMIN existence kabhi reveal mat karo — generic error dikhao
+        if (!actualRole || actualRole === "ADMIN") {
+          setError(
+            `No ${roleLabel} account found with this email. Please check your email or register a new account.`,
+          );
+          return;
+        }
+
+        if (ROLE_LABELS[actualRole] && ROLE_LOGIN[actualRole]) {
           setRoleMismatch({
             label: ROLE_LABELS[actualRole],
             loginHref: ROLE_LOGIN[actualRole],
@@ -225,7 +234,7 @@ function ForgotPasswordForm() {
         // Sync frontend timer with backend's actual remaining cooldown
         startTimer(wait);
         setError(
-          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`
+          `Please wait ${formatCountdown(wait)} before requesting a new OTP.`,
         );
         return;
       }
@@ -258,7 +267,7 @@ function ForgotPasswordForm() {
 
   function handleOtpKeyDown(
     index: number,
-    event: React.KeyboardEvent<HTMLInputElement>
+    event: React.KeyboardEvent<HTMLInputElement>,
   ) {
     if (event.key === "Backspace" && !otpDigits[index] && index > 0) {
       focusOtpIndex(index - 1);
@@ -399,7 +408,9 @@ function ForgotPasswordForm() {
     <>
       <div className="mb-6 text-center">
         <h1 className="font-heading text-h2 text-blue-800">{stepTitle}</h1>
-        <p className="mt-2 font-body text-body text-gray-500">{stepDescription}</p>
+        <p className="mt-2 font-body text-body text-gray-500">
+          {stepDescription}
+        </p>
       </div>
 
       {step === 2 && (
@@ -466,7 +477,10 @@ function ForgotPasswordForm() {
           </button>
 
           <p className="pt-2 text-center font-body text-label text-gray-500">
-            <Link href={loginHref} className="text-blue-600 hover:text-blue-800">
+            <Link
+              href={loginHref}
+              className="text-blue-600 hover:text-blue-800"
+            >
               Back to {roleLabel} login
             </Link>
           </p>
@@ -574,7 +588,10 @@ function ForgotPasswordForm() {
           </button>
 
           <p className="pt-2 text-center font-body text-label text-gray-500">
-            <Link href={loginHref} className="text-blue-600 hover:text-blue-800">
+            <Link
+              href={loginHref}
+              className="text-blue-600 hover:text-blue-800"
+            >
               Back to {roleLabel} login
             </Link>
           </p>
