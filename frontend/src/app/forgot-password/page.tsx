@@ -11,8 +11,8 @@ const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
 ).replace(/\/$/, "");
 
-const OTP_SENT_MESSAGE =
-  "If an account exists, an OTP has been sent to your email.";
+// const OTP_SENT_MESSAGE =
+//   "If an account exists, an OTP has been sent to your email.";
 
 // Must match backend RESEND_COOLDOWN_MS (2 minutes)
 const RESEND_COOLDOWN_SECONDS = 120;
@@ -414,9 +414,10 @@ function ForgotPasswordForm() {
       </div>
 
       {step === 2 && (
-        <div className="alert-success mb-4">
-          <p className="font-body text-body">{OTP_SENT_MESSAGE}</p>
-        </div>
+        <p className="mb-4 text-center font-body text-label text-gray-500">
+          OTP sent to{" "}
+          <span className="font-semibold text-gray-700">{email}</span>
+        </p>
       )}
 
       {/* Role mismatch card — shown instead of generic error */}
