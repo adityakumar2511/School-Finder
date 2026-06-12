@@ -105,33 +105,11 @@ export const registerParent = async (req: Request, res: Response) => {
 };
 
 // POST /api/auth/register-school
+// POST /api/auth/register-school
 export const registerSchool = async (req: Request, res: Response) => {
   const body = req.body as RegisterSchoolInput;
-  const {
-    name,
-    ownerEmail,
-    ownerPassword,
-    ownerName,
-    city,
-    state,
-    address,
-    pincode,
-    board,
-    schoolType,
-    medium,
-    classesFrom,
-    classesTo,
-    phone,
-    email,
-    website,
-    description,
-    logoUrl,
-    admissionFee,
-    tuitionFeeMonthly,
-    totalAnnualFee,
-  } = body;
+  const { name, ownerEmail, ownerPassword, phone } = body;
 
-  // Role-specific duplicate email check
   const existingUser = await prisma.user.findUnique({
     where: { email: ownerEmail },
   });
@@ -153,14 +131,8 @@ export const registerSchool = async (req: Request, res: Response) => {
   );
 
   const result = await prisma.$transaction(async (tx) => {
-    // School name duplicate check inside transaction
     const existingSchool = await tx.school.findFirst({
-      where: {
-        name: {
-          equals: name,
-          mode: "insensitive",
-        },
-      },
+      where: { name: { equals: name, mode: "insensitive" } },
     });
 
     if (existingSchool) {
@@ -171,10 +143,11 @@ export const registerSchool = async (req: Request, res: Response) => {
 
     const user = await tx.user.create({
       data: {
-        name: ownerName || ownerEmail.split("@")[0],
+        name: body.ownerName || ownerEmail.split("@")[0],
         email: ownerEmail,
         password: hashedPassword,
         role: "SCHOOL_ADMIN",
+        phone: phone,
       },
     });
 
@@ -184,23 +157,26 @@ export const registerSchool = async (req: Request, res: Response) => {
       data: {
         name,
         slug,
-        description: description ?? null,
-        address,
-        city,
-        state,
-        pincode: pincode ?? null,
-        board,
-        schoolType,
-        medium,
-        classesFrom,
-        classesTo,
         phone,
-        email: email ?? null,
-        website: website ?? null,
-        logoUrl: logoUrl ?? null,
-        admissionFee: admissionFee ?? null,
-        tuitionFeeMonthly: tuitionFeeMonthly ?? null,
-        totalAnnualFee: totalAnnualFee ?? null,
+        // Optional fields from body, fallback to DB defaults
+        description: body.description ?? null,
+        address: body.address ?? "",        // empty string — filled later
+        city: body.city ?? "",
+        state: body.state ?? "",
+        pincode: body.pincode ?? null,
+        board: body.board ?? "OTHER",       // default enum value
+        schoolType: body.schoolType ?? "CO_ED",
+        medium: body.medium ?? "ENGLISH",
+        classesFrom: body.classesFrom ?? 1,
+        classesTo: body.classesTo ?? 12,
+        email: body.email ?? null,
+        website: body.website ?? null,
+        logoUrl: body.logoUrl ?? null,
+        admissionFee: body.admissionFee ?? null,
+        tuitionFeeMonthly: body.tuitionFeeMonthly ?? null,
+        totalAnnualFee: body.totalAnnualFee ?? null,
+        transportFee: body.transportFee ?? null,
+        hostelFee: body.hostelFee ?? null,
         status: "PENDING",
         ownerId: user.id,
       },

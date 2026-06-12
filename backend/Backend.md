@@ -1,480 +1,572 @@
-  # SchoolFinder — Backend Documentation
-
-  > Last updated: June 9, 2026
-
-  > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Resend · Fast2SMS · Cloudinary  
-  > **Default port:** `4000` · **Repository path:** `backend/`  
-  > **Schema owner:** `backend/prisma/schema.prisma`
-
-  ---
-
-  ## Table of Contents
-
-  1. [Project Overview](#1-project-overview)
-  2. [Tech Stack](#2-tech-stack)
-  3. [Folder Structure](#3-folder-structure)
-  4. [Authentication](#4-authentication)
-  5. [API Endpoints](#5-api-endpoints)
-  6. [Middleware](#6-middleware)
-  7. [Database Schema](#7-database-schema)
-  8. [Environment Variables](#8-environment-variables)
-  9. [Lib Modules](#9-lib-modules)
-  10. [Error Handling](#10-error-handling)
-  11. [Deployment](#11-deployment)
-  
-
-  ---
-
-  ## 1. Project Overview
-
-  The SchoolFinder backend is a **stateless REST API** and the **single source of truth** for all database operations.
-
-  | Responsibility | Detail |
-  |----------------|--------|
-  | Public discovery | School list, search, detail by slug |
-  | Auth | JWT (HS256), role-separated login, password reset, phone OTP (SMS) |
-  | Parent | Profile, favourites, inquiries |
-  | School admin | Own school CRUD, gallery URLs, inquiry status |
-  | Platform admin | Moderation, users, stats |
-
-  The Next.js frontend handles UI, NextAuth sessions, and image uploads to Cloudinary. The backend stores image **URLs** (JSON body), not multipart uploads.
-
-  **Entry point:** `src/server.ts`
-
-  ---
-
-  ## 2. Tech Stack
-
-  | Technology | Version / usage |
-  |------------|-----------------|
-  | Express.js | 5.x |
-  | TypeScript | 6.x |
-  | Prisma | 5.x → client in `generated/prisma` |
-  | PostgreSQL | Neon via `@prisma/adapter-pg` + `pg` |
-  | JWT | `jsonwebtoken`, HS256, issuer `schoolfinder-api` |
-  | Zod | 4.x request validation |
-  | bcryptjs | Password hashing |
-  | Resend | Existing reset flow, partially retained |
-  | Resend | Password reset OTP email (`sendOtpEmail` in `mailer.ts`) |
-  | Fast2SMS | Phone OTP SMS (`POST /api/auth/send-otp`) |
-  | Helmet + express-rate-limit | Security |
-  
-  **Unused dependency:** `nodemailer` is in `package.json` but not imported in `src/`.
-
-  ---
-
-  ## 3. Folder Structure
-
-  ```
-  ./backend
-  ./backend/.env
-  ./backend/.env.example
-  ./backend/.gitignore
-  ./backend/Backend.md
-  ./backend/dist
-  ./backend/dist/config
-  ./backend/dist/config/production.js
-  ./backend/dist/controllers
-  ./backend/dist/controllers/admin.controller.js
-  ./backend/dist/controllers/auth.controller.js
-  ./backend/dist/controllers/favourite.controller.js
-  ./backend/dist/controllers/inquiry.controller.js
-  ./backend/dist/controllers/parent.controller.js
-  ./backend/dist/controllers/schools.controller.js
-  ./backend/dist/lib
-  ./backend/dist/lib/account-status.js
-  ./backend/dist/lib/cache.js
-  ./backend/dist/lib/cloudinary.js
-  ./backend/dist/lib/favourites.js
-  ./backend/dist/lib/mailer.js
-  ./backend/dist/lib/otp.js
-  ./backend/dist/lib/pagination.js
-  ./backend/dist/lib/prisma.js
-  ./backend/dist/lib/queries
-  ./backend/dist/lib/queries/schools.js
-  ./backend/dist/lib/sanitize.js
-  ./backend/dist/lib/tokenBlacklist.js
-  ./backend/dist/middleware
-  ./backend/dist/middleware/auth.js
-  ./backend/dist/middleware/bruteForce.js
-  ./backend/dist/middleware/errorHandler.js
-  ./backend/dist/middleware/roleCheck.js
-  ./backend/dist/middleware/security.js
-  ./backend/dist/middleware/upload.js
-  ./backend/dist/middleware/validate.js
-  ./backend/dist/routes
-  ./backend/dist/routes/admin.routes.js
-  ./backend/dist/routes/auth.routes.js
-  ./backend/dist/routes/favourite.routes.js
-  ./backend/dist/routes/inquiry.routes.js
-  ./backend/dist/routes/parent.routes.js
-  ./backend/dist/routes/schools.routes.js
-  ./backend/dist/scripts
-  ./backend/dist/scripts/seed-admin.js
-  ./backend/dist/server.js
-  ./backend/dist/utils
-  ./backend/dist/utils/AppError.js
-  ./backend/dist/utils/asyncHandler.js
-  ./backend/dist/validators
-  ./backend/dist/validators/auth.validator.js
-  ./backend/dist/validators/school.validator.js
-  ./backend/package.json
-  ./backend/package-lock.json
-  ./backend/prisma
-  ./backend/prisma.config.ts
-  ./backend/prisma/migrations
-  ./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token
-  ./backend/prisma/migrations/20250602120000_restructure_schema_add_indexes_reset_token/migration.sql
-  ./backend/prisma/migrations/20260608172242_add_draft_status
-  ./backend/prisma/migrations/20260608172242_add_draft_status/migration.sql
-  ./backend/prisma/migrations/migration_lock.toml
-  ./backend/prisma/schema.prisma
-  ./backend/render.yaml
-  ./backend/scripts
-  ./backend/src
-  ./backend/src/config
-  ./backend/src/config/production.ts
-  ./backend/src/controllers
-  ./backend/src/controllers/admin.controller.ts
-  ./backend/src/controllers/auth.controller.ts
-  ./backend/src/controllers/favourite.controller.ts
-  ./backend/src/controllers/inquiry.controller.ts
-  ./backend/src/controllers/parent.controller.ts
-  ./backend/src/controllers/schools.controller.ts
-  ./backend/src/lib
-  ./backend/src/lib/account-status.ts
-  ./backend/src/lib/cache.ts
-  ./backend/src/lib/favourites.ts
-  ./backend/src/lib/mailer.ts
-  ./backend/src/lib/otp.ts
-  ./backend/src/lib/pagination.ts
-  ./backend/src/lib/prisma.ts
-  ./backend/src/lib/queries
-  ./backend/src/lib/queries/schools.ts
-  ./backend/src/lib/sanitize.ts
-  ./backend/src/lib/tokenBlacklist.ts
-  ./backend/src/middleware
-  ./backend/src/middleware/auth.ts
-  ./backend/src/middleware/bruteForce.ts
-  ./backend/src/middleware/errorHandler.ts
-  ./backend/src/middleware/roleCheck.ts
-  ./backend/src/middleware/security.ts
-  ./backend/src/middleware/validate.ts
-  ./backend/src/routes
-  ./backend/src/routes/admin.routes.ts
-  ./backend/src/routes/auth.routes.ts
-  ./backend/src/routes/favourite.routes.ts
-  ./backend/src/routes/inquiry.routes.ts
-  ./backend/src/routes/parent.routes.ts
-  ./backend/src/routes/schools.routes.ts
-  ./backend/src/scripts
-  ./backend/src/scripts/seed-admin.ts
-  ./backend/src/server.ts
-  ./backend/src/utils
-  ./backend/src/utils/AppError.ts
-  ./backend/src/utils/asyncHandler.ts
-  ./backend/src/validators
-  ./backend/src/validators/auth.validator.ts
-  ./backend/src/validators/school.validator.ts
-  ./backend/tsconfig.json
-  ```
-
-  ---
-
-  ## 4. Authentication
-
-  ### JWT
-
-  | Setting | Value |
-  |---------|--------|
-  | Algorithm | HS256 |
-  | Issuer | `schoolfinder-api` |
-  | Secret | `JWT_SECRET` |
-  | Expiry | `JWT_EXPIRES_IN` (default `7d`) |
-  | Payload | `id`, `role`, `email`, `jti` (UUID per token) |
-  | Header | `Authorization: Bearer <token>` |
-  | Logout | `jti` added to in-memory blacklist (`lib/tokenBlacklist.ts`) |
-
-  ### Flows
-
-  | Flow | Endpoint | Notes |
-  |------|----------|-------|
-  | Register parent | `POST /api/auth/register-parent` | Returns JWT |
-  | Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT; role-specific duplicate email error; school name uniqueness check inside Prisma transaction |
-  | Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard |
-  | Logout | `POST /api/auth/logout` | Blacklists `jti` |
-  | Forgot password | `POST /api/auth/forgot-password` | Email + optional `expectedRole`; 6-digit OTP via `sendOtpEmail` (Resend); generic 200 if no match / role mismatch |
-  | Verify reset OTP | `POST /api/auth/verify-reset-otp` | Email + 6-digit OTP + optional `expectedRole`; sets `otpVerified` |
-  | Reset password | `POST /api/auth/reset-password` | Email + passwords + optional `expectedRole`; requires `otpVerified` + valid `otpExpiry` |
-  | Send OTP | `POST /api/auth/send-otp` | Phone `+91[6-9]#########`; Fast2SMS; always 200 generic |
-  | Verify OTP | `POST /api/auth/verify-otp` | Phone + 6-digit OTP → JWT |
-  | Google sync | `POST /api/auth/google-sync` | Upsert PARENT; no Zod validator |
-  | Profile | `GET/PATCH /api/auth/me` | Bearer required |
-
-  ### Account disable
-
-  Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login returns 403.
-
-  ### Roles
-
-  `PARENT` · `SCHOOL_ADMIN` · `ADMIN` — enforced via `requireRole()` after `auth`.
-
-  ---
-
-  ## 5. API Endpoints
-
-  Global prefix from `server.ts`. Rate limiters apply as listed.
-
-  ### Health (no prefix)
-
-  | Method | Path | Description |
-  |--------|------|-------------|
-  | GET | `/health` | DB ping, `blacklistSize`; 503 if DB down |
-  | GET | `/ready` | `{ ready: true }` |
-
-  ### `/api/auth`
-
-  | Method | Path | Rate limit | Handler |
-  |--------|------|------------|---------|
-  | POST | `/register-parent` | auth + bruteForce | `registerParent` |
-  | POST | `/register-school` | auth + bruteForce | `registerSchool` |
-  | POST | `/login` | auth + bruteForce | `login` |
-  | POST | `/forgot-password` | forgotPassword (3/h) | `forgotPassword` — email OTP via Resend (`sendOtpEmail`) |
-  | POST | `/verify-reset-otp` | resetPassword (5/h) | `verifyResetOtp` |
-  | POST | `/send-otp` | otp (3/10min) | `sendOtp` |
-  | POST | `/verify-otp` | auth | `verifyOtp` |
-  | POST | `/reset-password` | resetPassword (5/h) | `resetPassword` — requires prior OTP verification |
-  | POST | `/logout` | auth middleware | `logout` |
-  | GET | `/me` | auth | `getMe` |
-  | PATCH | `/me` | auth | `updateMe` |
-  | POST | `/google-sync` | auth | `syncGoogleUser` |
-
-  **`POST /register-school`** — Public school self-registration (validated by `registerSchoolSchema`).
-
-  - Creates `SCHOOL_ADMIN` user + school with `status: PENDING`.
-  - **Duplicate email:** role-specific conflict message (`SCHOOL_ADMIN` → sign in instead; other roles → use different email).
-  - **Duplicate school name:** case-insensitive uniqueness check inside Prisma `$transaction`.
-  - **Fields:** `establishedYear`, `totalStudents`, `transportFee`, `hostelFee` (plus existing fee and profile fields).
-  - Returns JWT for immediate frontend sign-in.
-
-  ### `/api/schools`
-
-  | Method | Path | Auth | Handler |
-  |--------|------|------|---------|
-  | GET | `/` | Public | `getSchools` — filters: `city`, `board` (multi-value), `schoolType`, `medium`, `search`, `status` |
-  | GET | `/search` | Public | `searchSchools` |
-  | GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
-  | GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` |
-  | POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` (JSON `{ url }`) |
-  | DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
-  | GET | `/:slug` | Public | `getSchool` |
-  | POST | `/` | SCHOOL_ADMIN | `createSchool` |
-  | PATCH | `/:id` | auth (owner/ADMIN in controller) | `updateSchool` |
-  | DELETE | `/:id` | ADMIN | `deleteSchool` |
-
-  ### `/api/admin` (all routes: ADMIN)
-
-  | Method | Path | Handler |
-  |--------|------|---------|
-  | GET | `/stats` | `getStats` |
-  | GET | `/schools` | `getAdminSchools` — paginated list; query: `page`, `limit`, `status`, `search` |
-  | GET | `/check-owner` | `checkOwnerEmail` — query: `email` |
-  | GET | `/users` | `getAdminUsers` |
-  | GET | `/inquiries` | `getAdminInquiries` |
-  | PATCH | `/schools/:id/approve` | `approveSchoolById` |
-  | PATCH | `/schools/:id/reject` | `rejectSchoolById` |
-  | POST | `/approve` | `approveSchool` (legacy body) |
-  | POST | `/reject` | `rejectSchool` (legacy body) |
-  | POST | `/add-school` | `addSchoolDirect` |
-  | PATCH | `/users/:id/role` | `updateUserRole` |
-  | PATCH | `/users/:id/status` | `updateUserStatus` |
-
-  **Admin add-school support endpoints**
-
-  - **`GET /schools`** — `search` filters with case-insensitive `contains` on school `name`, `city`, and owner `email`. Used by the frontend add-school wizard (via BFF) to detect duplicate names; the client applies an exact case-insensitive name match on the returned rows.
-  - **`GET /check-owner?email=`** — Returns `{ exists: false }` or `{ exists: true, role, name?, hasSchool?, school? }`. Blocks wizard advance when the email is already a `SCHOOL_ADMIN` with an existing school.
-  - **`POST /add-school`** — Creates or reuses owner by `ownerEmail`; optional `ownerPassword` for new accounts (random password if omitted). Creates school with `status: APPROVED` immediately. Required body fields include `ownerEmail`, `name`, `city`, `state`, `address`, `board`, `schoolType`, `medium`, `classesFrom`, `classesTo`, `phone`; fees and other fields optional.
-
-  ### `/api/inquiries`
-
-  | Method | Path | Auth | Handler |
-  |--------|------|------|---------|
-  | POST | `/` | PARENT | `createInquiry` |
-  | GET | `/my` | PARENT | `getMyInquiries` |
-  | GET | `/school/:schoolId` | SCHOOL_ADMIN, ADMIN | `getSchoolInquiries` |
-  | PATCH | `/:id/status` | SCHOOL_ADMIN, ADMIN | `updateInquiryStatus` |
-
-  ### `/api/favourites` (legacy — `Deprecation` header on responses)
-
-  Router: `auth` + `PARENT`. Uses shared logic from `lib/favourites.ts`.
-
-  | Method | Path | Handler |
-  |--------|------|---------|
-  | GET | `/` | `getFavourites` |
-  | POST | `/` | `addFavourite` |
-  | DELETE | `/` | `removeFavourite` (`?schoolId=`) |
-
-  ### `/api/parent` (preferred)
-
-  Router: `auth` + `PARENT`.
-
-  | Method | Path | Handler |
-  |--------|------|---------|
-  | GET | `/profile` | `getParentProfile` |
-  | PATCH | `/profile` | `updateParentProfile` |
-  | GET | `/favourites` | `getParentFavourites` |
-  | POST | `/favourites` | `addParentFavourite` |
-  | DELETE | `/favourites` | `removeParentFavourite` |
-  | GET | `/inquiries` | `getParentInquiries` |
-
-  ---
-
-  ## 6. Middleware
-
-  | Middleware | Purpose |
-  |------------|---------|
-  | `applySecurityMiddleware` | Helmet, CORS (`FRONTEND_URL`), method guard |
-  | `generalRateLimiter` | 100 / 15 min / IP |
-  | `authRateLimiter` | 10 / 15 min |
-  | `forgotPasswordRateLimiter` | 3 / hour |
-  | `resetPasswordRateLimiter` | 5 / hour |
-  | `otpRateLimiter` | 3 / 10 min |
-  | `auth` | JWT verify + jti blacklist |
-  | `requireRole` | Role gate |
-  | `validate` | Zod + body sanitize |
-  | `bruteForceGuard` | 5 failures / 15 min per IP+email |
-  | `errorHandler` | AppError, Zod, Prisma, JWT, JSON errors |
-  | `notFoundHandler` | 404 with `NOT_FOUND` code |
-
-  ---
-
-  ## 7. Database Schema
-
-  ### Enums
-
-  | Enum | Values |
-  |------|--------|
-  | `Role` | `PARENT`, `SCHOOL_ADMIN`, `ADMIN` |
-  | `SchoolStatus` | `DRAFT`, `PENDING`, `APPROVED`, `REJECTED` |
-  | `BoardType` | `CBSE`, `ICSE`, `UP_BOARD`, `OTHER` |
-  | `SchoolType` | `BOYS`, `GIRLS`, `CO_ED` |
-  | `MediumType` | `HINDI`, `ENGLISH`, `BOTH` |
-  | `InquiryStatus` | `NEW`, `CONTACTED`, `CLOSED` |
-
-  ### Models
-
-  | Model | Purpose |
-  |-------|---------|
-  | `User` | Auth, profile, OTP fields, reset token fields |
-  | `School` | Listing with fees, status, owner |
-  | `SchoolImage` | Gallery URLs |
-  | `Facility` / `SchoolFacility` | Many-to-many |
-  | `Inquiry` | Parent → school messages |
-  | `Favourite` | Parent saved schools |
-  | `Account`, `Session`, `VerificationToken` | NextAuth-shaped tables (not used by backend routes) |
-
-  ### User OTP / reset fields
-
-  - `otpCode` — SHA-256 hash of 6-digit OTP  
-  - `otpExpiry` — 10-minute window  
-  - `otpVerified` — boolean  
-  - `resetToken` — SHA-256 hash of reset token  
-  - `resetTokenExpiry` — 1-hour window  
-
-  ### Indexes
-
-  **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`  
-  **Inquiry:** `[schoolId, status]`, `[parentId]`  
-  **Favourite:** `[parentId]`, unique `[parentId, schoolId]`
-
-  ---
-
-  ## 8. Environment Variables
-
-  From `backend/.env.example`. Startup validation in `config/production.ts`.
-
-  | Variable | Required | Notes |
-  |----------|----------|-------|
-  | `NODE_ENV` | Recommended | `development` / `production` |
-  | `PORT` | No (local) | Default `4000`; injected on Render |
-  | `DATABASE_URL` | Yes | Neon PostgreSQL, `sslmode=require` |
-  | `JWT_SECRET` | Yes | Must match frontend `JWT_SECRET` |
-  | `JWT_EXPIRES_IN` | No | Default `7d` |
-  | `FRONTEND_URL` | Yes in production | CORS + reset links; comma-separated OK |
-  | `CLOUDINARY_CLOUD_NAME` | Yes (startup) | Required by validator; upload API not exposed |
-  | `CLOUDINARY_API_KEY` | Yes (startup) | |
-  | `CLOUDINARY_API_SECRET` | Yes (startup) | |
-  | `RESEND_API_KEY` | Warn if missing | Password reset email (existing Resend flow) |
-  | `EMAIL_FROM` | Warn if missing | Verified Resend sender |
-  | `FAST2SMS_API_KEY` | Optional | SMS OTP; dev logs OTP to console if unset |
-  | `ADMIN_EMAIL` | Seeder only | `npm run seed:admin` |
-  | `ADMIN_PASSWORD` | Seeder only | |
-  | `BCRYPT_ROUNDS` | No | Default `12` |
-  | `TRUST_PROXY` | No | `true` behind reverse proxy |
-
-  **No SMTP variables.** Email is Resend only.
-
-  ---
-
-  ## 9. Lib Modules
-
-  | Module | Role |
-  |--------|------|
-  | `prisma.ts` | DB client + SSL pool |
-  | `otp.ts` | Generate/verify OTP hash; Fast2SMS send |
-  | `mailer.ts` | Resend password reset OTP via `sendOtpEmail` |
-  | `tokenBlacklist.ts` | In-memory jti blacklist (max 10k) |
-  | `favourites.ts` | Shared add/remove/list for both favourite APIs |
-  | `cache.ts` | In-memory TTL (list 60s, detail 300s, stats 30s) |
-  | `pagination.ts` | Page/limit helpers |
-  | `queries/schools.ts` | Selects, filters, cursor pagination |
-  | `sanitize.ts` | Input sanitization |
-  | `account-status.ts` | Disabled account sentinel |
-
-  ---
-
-  ## 10. Error Handling
-
-  Standard error envelope:
-
-  ```json
-  {
-    "success": false,
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed",
-    "errors": { "email": ["Invalid email"] }
-  }
-  ```
-
-  `utils/AppError.ts` exports `Errors.NotFound`, `Unauthorized`, `Forbidden`, `Conflict`, `BadRequest`, `RoleConflict`, `AccountDisabled`, `InvalidToken`, `RateLimited`.
-
-  ---
-
-  ## 11. Deployment
-
-  ### Scripts
-
-  | Script | Command |
-  |--------|---------|
-  | `dev` | `nodemon --exec ts-node src/server.ts` |
-  | `build` | `tsc` |
-  | `start` | `node dist/server.js` |
-  | `db:generate` | `prisma generate` |
-  | `migrate:deploy` | `prisma migrate deploy` |
-  | `migrate:dev` | `prisma migrate dev` |
-  | `seed:admin` | `ts-node src/scripts/seed-admin.ts` |
-
-  ### `render.yaml`
-
-  - **buildCommand:** `npm ci && npx prisma generate && npm run build`
-  - **preDeployCommand:** `npx prisma migrate deploy`
-  - **startCommand:** `npm start`
-  - **healthCheckPath:** `/health`
-
-  **Not in render.yaml:** `RESEND_API_KEY`, `EMAIL_FROM`, `FAST2SMS_API_KEY` — set manually in dashboard.
-
-  ---
-
-  ---
-
-  **SchoolFinder API** — Express REST backend for school discovery across India.
+# SchoolFinder — Backend Documentation
+
+> Last updated: June 12, 2026
+
+> **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Brevo · Fast2SMS  
+> **Default port:** `4000` · **Repository path:** `backend/`  
+> **Schema owner:** `backend/prisma/schema.prisma`
+
+The backend is a stateless REST API and the **single source of truth** for all database operations. The Next.js frontend handles UI, NextAuth sessions, and Cloudinary uploads; the backend stores image URLs only.
+
+**Entry point:** `src/server.ts`
+
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#1-architecture-overview)
+2. [Tech Stack](#2-tech-stack)
+3. [Folder Structure](#3-folder-structure)
+4. [Request Lifecycle](#4-request-lifecycle)
+5. [Authentication & Authorization](#5-authentication--authorization)
+6. [API Endpoints](#6-api-endpoints)
+7. [Controllers](#7-controllers)
+8. [Middleware](#8-middleware)
+9. [Validation Layer](#9-validation-layer)
+10. [Database Schema](#10-database-schema)
+11. [Lib Modules](#11-lib-modules)
+12. [Caching](#12-caching)
+13. [Error Handling](#13-error-handling)
+14. [Logging](#14-logging)
+15. [Background Jobs](#15-background-jobs)
+16. [File Storage](#16-file-storage)
+17. [Environment Variables](#17-environment-variables)
+18. [Deployment](#18-deployment)
+
+---
+
+## 1. Architecture Overview
+
+```
+Client (Next.js frontend)
+    │  Authorization: Bearer <JWT>
+    │  HTTPS
+    ▼
+Express API (port 4000)
+    ├── Security (Helmet, CORS, rate limits)
+    ├── Auth middleware (JWT verify, role check)
+    ├── Validation (Zod + sanitize)
+    ├── Controllers
+    └── Lib (cache, mailer, OTP, pagination)
+            │
+            ▼
+    PostgreSQL (Neon) via Prisma + pg adapter
+```
+
+| Responsibility | Detail |
+|----------------|--------|
+| Public discovery | School list, search, detail by slug, cities |
+| Auth | JWT (HS256), role-separated login, email OTP reset, phone OTP (SMS) |
+| Parent | Profile, favourites, inquiries |
+| School admin | Own school CRUD, gallery URLs, inquiry status |
+| Platform admin | Moderation, users, stats, direct school creation |
+
+---
+
+## 2. Tech Stack
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Express.js | 5.2 | HTTP API |
+| TypeScript | 6.0 | Type safety |
+| Prisma | 5.22 | ORM → client in `generated/prisma` |
+| PostgreSQL | — | Neon via `@prisma/adapter-pg` + `pg` |
+| JWT | jsonwebtoken 9.0 | API auth (HS256, issuer `schoolfinder-api`) |
+| Zod | 4.4 | Request validation |
+| bcryptjs | 3.0 | Password hashing |
+| Brevo | HTTPS API | Password reset OTP email (`BREVO_API_KEY`) |
+| Fast2SMS | HTTPS API | Phone OTP SMS (`FAST2SMS_API_KEY`) |
+| Helmet | 8.2 | Security headers |
+| express-rate-limit | 8.5 | Rate limiting |
+| compression | 1.8 | Response gzip |
+
+**Installed but unused in `src/`:** `resend`, `axios`, `@getbrevo/brevo` (mailer uses raw HTTPS, not the SDK).
+
+**No background job runner, no file upload middleware, no structured logger.**
+
+---
+
+## 3. Folder Structure
+
+```
+backend/
+├── prisma/
+│   ├── schema.prisma           # Single source of truth for DB schema
+│   └── migrations/
+├── generated/prisma/           # Generated Prisma client (gitignored)
+├── src/
+│   ├── server.ts               # Entry point, route mounts, health checks
+│   ├── config/
+│   │   └── production.ts       # Startup env validation
+│   ├── routes/
+│   │   ├── auth.routes.ts
+│   │   ├── schools.routes.ts
+│   │   ├── admin.routes.ts
+│   │   ├── inquiry.routes.ts
+│   │   ├── favourite.routes.ts  # Legacy — deprecation header
+│   │   └── parent.routes.ts     # Preferred parent API
+│   ├── controllers/
+│   │   ├── auth.controller.ts
+│   │   ├── schools.controller.ts
+│   │   ├── admin.controller.ts
+│   │   ├── inquiry.controller.ts
+│   │   ├── favourite.controller.ts
+│   │   └── parent.controller.ts
+│   ├── middleware/
+│   │   ├── auth.ts             # JWT verification + blacklist
+│   │   ├── roleCheck.ts        # requireRole()
+│   │   ├── security.ts         # Helmet, CORS, rate limiters
+│   │   ├── validate.ts         # Zod validation + sanitize
+│   │   ├── bruteForce.ts       # Login throttling
+│   │   └── errorHandler.ts     # Global error pipeline
+│   ├── validators/
+│   │   ├── auth.validator.ts
+│   │   └── school.validator.ts
+│   ├── lib/
+│   │   ├── prisma.ts           # DB client + SSL pool
+│   │   ├── cache.ts            # In-memory TTL cache
+│   │   ├── mailer.ts           # Brevo OTP email
+│   │   ├── otp.ts              # OTP generate/verify + Fast2SMS
+│   │   ├── tokenBlacklist.ts   # JWT jti blacklist
+│   │   ├── favourites.ts       # Shared favourite logic
+│   │   ├── pagination.ts       # Page/limit helpers
+│   │   ├── queries/schools.ts  # School selects and filters
+│   │   ├── sanitize.ts         # Input sanitization
+│   │   └── account-status.ts   # Disabled account sentinel
+│   ├── utils/
+│   │   ├── AppError.ts         # Typed error factory
+│   │   └── asyncHandler.ts     # Async route wrapper
+│   └── scripts/
+│       └── seed-admin.ts       # Initial admin seeder
+├── render.yaml                 # Render deployment blueprint
+├── .env.example
+└── package.json
+```
+
+---
+
+## 4. Request Lifecycle
+
+```
+HTTP Request
+    │
+    ▼
+applySecurityMiddleware()     Helmet CSP, CORS, method guard
+    │
+    ▼
+compression + express.json    2MB body limit
+    │
+    ▼
+generalRateLimiter            100 req / 15 min / IP
+    │
+    ▼
+Route-specific middleware     auth, requireRole, validate, rate limiters
+    │
+    ▼
+Controller handler            Business logic via asyncHandler
+    │
+    ├─ Success → JSON response
+    └─ Error → errorHandler → standardized envelope
+```
+
+**Global error pipeline:** `notFoundHandler` (404) → `errorHandler` (AppError, Zod, Prisma, JWT errors).
+
+**Startup:** `validateStartupEnv()` runs before `app.listen()`. Missing required vars exit process in production.
+
+---
+
+## 5. Authentication & Authorization
+
+### JWT Configuration
+
+| Setting | Value |
+|---------|--------|
+| Algorithm | HS256 |
+| Issuer | `schoolfinder-api` |
+| Secret | `JWT_SECRET` (must match frontend) |
+| Expiry | `JWT_EXPIRES_IN` (default `7d`) |
+| Payload | `id`, `role`, `email`, `jti` (UUID per token) |
+| Header | `Authorization: Bearer <token>` |
+| Logout | `jti` added to in-memory blacklist |
+
+### Auth Flows
+
+| Flow | Endpoint | Notes |
+|------|----------|-------|
+| Register parent | `POST /api/auth/register-parent` | Returns JWT |
+| Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT |
+| Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard |
+| Logout | `POST /api/auth/logout` | Blacklists `jti` |
+| Forgot password | `POST /api/auth/forgot-password` | Email OTP via Brevo; generic 200 on no match |
+| Verify reset OTP | `POST /api/auth/verify-reset-otp` | Sets `otpVerified` flag |
+| Reset password | `POST /api/auth/reset-password` | Requires prior OTP verification |
+| Send phone OTP | `POST /api/auth/send-otp` | Fast2SMS; **no frontend integration** |
+| Verify phone OTP | `POST /api/auth/verify-otp` | Returns JWT; **no frontend integration** |
+| Google sync | `POST /api/auth/google-sync` | Upsert PARENT user |
+| Profile | `GET/PATCH /api/auth/me` | Bearer required |
+
+### Role Enforcement
+
+Roles: `PARENT` · `SCHOOL_ADMIN` · `ADMIN`
+
+Applied via `auth` middleware + `requireRole()` on protected routes.
+
+### Account Disable
+
+Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login returns 403.
+
+---
+
+## 6. API Endpoints
+
+### Health (no prefix)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | DB ping, `blacklistSize`; 503 if DB down |
+| GET | `/ready` | `{ ready: true }` |
+
+### `/api/auth`
+
+| Method | Path | Rate Limit | Handler |
+|--------|------|------------|---------|
+| POST | `/register-parent` | auth + bruteForce | `registerParent` |
+| POST | `/register-school` | auth + bruteForce | `registerSchool` |
+| POST | `/login` | auth + bruteForce | `login` |
+| POST | `/forgot-password` | forgotPassword (3/h) | `forgotPassword` |
+| POST | `/verify-reset-otp` | resetPassword (5/h) | `verifyResetOtp` |
+| POST | `/send-otp` | otp (3/10min) | `sendOtp` |
+| POST | `/verify-otp` | auth | `verifyOtp` |
+| POST | `/reset-password` | resetPassword (5/h) | `resetPassword` |
+| POST | `/logout` | auth | `logout` |
+| GET | `/me` | auth | `getMe` |
+| PATCH | `/me` | auth | `updateMe` |
+| POST | `/google-sync` | auth | `syncGoogleUser` |
+
+### `/api/schools`
+
+| Method | Path | Auth | Handler |
+|--------|------|------|---------|
+| GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status |
+| GET | `/search` | Public | `searchSchools` — **no frontend caller** |
+| GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
+| GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` |
+| POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url }` |
+| DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
+| GET | `/:slug` | Public | `getSchool` — cached detail |
+| POST | `/` | SCHOOL_ADMIN | `createSchool` — **superseded by register-school** |
+| PATCH | `/:id` | auth | `updateSchool` — owner or ADMIN |
+| DELETE | `/:id` | ADMIN | `deleteSchool` |
+
+### `/api/admin` (all routes: ADMIN)
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/stats` | `getStats` |
+| GET | `/schools` | `getAdminSchools` — paginated; query: page, limit, status, search |
+| GET | `/check-owner` | `checkOwnerEmail` — query: email |
+| GET | `/users` | `getAdminUsers` |
+| GET | `/inquiries` | `getAdminInquiries` |
+| PATCH | `/schools/:id/approve` | `approveSchoolById` |
+| PATCH | `/schools/:id/reject` | `rejectSchoolById` |
+| POST | `/approve` | `approveSchool` — **legacy**, delegates to PATCH |
+| POST | `/reject` | `rejectSchool` — **legacy**, delegates to PATCH |
+| POST | `/add-school` | `addSchoolDirect` — creates APPROVED school |
+| PATCH | `/users/:id/role` | `updateUserRole` |
+| PATCH | `/users/:id/status` | `updateUserStatus` |
+
+### `/api/inquiries`
+
+| Method | Path | Auth | Handler |
+|--------|------|------|---------|
+| POST | `/` | PARENT | `createInquiry` |
+| GET | `/my` | PARENT | `getMyInquiries` |
+| GET | `/school/:schoolId` | SCHOOL_ADMIN, ADMIN | `getSchoolInquiries` |
+| PATCH | `/:id/status` | SCHOOL_ADMIN, ADMIN | `updateInquiryStatus` |
+
+### `/api/parent` (preferred)
+
+Router-level: `auth` + `requireRole(PARENT)`.
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/profile` | `getParentProfile` |
+| PATCH | `/profile` | `updateParentProfile` |
+| GET | `/favourites` | `getParentFavourites` |
+| POST | `/favourites` | `addParentFavourite` |
+| DELETE | `/favourites` | `removeParentFavourite` |
+| GET | `/inquiries` | `getParentInquiries` — **frontend uses `/api/inquiries/my` instead** |
+
+### `/api/favourites` (legacy)
+
+Router-level: `auth` + `requireRole(PARENT)`. Sets `Deprecation: Use /api/parent/favourites instead` header.
+
+| Method | Path | Handler |
+|--------|------|---------|
+| GET | `/` | `getFavourites` |
+| POST | `/` | `addFavourite` |
+| DELETE | `/` | `removeFavourite` |
+
+---
+
+## 7. Controllers
+
+| Controller | Handlers | Responsibility |
+|------------|----------|----------------|
+| `auth.controller.ts` | 12 | Registration, login, OTP reset, phone OTP, logout, profile, Google sync |
+| `schools.controller.ts` | 10 | Public list/search/detail, school admin CRUD, image URLs, admin delete |
+| `admin.controller.ts` | 12 | Stats, moderation, user management, direct add-school, owner check |
+| `inquiry.controller.ts` | 4 | Create, list (parent/school), status updates |
+| `parent.controller.ts` | 6 | Profile, favourites (rich shape), inquiries |
+| `favourite.controller.ts` | 3 | Legacy favourites with deprecation header |
+
+No separate repository layer — controllers call Prisma directly via `lib/queries/schools.ts` for complex selects.
+
+---
+
+## 8. Middleware
+
+| Middleware | File | Purpose |
+|------------|------|---------|
+| `applySecurityMiddleware` | `security.ts` | Helmet CSP, CORS (`FRONTEND_URL`), method guard |
+| `generalRateLimiter` | `security.ts` | 100 req / 15 min / IP |
+| `authRateLimiter` | `security.ts` | 10 req / 15 min |
+| `forgotPasswordRateLimiter` | `security.ts` | 3 / hour |
+| `resetPasswordRateLimiter` | `security.ts` | 5 / hour |
+| `otpRateLimiter` | `security.ts` | 3 / 10 min |
+| `auth` | `auth.ts` | JWT verify, issuer check, jti blacklist |
+| `requireRole` | `roleCheck.ts` | Role gate after auth |
+| `validate` | `validate.ts` | Zod schema + body sanitize |
+| `bruteForceGuard` | `bruteForce.ts` | 5 failures / 15 min per IP+email |
+| `errorHandler` | `errorHandler.ts` | Standardized error responses |
+| `notFoundHandler` | `errorHandler.ts` | 404 with `NOT_FOUND` code |
+| `asyncHandler` | `asyncHandler.ts` | Wraps async route handlers |
+
+---
+
+## 9. Validation Layer
+
+Validation uses **Zod schemas** in `src/validators/` applied via `validate()` middleware.
+
+| Validator | Schemas |
+|-----------|---------|
+| `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp |
+| `school.validator.ts` | createSchool, updateSchool |
+
+**Sanitization:** `lib/sanitize.ts` strips HTML from string inputs before validation.
+
+**Error format:**
+```json
+{
+  "success": false,
+  "code": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "errors": { "email": ["Invalid email"] }
+}
+```
+
+---
+
+## 10. Database Schema
+
+**File:** `prisma/schema.prisma`  
+**Client:** `generated/prisma` via `@prisma/adapter-pg`
+
+### Enums
+
+| Enum | Values |
+|------|--------|
+| `Role` | PARENT, SCHOOL_ADMIN, ADMIN |
+| `SchoolStatus` | DRAFT, PENDING, APPROVED, REJECTED |
+| `BoardType` | CBSE, ICSE, UP_BOARD, OTHER |
+| `SchoolType` | BOYS, GIRLS, CO_ED |
+| `MediumType` | HINDI, ENGLISH, BOTH |
+| `InquiryStatus` | NEW, CONTACTED, CLOSED |
+
+### Models
+
+| Model | Purpose | Notes |
+|-------|---------|-------|
+| `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; legacy `resetToken*` unused |
+| `School` | Listing with fees, status, owner | Default status `PENDING` |
+| `SchoolImage` | Gallery URLs | Cascade delete with school |
+| `Facility` / `SchoolFacility` | M:N facilities | **Read-only** — no write API |
+| `Inquiry` | Parent → school messages | Status workflow |
+| `Favourite` | Parent saved schools | Unique `[parentId, schoolId]` |
+| `Account`, `Session`, `VerificationToken` | NextAuth-shaped | **Not used by backend routes** |
+
+### Indexes
+
+- **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`
+- **Inquiry:** `[schoolId, status]`, `[parentId]`
+- **Favourite:** `[parentId]`, unique `[parentId, schoolId]`
+
+### Partial Implementation Notes
+
+- **`DRAFT` status:** Exists in schema and frontend checks; backend never assigns it in application code
+- **`resetToken`/`resetTokenExpiry`:** Schema fields exist but are never set; only cleared in reset flow
+- **Facility model:** Readable via relations but no API to manage facilities
+
+---
+
+## 11. Lib Modules
+
+| Module | Role |
+|--------|------|
+| `prisma.ts` | DB client + SSL connection pool |
+| `cache.ts` | In-memory TTL cache with invalidation |
+| `mailer.ts` | Brevo OTP email via HTTPS API |
+| `otp.ts` | Generate/verify OTP hash; Fast2SMS send |
+| `tokenBlacklist.ts` | In-memory jti blacklist (max 10k, 10-min cleanup interval) |
+| `favourites.ts` | Shared add/remove/list for both favourite APIs |
+| `pagination.ts` | Page/limit parsing and response helpers |
+| `queries/schools.ts` | Select shapes, filters, cursor pagination |
+| `sanitize.ts` | HTML stripping from request bodies |
+| `account-status.ts` | Disabled account detection (`phone = "__DISABLED__"`) |
+
+**Unused export:** `getListenHost()` in `config/production.ts` — server hardcodes `"0.0.0.0"`.
+
+---
+
+## 12. Caching
+
+**Implementation:** In-memory `Map` with TTL in `lib/cache.ts`.
+
+| Namespace | TTL | Invalidated On |
+|-----------|-----|----------------|
+| School list/search/cities | 60s | School mutations |
+| School detail | 300s | School update/delete |
+| Admin stats | 30s | School approve/reject/create |
+
+**Pattern:** `withCache(key, ttl, fetchFn)` + `buildCacheKey(namespace, parts)`
+
+**Invalidation:** `invalidateSchoolCache()` clears `sf:schools:*`, `sf:admin:stats*`, legacy `schools:cities`
+
+**Not cached:** Auth, inquiries, favourites, user lists.
+
+---
+
+## 13. Error Handling
+
+Standard error envelope:
+
+```json
+{
+  "success": false,
+  "code": "NOT_FOUND",
+  "message": "Resource not found"
+}
+```
+
+**Error types** (`utils/AppError.ts`): NotFound, Unauthorized, Forbidden, Conflict, BadRequest, RoleConflict, AccountDisabled, InvalidToken, RateLimited.
+
+**Handled by `errorHandler`:**
+- `AppError` — mapped status codes
+- Zod validation errors — 400 with field details
+- Prisma errors — P2002 (conflict), P2025 (not found), P2003 (foreign key)
+- JWT errors — 401
+- Malformed JSON — 400
+
+---
+
+## 14. Logging
+
+**No structured logger** — uses `console.log/info/warn/error` throughout.
+
+| Event | Level |
+|-------|-------|
+| Server start | info |
+| OTP generation | log (always printed to terminal, dev and prod) |
+| Brevo email send | log/error |
+| AppError | warn |
+| Unhandled errors | error (+ stack in dev) |
+| Config warnings | warn |
+| Process hooks | unhandledRejection, uncaughtException (exit in prod) |
+
+---
+
+## 15. Background Jobs
+
+**None.** No cron, queue, or worker processes.
+
+Only periodic task: `tokenBlacklist` cleanup via `setInterval` every 10 minutes.
+
+---
+
+## 16. File Storage
+
+**No backend file upload.** Images are URL strings in JSON body.
+
+- Frontend uploads to Cloudinary via `POST /api/upload`
+- Backend stores URLs in `School.logoUrl` and `SchoolImage.url`
+- `addSchoolImage` expects `{ url, caption? }` in request body
+- Cloudinary env vars in backend are documented but **not read by application code**
+
+---
+
+## 17. Environment Variables
+
+From `backend/.env.example`. Validated by `validateStartupEnv()` in `config/production.ts`.
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `NODE_ENV` | Recommended | `development` / `production` |
+| `PORT` | No (local) | Default `4000`; injected on Render |
+| `DATABASE_URL` | Yes | Neon PostgreSQL, `sslmode=require` |
+| `JWT_SECRET` | Yes | Must match frontend |
+| `JWT_EXPIRES_IN` | No | Default `7d` |
+| `FRONTEND_URL` | Yes in production | CORS; comma-separated OK |
+| `BREVO_API_KEY` | For email | **Actually used by mailer** (not in `.env.example`) |
+| `EMAIL_FROM` | For email | Verified Brevo sender |
+| `RESEND_API_KEY` | Validated in prod | **Not used by mailer** — startup validation mismatch |
+| `FAST2SMS_API_KEY` | Optional | SMS OTP; dev logs OTP if unset |
+| `CLOUDINARY_*` | Documented | Not read by backend code |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder only | `npm run seed:admin` |
+| `BCRYPT_ROUNDS` | No | Default `12` |
+| `TRUST_PROXY` | No | Auto-enabled when `NODE_ENV=production` |
+
+---
+
+## 18. Deployment
+
+### Scripts
+
+| Script | Command |
+|--------|---------|
+| `dev` | `nodemon --exec ts-node src/server.ts` |
+| `build` | `tsc` |
+| `start` | `node dist/server.js` |
+| `db:generate` | `prisma generate` |
+| `migrate:deploy` | `prisma migrate deploy` |
+| `migrate:dev` | `prisma migrate dev` |
+| `seed:admin` | `ts-node src/scripts/seed-admin.ts` |
+
+### Render (`render.yaml`)
+
+```yaml
+buildCommand: npm ci && npx prisma generate && npm run build
+preDeployCommand: npx prisma migrate deploy
+startCommand: npm start
+healthCheckPath: /health
+```
+
+Set manually in dashboard: `BREVO_API_KEY`, `EMAIL_FROM`, `FAST2SMS_API_KEY`, `FRONTEND_URL`, `DATABASE_URL`.
+
+### Local Development
+
+```bash
+cd backend
+cp .env.example .env
+# Edit DATABASE_URL, JWT_SECRET, FRONTEND_URL, BREVO_API_KEY, etc.
+npm install
+npx prisma generate
+npm run migrate:dev
+npm run dev
+```
+
+API: [http://localhost:4000](http://localhost:4000)  
+Health: `GET http://localhost:4000/health`
+
+---
+
+**SchoolFinder API** — Express REST backend for school discovery across India.

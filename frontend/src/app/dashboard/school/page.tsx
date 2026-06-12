@@ -115,6 +115,40 @@
         </div>
 
         <div className="mx-auto max-w-6xl space-y-8 px-4 py-8">
+          {/* Profile completion banner */}
+{(() => {
+  const missing = [
+    !school.address?.trim() && "Address",
+    !school.city?.trim() && "City",
+    !school.description?.trim() && "Description",
+    !school.logoUrl && "Logo",
+    !school.email && "School email",
+    !school.website && "Website",
+  ].filter(Boolean);
+
+  if (missing.length === 0) return null;
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 pt-6">
+      <Link href="/dashboard/school/profile" className="block">
+        <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 transition-colors">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-heading font-semibold text-amber-800 text-sm">
+              Complete your school profile
+            </p>
+            <p className="font-body text-xs text-amber-700 mt-0.5">
+              Missing: {missing.join(", ")} — A complete profile gets more parent inquiries.
+            </p>
+          </div>
+          <span className="ml-auto text-xs font-heading font-semibold text-amber-700 whitespace-nowrap">
+            Fill now →
+          </span>
+        </div>
+      </Link>
+    </div>
+  );
+})()}
           <SchoolStatusCard
             status={school.status}
             rejectionReason={school.rejectionReason}

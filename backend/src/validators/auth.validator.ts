@@ -42,91 +42,79 @@ const optionalFee = z.preprocess(
   z.coerce.number().nonnegative().optional(),
 );
 
-export const registerSchoolSchema = z
-  .object({
-    schoolName: z.preprocess(
-      preprocessOptionalString,
-      z.string().min(3, "School name must be at least 3 characters").optional(),
-    ),
-    name: z.preprocess(
-      preprocessOptionalString,
-      z.string().min(3, "School name must be at least 3 characters").optional(),
-    ),
-    ownerEmail: z.preprocess(
-      preprocessEmail,
-      z.string().email("Enter a valid owner email address"),
-    ),
-    ownerPassword: z.string().min(8, "Password must be at least 8 characters"),
-    ownerName: z.preprocess(preprocessOptionalString, z.string().optional()),
-    city: z.preprocess(preprocessTrim, z.string().min(2, "City is required")),
-    state: z.preprocess(preprocessTrim, z.string().min(2, "State is required")),
-    address: z.preprocess(
-      preprocessTrim,
-      z.string().min(5, "Address is required"),
-    ),
-    pincode: z.preprocess(
-      preprocessOptionalString,
-      z
-        .string()
-        .regex(/^\d{6}$/, "Enter a valid 6-digit pincode")
-        .optional(),
-    ),
-    board: boardSchema,
-    schoolType: schoolTypeSchema,
-    medium: mediumSchema,
-    classesFrom: z.coerce.number().int().min(1).max(12),
-    classesTo: z.coerce.number().int().min(1).max(12),
-    phone: z.preprocess(
-      preprocessTrim,
-      z.string().regex(mobilePattern, "Enter a valid 10-digit mobile number"),
-    ),
-    email: z.preprocess(
-      preprocessOptionalString,
-      z.string().email("Enter a valid school email address").optional(),
-    ),
-    website: z.preprocess(
-      preprocessOptionalString,
-      z.string().url("Enter a valid website URL").optional(),
-    ),
-    description: z.preprocess(
-      preprocessOptionalString,
-      z.string().max(10000).optional(),
-    ),
-    establishedYear: z.preprocess(
-      (v) => (v === "" || v === null || v === undefined ? undefined : v),
-      z.coerce
-        .number()
-        .int()
-        .min(1800)
-        .max(new Date().getFullYear())
-        .optional(),
-    ),
-    totalStudents: z.preprocess(
-      (v) => (v === "" || v === null || v === undefined ? undefined : v),
-      z.coerce.number().int().nonnegative().optional(),
-    ),
-    transportFee: optionalFee,
-    hostelFee: optionalFee,
-    logoUrl: z.preprocess(
-      preprocessOptionalString,
-      z.string().url().optional(),
-    ),
-    admissionFee: optionalFee,
-    tuitionFeeMonthly: optionalFee,
-    totalAnnualFee: optionalFee,
-  })
-  .refine((data) => Boolean(data.name || data.schoolName), {
-    message: "School name is required",
-    path: ["name"],
-  })
-  .refine((data) => data.classesFrom <= data.classesTo, {
-    message: "classesFrom must not be greater than classesTo",
-    path: ["classesTo"],
-  })
-  .transform((data) => ({
-    ...data,
-    name: (data.name ?? data.schoolName) as string,
-  }));
+export const registerSchoolSchema = z.object({
+  // Required — minimum registration
+  name: z.preprocess(
+    preprocessTrim,
+    z.string().min(3, "School name must be at least 3 characters"),
+  ),
+  ownerEmail: z.preprocess(
+    preprocessEmail,
+    z.string().email("Enter a valid email address"),
+  ),
+  ownerPassword: z.string().min(8, "Password must be at least 8 characters"),
+  phone: z.preprocess(
+    preprocessTrim,
+    z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number"),
+  ),
+
+  // Optional — filled later from dashboard
+  ownerName: z.preprocess(preprocessOptionalString, z.string().optional()),
+  city: z.preprocess(preprocessOptionalString, z.string().optional()),
+  state: z.preprocess(preprocessOptionalString, z.string().optional()),
+  address: z.preprocess(preprocessOptionalString, z.string().optional()),
+  pincode: z.preprocess(
+    preprocessOptionalString,
+    z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional(),
+  ),
+  board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]).optional(),
+  schoolType: z.enum(["BOYS", "GIRLS", "CO_ED"]).optional(),
+  medium: z.enum(["HINDI", "ENGLISH", "BOTH"]).optional(),
+  classesFrom: z.coerce.number().int().min(1).max(12).optional(),
+  classesTo: z.coerce.number().int().min(1).max(12).optional(),
+  email: z.preprocess(
+    preprocessOptionalString,
+    z.string().email("Enter a valid school email").optional(),
+  ),
+  website: z.preprocess(
+    preprocessOptionalString,
+    z.string().url("Enter a valid website URL").optional(),
+  ),
+  description: z.preprocess(
+    preprocessOptionalString,
+    z.string().max(10000).optional(),
+  ),
+  establishedYear: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1800).max(new Date().getFullYear()).optional(),
+  ),
+  totalStudents: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().nonnegative().optional(),
+  ),
+  logoUrl: z.preprocess(preprocessOptionalString, z.string().url().optional()),
+  admissionFee: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().nonnegative().optional(),
+  ),
+  tuitionFeeMonthly: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().nonnegative().optional(),
+  ),
+  totalAnnualFee: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().nonnegative().optional(),
+  ),
+  transportFee: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().nonnegative().optional(),
+  ),
+  hostelFee: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().nonnegative().optional(),
+  ),
+});
+
 
 export const forgotPasswordSchema = z.object({
   email: z.preprocess(
