@@ -45,7 +45,8 @@ export default async function SchoolProfilePage() {
 
       <Card>
         <CardContent className="p-6 md:p-8">
-          <SchoolProfileForm school={school} galleryImages={galleryImages} />
+          <SchoolProfileForm school={school} />
+          {/* <SchoolProfileForm school={school} galleryImages={galleryImages} /> */}
         </CardContent>
       </Card>
     </main>
