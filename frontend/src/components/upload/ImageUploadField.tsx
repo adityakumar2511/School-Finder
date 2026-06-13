@@ -10,18 +10,22 @@ import type { UploadFolder } from "@/lib/upload-security";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  label: string;
   folder: UploadFolder;
+  // All optional — supports both controlled (RHF) and uncontrolled usage
+  label?: string;
   hint?: string;
   previewUrl?: string | null;
-  onUploaded: (url: string) => void;
+  onUploaded?: (url: string) => void;
   onClear?: () => void;
   className?: string;
+  // Controlled mode — for RHF setValue integration
+  value?: string;
+  onChange?: (url: string) => void;
 };
 
 const ACCEPT = "image/jpeg,image/png,image/webp";
 
-export default function ImageUploadField({
+function ImageUploadField({
   label,
   folder,
   hint,
@@ -29,6 +33,8 @@ export default function ImageUploadField({
   onUploaded,
   onClear,
   className,
+  value,
+  onChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -38,7 +44,8 @@ export default function ImageUploadField({
   const [dragOver, setDragOver] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-  const displayPreview = localPreview ?? previewUrl ?? null;
+  // Support both controlled (value prop) and uncontrolled (previewUrl prop) modes
+  const displayPreview = localPreview ?? value ?? previewUrl ?? null;
 
   const processFile = useCallback(
     async (file: File) => {
@@ -70,9 +77,11 @@ export default function ImageUploadField({
       }
 
       setPendingFile(null);
-      onUploaded(result.url);
+      setLocalPreview(null);
+      onUploaded?.(result.url);
+      onChange?.(result.url);
     },
-    [folder, onUploaded]
+    [folder, onUploaded, onChange]
   );
 
   function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -92,6 +101,7 @@ export default function ImageUploadField({
     setLocalPreview(null);
     setError(null);
     setPendingFile(null);
+    onChange?.("");
     onClear?.();
   }
 
@@ -105,7 +115,9 @@ export default function ImageUploadField({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <p className="font-heading text-sm font-semibold text-gray-800">{label}</p>
+      {label && (
+        <p className="font-heading text-sm font-semibold text-gray-800">{label}</p>
+      )}
       {hint && <p className="font-body text-xs text-gray-500">{hint}</p>}
 
       <div
@@ -163,7 +175,7 @@ export default function ImageUploadField({
                 <Upload className="mr-2 h-4 w-4" />
                 Choose image
               </Button>
-              {displayPreview && onClear && (
+              {displayPreview && (
                 <Button
                   type="button"
                   variant="outline"
@@ -219,3 +231,6 @@ export default function ImageUploadField({
     </div>
   );
 }
+
+export { ImageUploadField };
+export default ImageUploadField;

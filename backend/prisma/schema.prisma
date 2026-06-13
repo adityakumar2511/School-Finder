@@ -111,41 +111,148 @@ model User {
 }
 
 model School {
-  id                String       @id @default(cuid())
-  name              String
-  slug              String       @unique
-  description       String?      @db.Text
-  address           String
-  city              String
-  state             String
-  pincode           String?
-  board             BoardType
-  schoolType        SchoolType
-  medium            MediumType
-  classesFrom       Int
-  classesTo         Int
-  totalStudents     Int?
-  establishedYear   Int?
-  phone             String
-  email             String?
-  website           String?
-  logoUrl           String?
-  rejectionReason   String?      @db.Text
-  status            SchoolStatus @default(PENDING)
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  description   String?      @db.Text
+  address       String
+  city          String
+  state         String
+  pincode       String?
+  board         BoardType
+  schoolType    SchoolType
+  medium        MediumType
+  classesFrom   Int
+  classesTo     Int
+  totalStudents Int?
+  phone         String
+  email         String?
+  website       String?
+  logoUrl       String?
+  coverImageUrl String?
+  rejectionReason String?    @db.Text
+  status        SchoolStatus @default(PENDING)
+
+  // Fee fields (existing — kept for backward compat)
   admissionFee      Float?
   tuitionFeeMonthly Float?
   totalAnnualFee    Float?
   transportFee      Float?
   hostelFee         Float?
-  ownerId           String
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
 
-  owner      User             @relation("SchoolOwner", fields: [ownerId], references: [id])
-  images     SchoolImage[]
-  facilities SchoolFacility[]
-  inquiries  Inquiry[]
-  favourites Favourite[]
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Section 1: Basic Info ──────────────────────────────────────────────────
+  tagline           String?
+  establishedYear   Int?
+  managementType    String?   // e.g. "Government" | "Private" | "Aided"
+  schoolCategory    String?   // e.g. "Primary" | "Secondary" | "Senior Secondary"
+  schoolFormat      String?   // e.g. "Day" | "Boarding" | "Day + Boarding"
+  affiliationNumber String?
+  startTime         String?
+  endTime           String?
+  workingDays       String?
+
+  // ── Section 2: About ──────────────────────────────────────────────────────
+  vision            String?   @db.Text
+  mission           String?   @db.Text
+  principalMessage  String?   @db.Text
+
+  // ── Section 3: Academics ──────────────────────────────────────────────────
+  classesOffered      String[]
+  streamsOffered      String[]
+  studentTeacherRatio String?
+
+  // ── Section 4: Admissions ─────────────────────────────────────────────────
+  admissionOpen      Boolean   @default(false)
+  admissionStartDate DateTime?
+  admissionEndDate   DateTime?
+  ageCriteria        String?
+  requiredDocuments  String?   @db.Text
+  admissionProcess   String?   @db.Text
+
+  // ── Section 5: Fee Structure ──────────────────────────────────────────────
+  averageAnnualFee Int?
+  prePrimaryFee    Int?
+  class1to5Fee     Int?
+  class6to8Fee     Int?
+  class9to10Fee    Int?
+  class11to12Fee   Int?
+
+  // ── Section 6 & 7: Facilities & Sports ───────────────────────────────────
+  facilitiesList String[]
+  sportsList     String[]
+
+  // ── Section 8: Infrastructure ─────────────────────────────────────────────
+  campusArea     String?
+  totalClassrooms Int?
+  totalLabs       Int?
+  libraryBooks    Int?
+  hostelCapacity  Int?
+  totalBuses      Int?
+
+  // ── Section 9: Faculty ────────────────────────────────────────────────────
+  totalTeachers     Int?
+  qualifiedTeachers Int?
+  trainingPrograms  String?   @db.Text
+
+  // ── Section 10: Programs ──────────────────────────────────────────────────
+  programsList String[]
+
+  // ── Section 11: Student Life ──────────────────────────────────────────────
+  clubsActivities    String?   @db.Text
+  culturalActivities String?   @db.Text
+  annualEvents       String?   @db.Text
+  educationalTours   String?   @db.Text
+
+  // ── Section 12: Achievements ──────────────────────────────────────────────
+  academicAchievements String?   @db.Text
+  sportsAchievements   String?   @db.Text
+  awardsRecognitions   String?   @db.Text
+
+  // ── Section 15: Hostel ────────────────────────────────────────────────────
+  hostelAvailable Boolean @default(false)
+  hostelBoys      Boolean @default(false)
+  hostelGirls     Boolean @default(false)
+  hostelMess      Boolean @default(false)
+
+  // ── Section 16: Transport ─────────────────────────────────────────────────
+  transportAvailable Boolean @default(false)
+  transportAreas     String?
+  gpsTracking        Boolean @default(false)
+  totalVehicles      String?
+
+  // ── Section 17: Safety ────────────────────────────────────────────────────
+  hasCCTV          Boolean @default(false)
+  hasGuards        Boolean @default(false)
+  hasMedicalRoom   Boolean @default(false)
+  hasFireSafety    Boolean @default(false)
+  hasVisitorMgmt   Boolean @default(false)
+
+  // ── Section 20: Contact extras ────────────────────────────────────────────
+  whatsapp                 String?
+  mapUrl                   String?
+  facebook                 String?
+  instagram                String?
+  youtube                  String?
+  linkedin                 String?
+  admissionCoordinatorName String?
+  admissionPhone           String?
+  admissionEmail           String?
+
+  // ── Relations ─────────────────────────────────────────────────────────────
+  owner        User               @relation("SchoolOwner", fields: [ownerId], references: [id])
+  images       SchoolImage[]
+  facilities   SchoolFacility[]
+  inquiries    Inquiry[]
+  favourites   Favourite[]
+  customFields SchoolCustomField[]
+  boardResults BoardResult[]
+  scholarships Scholarship[]
+  faqs         SchoolFAQ[]
+  downloads    SchoolDownload[]
 
   @@index([status, createdAt])
   @@index([city, status])
@@ -153,16 +260,19 @@ model School {
   @@index([ownerId])
 }
 
+// ── Section 18: Gallery ───────────────────────────────────────────────────────
 model SchoolImage {
   id        String   @id @default(cuid())
   schoolId  String
   url       String
   caption   String?
+  category  String?
   createdAt DateTime @default(now())
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
+// ── Existing: Facilities M:N ──────────────────────────────────────────────────
 model Facility {
   id   String  @id @default(cuid())
   name String  @unique
@@ -181,6 +291,74 @@ model SchoolFacility {
   @@id([schoolId, facilityId])
 }
 
+// ── Custom Fields (any section) ───────────────────────────────────────────────
+// section field stores which form section this belongs to e.g. "basicInfo", "about"
+model SchoolCustomField {
+  id        String @id @default(cuid())
+  schoolId  String
+  section   String
+  label     String
+  value     String @db.Text
+  fieldType String @default("text") // "text" | "number" | "date" | "url" | "richtext"
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, section])
+}
+
+// ── Section 13: Board Results ─────────────────────────────────────────────────
+model BoardResult {
+  id          String @id @default(cuid())
+  schoolId    String
+  year        String
+  class10Pass String?
+  class12Pass String?
+  topperName  String?
+  topperScore String?
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+// ── Section 14: Scholarships ──────────────────────────────────────────────────
+model Scholarship {
+  id          String  @id @default(cuid())
+  schoolId    String
+  name        String
+  eligibility String? @db.Text
+  benefits    String? @db.Text
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+// ── Section 22: FAQs ──────────────────────────────────────────────────────────
+model SchoolFAQ {
+  id       String @id @default(cuid())
+  schoolId String
+  question String
+  answer   String @db.Text
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+// ── Section 19: Downloads ─────────────────────────────────────────────────────
+model SchoolDownload {
+  id       String @id @default(cuid())
+  schoolId String
+  label    String
+  url      String
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+// ── Existing ──────────────────────────────────────────────────────────────────
 model Inquiry {
   id        String        @id @default(cuid())
   schoolId  String

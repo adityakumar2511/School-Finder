@@ -1,6 +1,6 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 12, 2026
+> Last updated: June 2026
 
 > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Brevo · Fast2SMS  
 > **Default port:** `4000` · **Repository path:** `backend/`  
@@ -58,7 +58,7 @@ Express API (port 4000)
 | Public discovery | School list, search, detail by slug, cities |
 | Auth | JWT (HS256), role-separated login, email OTP reset, phone OTP (SMS) |
 | Parent | Profile, favourites, inquiries |
-| School admin | Own school CRUD, gallery URLs, inquiry status |
+| School admin | Own school CRUD (scalar + related models), gallery URLs, inquiry status |
 | Platform admin | Moderation, users, stats, direct school creation |
 
 ---
@@ -107,7 +107,7 @@ backend/
 │   │   └── parent.routes.ts     # Preferred parent API
 │   ├── controllers/
 │   │   ├── auth.controller.ts
-│   │   ├── schools.controller.ts
+│   │   ├── schools.controller.ts   # Updated: transaction-based sync helpers
 │   │   ├── admin.controller.ts
 │   │   ├── inquiry.controller.ts
 │   │   ├── favourite.controller.ts
@@ -121,7 +121,7 @@ backend/
 │   │   └── errorHandler.ts     # Global error pipeline
 │   ├── validators/
 │   │   ├── auth.validator.ts
-│   │   └── school.validator.ts
+│   │   └── school.validator.ts     # Updated: all 22-section fields + nested schemas
 │   ├── lib/
 │   │   ├── prisma.ts           # DB client + SSL pool
 │   │   ├── cache.ts            # In-memory TTL cache
@@ -250,12 +250,12 @@ Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login re
 | GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status |
 | GET | `/search` | Public | `searchSchools` — **no frontend caller** |
 | GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
-| GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` |
-| POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url }` |
+| GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` — includes all related models |
+| POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url, caption?, category? }` |
 | DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
-| GET | `/:slug` | Public | `getSchool` — cached detail |
+| GET | `/:slug` | Public | `getSchool` — cached detail, includes all related models |
 | POST | `/` | SCHOOL_ADMIN | `createSchool` — **superseded by register-school** |
-| PATCH | `/:id` | auth | `updateSchool` — owner or ADMIN |
+| PATCH | `/:id` | auth | `updateSchool` — owner or ADMIN; runs in Prisma transaction |
 | DELETE | `/:id` | ADMIN | `deleteSchool` |
 
 ### `/api/admin` (all routes: ADMIN)
@@ -322,6 +322,23 @@ Router-level: `auth` + `requireRole(PARENT)`. Sets `Deprecation: Use /api/parent
 
 No separate repository layer — controllers call Prisma directly via `lib/queries/schools.ts` for complex selects.
 
+### `schools.controller.ts` — Sync Helper Pattern
+
+`updateSchool` runs inside a **`prisma.$transaction`** and delegates related-model writes to private sync helpers. Each helper performs a delete-not-in-list + upsert:
+
+| Helper | Models touched | Keyed by |
+|--------|---------------|----------|
+| `syncBoardResults` | `BoardResult` | `id` (optional on create) |
+| `syncScholarships` | `Scholarship` | `id` |
+| `syncFAQs` | `SchoolFAQ` | `id` |
+| `syncDownloads` | `SchoolDownload` | `id` |
+| `syncGalleryImages` | `SchoolImage` | `id` |
+| `syncCustomFields` | `SchoolCustomField` | `id`; optional `section` filter |
+
+Each array is only synced if present in the request body (`!== undefined`), allowing partial section updates without wiping other relations.
+
+`extractScalarFields()` strips relation arrays before passing data to `school.update()` to avoid Prisma type errors.
+
 ---
 
 ## 8. Middleware
@@ -351,7 +368,43 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 | Validator | Schemas |
 |-----------|---------|
 | `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp |
-| `school.validator.ts` | createSchool, updateSchool |
+| `school.validator.ts` | createSchool, updateSchool (see field inventory below) |
+
+### `school.validator.ts` — Field Inventory
+
+#### Nested schemas (exported types used by controller)
+
+| Schema | Type export | Used in |
+|--------|-------------|---------|
+| `boardResultSchema` | `BoardResultInput` | `syncBoardResults` |
+| `scholarshipSchema` | `ScholarshipInput` | `syncScholarships` |
+| `faqSchema` | `FAQInput` | `syncFAQs` |
+| `downloadSchema` | `DownloadInput` | `syncDownloads` |
+| `galleryImageSchema` | `GalleryImageInput` | `syncGalleryImages` |
+| `customFieldSchema` | `CustomFieldInput` | `syncCustomFields` |
+
+#### Scalar field coverage in `updateSchoolBodySchema`
+
+| Section | Fields |
+|---------|--------|
+| Core identity | `name`, `city`, `state`, `address`, `pincode`, `board`, `schoolType`, `medium`, `classesFrom`, `classesTo`, `phone`, `email`, `website`, `logoUrl`, `coverImageUrl`, `description` |
+| Legacy fees | `admissionFee`, `tuitionFeeMonthly`, `totalAnnualFee`, `transportFee`, `hostelFee`, `totalStudents` |
+| Basic Info extras | `tagline`, `establishedYear`, `managementType`, `schoolCategory`, `schoolFormat`, `affiliationNumber`, `startTime`, `endTime`, `workingDays` |
+| About | `vision`, `mission`, `principalMessage` |
+| Academics | `classesOffered[]`, `streamsOffered[]`, `studentTeacherRatio` |
+| Admissions | `admissionOpen`, `admissionStartDate`, `admissionEndDate`, `ageCriteria`, `requiredDocuments`, `admissionProcess` |
+| Fee structure | `averageAnnualFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee` |
+| Facilities & Sports | `facilitiesList[]`, `sportsList[]` |
+| Infrastructure | `campusArea`, `totalClassrooms`, `totalLabs`, `libraryBooks`, `hostelCapacity`, `totalBuses` |
+| Faculty | `totalTeachers`, `qualifiedTeachers`, `trainingPrograms` |
+| Programs | `programsList[]` |
+| Student Life | `clubsActivities`, `culturalActivities`, `annualEvents`, `educationalTours` |
+| Achievements | `academicAchievements`, `sportsAchievements`, `awardsRecognitions` |
+| Hostel | `hostelAvailable`, `hostelBoys`, `hostelGirls`, `hostelMess` |
+| Transport | `transportAvailable`, `transportAreas`, `gpsTracking`, `totalVehicles` |
+| Safety | `hasCCTV`, `hasGuards`, `hasMedicalRoom`, `hasFireSafety`, `hasVisitorMgmt` |
+| Contact extras | `whatsapp`, `mapUrl`, `facebook`, `instagram`, `youtube`, `linkedin`, `admissionCoordinatorName`, `admissionPhone`, `admissionEmail` |
+| Related arrays | `boardResults[]`, `scholarships[]`, `faqs[]`, `downloads[]`, `images[]`, `customFields[]` |
 
 **Sanitization:** `lib/sanitize.ts` strips HTML from string inputs before validation.
 
@@ -388,24 +441,103 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 | Model | Purpose | Notes |
 |-------|---------|-------|
 | `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; legacy `resetToken*` unused |
-| `School` | Listing with fees, status, owner | Default status `PENDING` |
-| `SchoolImage` | Gallery URLs | Cascade delete with school |
+| `School` | Listing — scalar fields for all 22 profile sections | See field inventory below |
+| `SchoolImage` | Gallery URLs | `category` field added; cascade delete with school |
+| `BoardResult` | Per-year board exam results | Section 13; cascade delete |
+| `Scholarship` | Scholarship listings | Section 14; cascade delete |
+| `SchoolFAQ` | FAQ pairs | Section 22; Prisma accessor: `schoolFAQ`; cascade delete |
+| `SchoolDownload` | Downloadable files | Section 19; cascade delete |
+| `SchoolCustomField` | School-defined extra fields for any section | `section` field identifies origin; cascade delete |
 | `Facility` / `SchoolFacility` | M:N facilities | **Read-only** — no write API |
 | `Inquiry` | Parent → school messages | Status workflow |
 | `Favourite` | Parent saved schools | Unique `[parentId, schoolId]` |
 | `Account`, `Session`, `VerificationToken` | NextAuth-shaped | **Not used by backend routes** |
+
+### School Model — Scalar Field Inventory
+
+The `School` model carries scalar fields for all sections that don't need a separate table. Fields are grouped by section for readability; all are optional except core identity fields.
+
+| Group | Fields |
+|-------|--------|
+| Core (required) | `name`, `slug`, `address`, `city`, `state`, `board`, `schoolType`, `medium`, `classesFrom`, `classesTo`, `phone`, `status`, `ownerId` |
+| Core (optional) | `description`, `pincode`, `email`, `website`, `logoUrl`, `coverImageUrl`, `totalStudents`, `rejectionReason` |
+| Legacy fees | `admissionFee`, `tuitionFeeMonthly`, `totalAnnualFee`, `transportFee`, `hostelFee` |
+| Basic Info extras | `tagline`, `establishedYear`, `managementType`, `schoolCategory`, `schoolFormat`, `affiliationNumber`, `startTime`, `endTime`, `workingDays` |
+| About | `vision`, `mission`, `principalMessage` |
+| Academics | `classesOffered String[]`, `streamsOffered String[]`, `studentTeacherRatio` |
+| Admissions | `admissionOpen Boolean`, `admissionStartDate`, `admissionEndDate`, `ageCriteria`, `requiredDocuments`, `admissionProcess` |
+| Fee structure | `averageAnnualFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee` |
+| Facilities & Sports | `facilitiesList String[]`, `sportsList String[]` |
+| Infrastructure | `campusArea`, `totalClassrooms`, `totalLabs`, `libraryBooks`, `hostelCapacity`, `totalBuses` |
+| Faculty | `totalTeachers`, `qualifiedTeachers`, `trainingPrograms` |
+| Programs | `programsList String[]` |
+| Student Life | `clubsActivities`, `culturalActivities`, `annualEvents`, `educationalTours` |
+| Achievements | `academicAchievements`, `sportsAchievements`, `awardsRecognitions` |
+| Hostel | `hostelAvailable Boolean`, `hostelBoys Boolean`, `hostelGirls Boolean`, `hostelMess Boolean` |
+| Transport | `transportAvailable Boolean`, `transportAreas`, `gpsTracking Boolean`, `totalVehicles` |
+| Safety | `hasCCTV Boolean`, `hasGuards Boolean`, `hasMedicalRoom Boolean`, `hasFireSafety Boolean`, `hasVisitorMgmt Boolean` |
+| Contact extras | `whatsapp`, `mapUrl`, `facebook`, `instagram`, `youtube`, `linkedin`, `admissionCoordinatorName`, `admissionPhone`, `admissionEmail` |
+
+### Related Models — Field Detail
+
+**`SchoolCustomField`**
+```
+id, schoolId, section (e.g. "basicInfo"), label, value, fieldType ("text"|"number"|"date"|"url"|"richtext")
+@@index([schoolId, section])
+```
+
+**`BoardResult`**
+```
+id, schoolId, year, class10Pass?, class12Pass?, topperName?, topperScore?
+@@index([schoolId])
+```
+
+**`Scholarship`**
+```
+id, schoolId, name, eligibility?, benefits?
+@@index([schoolId])
+```
+
+**`SchoolFAQ`** (Prisma accessor: `schoolFAQ`)
+```
+id, schoolId, question, answer
+@@index([schoolId])
+```
+
+**`SchoolDownload`**
+```
+id, schoolId, label, url
+@@index([schoolId])
+```
+
+**`SchoolImage`** (updated)
+```
+id, schoolId, url, caption?, category?    ← category is new
+```
 
 ### Indexes
 
 - **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`
 - **Inquiry:** `[schoolId, status]`, `[parentId]`
 - **Favourite:** `[parentId]`, unique `[parentId, schoolId]`
+- **SchoolCustomField:** `[schoolId, section]`
+- **BoardResult, Scholarship, SchoolFAQ, SchoolDownload:** `[schoolId]`
+
+### Migration
+
+After replacing `schema.prisma`, run from `backend/`:
+
+```bash
+npx prisma migrate dev --name add_school_profile_sections
+npx prisma generate   # runs automatically after migrate, but explicit is safer
+```
 
 ### Partial Implementation Notes
 
 - **`DRAFT` status:** Exists in schema and frontend checks; backend never assigns it in application code
 - **`resetToken`/`resetTokenExpiry`:** Schema fields exist but are never set; only cleared in reset flow
-- **Facility model:** Readable via relations but no API to manage facilities
+- **`Facility` model:** Readable via relations but no API to manage facilities
+- **Reviews (Section 21):** Read-only on frontend, no backend model — system generated from `Inquiry` data or future review model
 
 ---
 
@@ -441,6 +573,8 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 **Pattern:** `withCache(key, ttl, fetchFn)` + `buildCacheKey(namespace, parts)`
 
 **Invalidation:** `invalidateSchoolCache()` clears `sf:schools:*`, `sf:admin:stats*`, legacy `schools:cities`
+
+**Note:** `updateSchool` runs in a transaction and calls `invalidateSchoolCache()` after commit — related model changes (board results, FAQs, etc.) correctly bust the cache.
 
 **Not cached:** Auth, inquiries, favourites, user lists.
 
@@ -498,8 +632,9 @@ Only periodic task: `tokenBlacklist` cleanup via `setInterval` every 10 minutes.
 **No backend file upload.** Images are URL strings in JSON body.
 
 - Frontend uploads to Cloudinary via `POST /api/upload`
-- Backend stores URLs in `School.logoUrl` and `SchoolImage.url`
-- `addSchoolImage` expects `{ url, caption? }` in request body
+- Backend stores URLs in `School.logoUrl`, `School.coverImageUrl`, and `SchoolImage.url`
+- `addSchoolImage` expects `{ url, caption?, category? }` in request body
+- `updateSchool` accepts `images[]` array in payload; synced via `syncGalleryImages` in transaction
 - Cloudinary env vars in backend are documented but **not read by application code**
 
 ---

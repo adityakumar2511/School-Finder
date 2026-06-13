@@ -1,475 +1,883 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Loader2, Save, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { SchoolProfileSidebar } from "./SchoolProfileSidebar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Building2,
-  MapPin,
-  GraduationCap,
-  IndianRupee,
-  Phone,
-  ImageIcon,
-} from "lucide-react";
-import type { SchoolDashboardSchool } from "@/lib/school/data";
-import ImageUploadField from "@/components/upload/ImageUploadField";
-import SchoolGalleryManager from "@/components/school/SchoolGalleryManager";
+  BasicInfoSection,
+  AboutSchoolSection,
+  AcademicsSection,
+  AdmissionsSection,
+  FeeStructureSection,
+  FacilitiesSection,
+  SportsSection,
+  InfrastructureSection,
+  FacultySection,
+  ProgramsSection,
+  StudentLifeSection,
+  AchievementsSection,
+  BoardResultsSection,
+  ScholarshipsSection,
+  HostelSection,
+  TransportSection,
+  SafetySection,
+  GallerySection,
+  DownloadsSection,
+  ContactSection,
+  ReviewsSection,
+  FAQsSection,
+} from "./formSections";
+import type { SectionProps } from "./formSections/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Sub-schemas (one per section)
+// ─────────────────────────────────────────────────────────────
 
-type FormValues = {
-  name: string;
-  description: string;
-  logoUrl: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
-  board: string;
-  schoolType: string;
-  medium: string;
-  classesFrom: number;
-  classesTo: number;
-  totalStudents: string;
-  establishedYear: string;
-  admissionFee: string;
-  tuitionFeeMonthly: string;
-  totalAnnualFee: string;
-  transportFee: string;
-  hostelFee: string;
-  phone: string;
-  email: string;
-  website: string;
-};
+const customFieldSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+  fieldType: z.enum(["text", "number", "date", "url", "richtext"]),
+});
 
-// ─── Steps config ─────────────────────────────────────────────────────────────
+const boardResultSchema = z.object({
+  year: z.string(),
+  class10Percent: z.string(),
+  class12Percent: z.string(),
+  topperName: z.string(),
+  topScore: z.string(),
+  customFields: z.array(customFieldSchema).optional(),
+});
 
-const STEPS = [
-  { id: 0, label: "Basic Info",  icon: Building2,      fields: ["name", "description", "logoUrl"] },
-  { id: 1, label: "Location",    icon: MapPin,          fields: ["address", "city", "state", "pincode"] },
-  { id: 2, label: "Academics",   icon: GraduationCap,   fields: ["board", "schoolType", "medium", "classesFrom", "classesTo", "totalStudents", "establishedYear"] },
-  { id: 3, label: "Fees",        icon: IndianRupee,     fields: ["admissionFee", "tuitionFeeMonthly", "totalAnnualFee", "transportFee", "hostelFee"] },
-  { id: 4, label: "Contact",     icon: Phone,           fields: ["phone", "email", "website"] },
-  { id: 5, label: "Gallery",     icon: ImageIcon,       fields: [] },
-] as const;
+const scholarshipSchema = z.object({
+  name: z.string(),
+  eligibility: z.string(),
+  benefits: z.string(),
+});
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const faqSchema = z.object({
+  question: z.string(),
+  answer: z.string(),
+});
 
-function toFormValues(school: SchoolDashboardSchool): FormValues {
+const galleryImageSchema = z.object({
+  url: z.string(),
+  caption: z.string().optional(),
+  category: z
+    .enum(["campus", "classroom", "sports", "events", "other"])
+    .optional(),
+});
+
+const downloadFileSchema = z.object({
+  label: z.string(),
+  url: z.string(),
+});
+
+// ─────────────────────────────────────────────────────────────
+// Master schema — all 22 sections
+// ─────────────────────────────────────────────────────────────
+
+export const schoolProfileSchema = z.object({
+  // 1. Basic Info
+  basicInfo: z.object({
+    schoolName: z.string().min(3, "School name must be at least 3 characters"),
+    tagline: z.string().optional(),
+    establishedYear: z.string().optional(),
+    managementType: z.string().optional(),
+    category: z.string().optional(),
+    format: z.string().optional(),
+    genderType: z.string().optional(),
+    board: z.string().optional(),
+    medium: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    affiliationNumber: z.string().optional(),
+    recognitionNumber: z.string().optional(),
+    affiliatedSince: z.string().optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+    workingDays: z.string().optional(),
+    logoUrl: z.string().optional(),
+    coverImageUrl: z.string().optional(),
+    classesOffered: z.array(z.string()).optional(),
+    languagesOffered: z.array(z.string()).optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 2. About School
+  about: z.object({
+    about: z.string().optional(),
+    vision: z.string().optional(),
+    mission: z.string().optional(),
+    principalMessage: z.string().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 3. Academics
+  academics: z.object({
+    streamsOffered: z.array(z.string()).optional(),
+    studentTeacherRatio: z.string().optional(),
+    academicCalendar: z.string().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 4. Admissions
+  admissions: z.object({
+    admissionOpen: z.boolean().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    ageCriteria: z.string().optional(),
+    requiredDocuments: z.string().optional(),
+    admissionProcess: z.string().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 5. Fee Structure
+  fees: z.object({
+    feeMode: z.enum(["simple", "detailed"]).optional(),
+    averageAnnualFee: z.string().optional(),
+    prePrimaryFee: z.string().optional(),
+    class1to5Fee: z.string().optional(),
+    class6to8Fee: z.string().optional(),
+    class9to10Fee: z.string().optional(),
+    class11to12Fee: z.string().optional(),
+    customFeeHeads: z.array(customFieldSchema).optional(),
+  }),
+
+  // 6. Facilities
+  facilities: z.object({
+    items: z.array(z.string()).optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 7. Sports
+  sports: z.object({
+    items: z.array(z.string()).optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 8. Infrastructure
+  infrastructure: z.object({
+    campusArea: z.string().optional(),
+    classrooms: z.string().optional(),
+    labs: z.string().optional(),
+    libraryBooks: z.string().optional(),
+    hostelCapacity: z.string().optional(),
+    buses: z.string().optional(),
+  }),
+
+  // 9. Faculty
+  faculty: z.object({
+    totalTeachers: z.string().optional(),
+    qualifiedTeachers: z.string().optional(),
+    trainingPrograms: z.string().optional(),
+  }),
+
+  // 10. Programs & Specializations
+  programs: z.object({
+    items: z.array(z.string()).optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 11. Student Life
+  studentLife: z.object({
+    clubs: z.string().optional(),
+    culturalActivities: z.string().optional(),
+    annualEvents: z.string().optional(),
+    educationalTours: z.string().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 12. Achievements
+  achievements: z.object({
+    academic: z.string().optional(),
+    sports: z.string().optional(),
+    awards: z.string().optional(),
+    recognitions: z.string().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 13. Board Results
+  boardResults: z.object({
+    results: z.array(boardResultSchema).optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 14. Scholarships
+  scholarships: z.object({
+    list: z.array(scholarshipSchema).optional(),
+  }),
+
+  // 15. Hostel
+  hostel: z.object({
+    available: z.boolean().optional(),
+    boys: z.boolean().optional(),
+    girls: z.boolean().optional(),
+    capacity: z.string().optional(),
+    mess: z.boolean().optional(),
+    customFields: z.array(customFieldSchema).optional(),
+  }),
+
+  // 16. Transport
+  transport: z.object({
+    available: z.boolean().optional(),
+    coverageAreas: z.string().optional(),
+    gpsTracking: z.boolean().optional(),
+    vehicles: z.string().optional(),
+  }),
+
+  // 17. Safety & Security
+  safety: z.object({
+    cctv: z.boolean().optional(),
+    guards: z.boolean().optional(),
+    medicalRoom: z.boolean().optional(),
+    fireSafety: z.boolean().optional(),
+    visitorManagement: z.boolean().optional(),
+  }),
+
+  // 18. Gallery
+  gallery: z.object({
+    images: z.array(galleryImageSchema).optional(),
+  }),
+
+  // 19. Downloads
+  downloads: z.object({
+    files: z.array(downloadFileSchema).optional(),
+  }),
+
+  // 20. Contact
+  contact: z.object({
+    phone: z.string().optional(),
+    whatsapp: z.string().optional(),
+    email: z.string().email("Invalid email").optional().or(z.literal("")),
+    website: z.string().url("Invalid URL").optional().or(z.literal("")),
+    address: z.string().optional(),
+    mapUrl: z.string().optional(),
+    facebook: z.string().optional(),
+    instagram: z.string().optional(),
+    youtube: z.string().optional(),
+    linkedin: z.string().optional(),
+    admissionCoordinatorName: z.string().optional(),
+    admissionPhone: z.string().optional(),
+    admissionEmail: z
+      .string()
+      .email("Invalid email")
+      .optional()
+      .or(z.literal("")),
+  }),
+
+  // 21. Reviews — read only, no schema needed (display only)
+
+  // 22. FAQs
+  faqs: z.object({
+    list: z.array(faqSchema).optional(),
+  }),
+});
+
+export type SchoolProfileFormData = z.infer<typeof schoolProfileSchema>;
+
+// ─────────────────────────────────────────────────────────────
+// Section config list
+// ─────────────────────────────────────────────────────────────
+
+const SECTION_LABELS = [
+  "Basic Info",
+  "About School",
+  "Academics",
+  "Admissions",
+  "Fee Structure",
+  "Facilities",
+  "Sports",
+  "Infrastructure",
+  "Faculty",
+  "Programs",
+  "Student Life",
+  "Achievements",
+  "Board Results",
+  "Scholarships",
+  "Hostel",
+  "Transport",
+  "Safety & Security",
+  "Gallery",
+  "Downloads",
+  "Contact",
+  "Reviews",
+  "FAQs",
+];
+
+// ─────────────────────────────────────────────────────────────
+// API data → form default values mapper
+// ─────────────────────────────────────────────────────────────
+
+function mapSchoolToFormData(
+  school: Record<string, unknown>,
+): SchoolProfileFormData {
   return {
-    name: school.name,
-    description: school.description ?? "",
-    logoUrl: school.logoUrl ?? "",
-    address: school.address ?? "",
-    city: school.city ?? "",
-    state: school.state ?? "",
-    pincode: school.pincode ?? "",
-    board: school.board ?? "OTHER",
-    schoolType: school.schoolType ?? "CO_ED",
-    medium: school.medium ?? "ENGLISH",
-    classesFrom: school.classesFrom ?? 1,
-    classesTo: school.classesTo ?? 12,
-    totalStudents: school.totalStudents?.toString() ?? "",
-    establishedYear: school.establishedYear?.toString() ?? "",
-    admissionFee: school.admissionFee?.toString() ?? "",
-    tuitionFeeMonthly: school.tuitionFeeMonthly?.toString() ?? "",
-    totalAnnualFee: school.totalAnnualFee?.toString() ?? "",
-    transportFee: school.transportFee?.toString() ?? "",
-    hostelFee: school.hostelFee?.toString() ?? "",
-    phone: school.phone ?? "",
-    email: school.email ?? "",
-    website: school.website ?? "",
+    basicInfo: {
+      schoolName: (school.name as string) || "",
+      tagline: (school.tagline as string) || "",
+      establishedYear: school.establishedYear
+        ? String(school.establishedYear)
+        : "",
+      managementType: (school.managementType as string) || "",
+      category: (school.schoolCategory as string) || "",
+      format: (school.schoolFormat as string) || "",
+      genderType: (school.schoolType as string) || "",
+      board: (school.board as string) || "",
+      medium: (school.medium as string) || "",
+      city: (school.city as string) || "",
+      state: (school.state as string) || "",
+      affiliationNumber: (school.affiliationNumber as string) || "",
+      recognitionNumber: (school.recognitionNumber as string) || "",
+      affiliatedSince: (school.affiliatedSince as string) || "",
+      startTime: (school.startTime as string) || "",
+      endTime: (school.endTime as string) || "",
+      workingDays: (school.workingDays as string) || "",
+      logoUrl: (school.logoUrl as string) || "",
+      coverImageUrl: (school.coverImageUrl as string) || "",
+      classesOffered: (school.classesOffered as string[]) || [],
+      languagesOffered: (school.languagesOffered as string[]) || [],
+      customFields: [],
+    },
+    about: {
+      about: (school.about as string) || "",
+      vision: (school.vision as string) || "",
+      mission: (school.mission as string) || "",
+      principalMessage: (school.principalMessage as string) || "",
+      customFields: [],
+    },
+    academics: {
+      streamsOffered: (school.streamsOffered as string[]) || [],
+      studentTeacherRatio: (school.studentTeacherRatio as string) || "",
+      academicCalendar: (school.academicCalendar as string) || "",
+      customFields: [],
+    },
+    admissions: {
+      admissionOpen: (school.admissionOpen as boolean) || false,
+      startDate: (school.admissionStartDate as string) || "",
+      endDate: (school.admissionEndDate as string) || "",
+      ageCriteria: (school.ageCriteria as string) || "",
+      requiredDocuments: (school.requiredDocuments as string) || "",
+      admissionProcess: (school.admissionProcess as string) || "",
+      customFields: [],
+    },
+    fees: {
+      feeMode: "simple",
+      averageAnnualFee: school.averageAnnualFee
+        ? String(school.averageAnnualFee)
+        : "",
+      prePrimaryFee: (school.prePrimaryFee as string) || "",
+      class1to5Fee: (school.class1to5Fee as string) || "",
+      class6to8Fee: (school.class6to8Fee as string) || "",
+      class9to10Fee: (school.class9to10Fee as string) || "",
+      class11to12Fee: (school.class11to12Fee as string) || "",
+      customFeeHeads: [],
+    },
+    facilities: {
+      items: (school.facilitiesList as string[]) || [],
+      customFields: [],
+    },
+    sports: {
+      items: (school.sportsList as string[]) || [],
+      customFields: [],
+    },
+    infrastructure: {
+      campusArea: (school.campusArea as string) || "",
+      classrooms: school.classrooms ? String(school.classrooms) : "",
+      labs: school.labs ? String(school.labs) : "",
+      libraryBooks: school.libraryBooks ? String(school.libraryBooks) : "",
+      hostelCapacity: school.hostelCapacity
+        ? String(school.hostelCapacity)
+        : "",
+      buses: school.buses ? String(school.buses) : "",
+    },
+    faculty: {
+      totalTeachers: school.totalTeachers ? String(school.totalTeachers) : "",
+      qualifiedTeachers: school.qualifiedTeachers
+        ? String(school.qualifiedTeachers)
+        : "",
+      trainingPrograms: (school.trainingPrograms as string) || "",
+    },
+    programs: {
+      items: (school.programsList as string[]) || [],
+      customFields: [],
+    },
+    studentLife: {
+      clubs: (school.clubs as string) || "",
+      culturalActivities: (school.culturalActivities as string) || "",
+      annualEvents: (school.annualEvents as string) || "",
+      educationalTours: (school.educationalTours as string) || "",
+      customFields: [],
+    },
+    achievements: {
+      academic: (school.academicAchievements as string) || "",
+      sports: (school.sportsAchievements as string) || "",
+      awards: (school.awards as string) || "",
+      recognitions: (school.recognitions as string) || "",
+      customFields: [],
+    },
+    boardResults: {
+      results: [],
+      customFields: [],
+    },
+    scholarships: { list: [] },
+    hostel: {
+      available: (school.hostelAvailable as boolean) || false,
+      boys: (school.boysHostel as boolean) || false,
+      girls: (school.girlsHostel as boolean) || false,
+      capacity: school.hostelCapacity ? String(school.hostelCapacity) : "",
+      mess: (school.messAvailable as boolean) || false,
+      customFields: [],
+    },
+    transport: {
+      available: (school.transportAvailable as boolean) || false,
+      coverageAreas: (school.coverageAreas as string) || "",
+      gpsTracking: (school.gpsTracking as boolean) || false,
+      vehicles: school.vehicles ? String(school.vehicles) : "",
+    },
+    safety: {
+      cctv: (school.cctv as boolean) || false,
+      guards: (school.securityGuards as boolean) || false,
+      medicalRoom: (school.medicalRoom as boolean) || false,
+      fireSafety: (school.fireSafety as boolean) || false,
+      visitorManagement: (school.visitorManagement as boolean) || false,
+    },
+    gallery: { images: [] },
+    downloads: { files: [] },
+    contact: {
+      phone: (school.phone as string) || "",
+      whatsapp: (school.whatsapp as string) || "",
+      email: (school.email as string) || "",
+      website: (school.website as string) || "",
+      address: (school.address as string) || "",
+      mapUrl: (school.mapUrl as string) || "",
+      facebook: (school.facebook as string) || "",
+      instagram: (school.instagram as string) || "",
+      youtube: (school.youtube as string) || "",
+      linkedin: (school.linkedin as string) || "",
+      admissionCoordinatorName:
+        (school.admissionCoordinatorName as string) || "",
+      admissionPhone: (school.admissionPhone as string) || "",
+      admissionEmail: (school.admissionEmail as string) || "",
+    },
+    faqs: { list: [] },
   };
 }
 
-function parseOptionalNumber(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const num = Number(trimmed);
-  return Number.isFinite(num) ? num : undefined;
+// ─────────────────────────────────────────────────────────────
+// Draft key
+// ─────────────────────────────────────────────────────────────
+
+const DRAFT_KEY = (schoolId: string) => `sf_school_profile_draft_${schoolId}`;
+
+// ─────────────────────────────────────────────────────────────
+// Props
+// ─────────────────────────────────────────────────────────────
+
+interface SchoolProfileFormProps {
+  school: Record<string, unknown>;
 }
 
-// Check if a step has all key fields filled
-function isStepComplete(stepId: number, values: FormValues): boolean {
-  switch (stepId) {
-    case 0: return !!(values.name?.trim());
-    case 1: return !!(values.address?.trim() && values.city?.trim() && values.state?.trim());
-    case 2: return !!(values.board && values.schoolType && values.medium);
-    case 3: return true; // fees optional
-    case 4: return !!(values.phone?.trim());
-    case 5: return true; // gallery optional
-    default: return false;
-  }
-}
+// ─────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────
 
-// ─── Component ────────────────────────────────────────────────────────────────
+export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
+  const [activeSection, setActiveSection] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-export default function SchoolProfileForm({
-  school,
-  galleryImages = [],
-}: {
-  school: SchoolDashboardSchool;
-  galleryImages?: { id: string; url: string; caption: string | null }[];
-}) {
-  const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [savedSteps, setSavedSteps] = useState<Set<number>>(new Set());
+  const schoolId = school.id as string;
 
-  const { register, handleSubmit, setValue, watch, formState: { isSubmitting } } =
-    useForm<FormValues>({ defaultValues: toFormValues(school) });
+  // ── Form init ──────────────────────────────────────────────
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<SchoolProfileFormData>({
+    resolver: zodResolver(schoolProfileSchema),
+    defaultValues: mapSchoolToFormData(school),
+  });
 
-  const values = watch();
-  const board = watch("board");
-  const schoolType = watch("schoolType");
-  const medium = watch("medium");
-
-  // ── Save current step ──────────────────────────────────────────────────────
-
-  async function saveStep(stepValues: FormValues) {
-    setMessage(null);
-    setError(null);
-
-    const payload = {
-      name: stepValues.name.trim(),
-      description: stepValues.description.trim() || null,
-      address: stepValues.address.trim() || "",
-      city: stepValues.city.trim() || "",
-      state: stepValues.state.trim() || "",
-      pincode: stepValues.pincode.trim() || null,
-      board: stepValues.board,
-      schoolType: stepValues.schoolType,
-      medium: stepValues.medium,
-      classesFrom: Number(stepValues.classesFrom) || 1,
-      classesTo: Number(stepValues.classesTo) || 12,
-      phone: stepValues.phone.trim(),
-      email: stepValues.email.trim() || null,
-      website: stepValues.website.trim() || null,
-      logoUrl: stepValues.logoUrl.trim() || null,
-      admissionFee: parseOptionalNumber(stepValues.admissionFee),
-      tuitionFeeMonthly: parseOptionalNumber(stepValues.tuitionFeeMonthly),
-      totalAnnualFee: parseOptionalNumber(stepValues.totalAnnualFee),
-      transportFee: parseOptionalNumber(stepValues.transportFee),
-      hostelFee: parseOptionalNumber(stepValues.hostelFee),
-      totalStudents: parseOptionalNumber(stepValues.totalStudents),
-      establishedYear: parseOptionalNumber(stepValues.establishedYear),
-    };
-
-    const res = await fetch("/api/school/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const body = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      setError(body.message ?? "Failed to save. Try again.");
-      return false;
+  // ── Draft restore on mount ─────────────────────────────────
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY(schoolId));
+      if (draft) {
+        const parsed = JSON.parse(draft) as SchoolProfileFormData;
+        reset(parsed);
+      }
+    } catch {
+      // ignore malformed draft
     }
+  }, [schoolId, reset]);
 
-    setSavedSteps((prev) => new Set(prev).add(currentStep));
-    setMessage("Saved!");
-    router.refresh();
-    return true;
-  }
-
-  async function handleSaveAndNext(data: FormValues) {
-    if (currentStep === 5) {
-      setMessage("All sections saved!");
-      return;
+  // ── Auto-save draft on change ──────────────────────────────
+  const watchedValues = watch();
+  useEffect(() => {
+    if (!isDirty) return;
+    try {
+      localStorage.setItem(DRAFT_KEY(schoolId), JSON.stringify(watchedValues));
+    } catch {
+      // ignore storage errors
     }
-    const ok = await saveStep(data);
-    if (ok && currentStep < 5) {
-      setTimeout(() => {
-        setMessage(null);
-        setCurrentStep((s) => s + 1);
-      }, 600);
-    }
-  }
+  }, [watchedValues, isDirty, schoolId]);
 
-  async function handleSaveOnly(data: FormValues) {
-    await saveStep(data);
-  }
+  // ── Section props (passed to every section) ────────────────
+  const sectionProps: SectionProps = {
+    control,
+    register,
+    errors,
+    watch,
+    setValue,
+    isLoading: saving,
+  };
 
-  // ─── Sidebar ───────────────────────────────────────────────────────────────
-
-  const Sidebar = () => (
-    <nav className="w-full md:w-56 shrink-0">
-      <ul className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-        {STEPS.map((step) => {
-          const Icon = step.icon;
-          const complete = savedSteps.has(step.id) || isStepComplete(step.id, values);
-          const active = currentStep === step.id;
-          return (
-            <li key={step.id}>
-              <button
-                type="button"
-                onClick={() => { setMessage(null); setError(null); setCurrentStep(step.id); }}
-                className={`flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-heading font-semibold transition-colors whitespace-nowrap
-                  ${active
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 hover:bg-gray-100"
-                  }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="hidden md:inline">{step.label}</span>
-                <span className="md:hidden text-xs">{step.label}</span>
-                {complete && !active && (
-                  <CheckCircle className="w-3.5 h-3.5 ml-auto text-green-500 shrink-0" />
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
-
-  // ─── Step panels ───────────────────────────────────────────────────────────
-
-  const inputCls = "h-10 rounded-xl border border-gray-200 bg-gray-50 font-body text-sm";
-
-  const StepBasicInfo = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label htmlFor="name">School name <span className="text-red-500">*</span></Label>
-        <Input id="name" className={inputCls} {...register("name", { required: true })} />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="description">About your school</Label>
-        <Textarea id="description" rows={4} className="rounded-xl border border-gray-200 bg-gray-50 font-body text-sm" {...register("description")} placeholder="Describe your school, vision, and key highlights..." />
-      </div>
-      <ImageUploadField
-        label="School logo"
-        folder="logos"
-        hint="Upload a square logo. PNG or JPG, max 5MB."
-        previewUrl={watch("logoUrl") || null}
-        onUploaded={(url) => setValue("logoUrl", url, { shouldDirty: true })}
-        onClear={() => setValue("logoUrl", "", { shouldDirty: true })}
-      />
-      <input type="hidden" {...register("logoUrl")} />
-    </div>
-  );
-
-  const StepLocation = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label htmlFor="address">Street address <span className="text-red-500">*</span></Label>
-        <Input id="address" className={inputCls} placeholder="e.g. 12, Civil Lines, Near Bus Stand" {...register("address")} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="city">City <span className="text-red-500">*</span></Label>
-          <Input id="city" className={inputCls} placeholder="e.g. Varanasi" {...register("city")} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="state">State <span className="text-red-500">*</span></Label>
-          <Input id="state" className={inputCls} placeholder="e.g. Uttar Pradesh" {...register("state")} />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="pincode">Pincode</Label>
-        <Input id="pincode" className={inputCls} maxLength={6} placeholder="e.g. 221001" {...register("pincode")} />
-      </div>
-    </div>
-  );
-
-  const StepAcademics = () => (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Board <span className="text-red-500">*</span></Label>
-          <Select value={board} onValueChange={(v) => setValue("board", v)}>
-            <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {[["CBSE","CBSE"],["ICSE","ICSE"],["UP_BOARD","UP Board"],["OTHER","Other"]].map(([val, label]) => (
-                <SelectItem key={val} value={val}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>School type <span className="text-red-500">*</span></Label>
-          <Select value={schoolType} onValueChange={(v) => setValue("schoolType", v)}>
-            <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {[["BOYS","Boys"],["GIRLS","Girls"],["CO_ED","Co-Ed"]].map(([val, label]) => (
-                <SelectItem key={val} value={val}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Medium <span className="text-red-500">*</span></Label>
-          <Select value={medium} onValueChange={(v) => setValue("medium", v)}>
-            <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {[["HINDI","Hindi"],["ENGLISH","English"],["BOTH","Both"]].map(([val, label]) => (
-                <SelectItem key={val} value={val}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="establishedYear">Established year</Label>
-          <Input id="establishedYear" className={inputCls} placeholder="e.g. 1995" {...register("establishedYear")} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="classesFrom">Classes from</Label>
-          <Input id="classesFrom" type="number" min={1} max={12} className={inputCls} {...register("classesFrom", { valueAsNumber: true })} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="classesTo">Classes to</Label>
-          <Input id="classesTo" type="number" min={1} max={12} className={inputCls} {...register("classesTo", { valueAsNumber: true })} />
-        </div>
-        <div className="space-y-1.5 col-span-2">
-          <Label htmlFor="totalStudents">Total students</Label>
-          <Input id="totalStudents" className={inputCls} placeholder="e.g. 850" {...register("totalStudents")} />
-        </div>
-      </div>
-    </div>
-  );
-
-  const StepFees = () => (
-    <div className="space-y-5">
-      <p className="text-sm text-gray-500 font-body">All fee fields are optional. Fill what's applicable.</p>
-      <div className="grid grid-cols-2 gap-4">
-        {[
-          { id: "admissionFee",      label: "Admission fee (₹)" },
-          { id: "tuitionFeeMonthly", label: "Monthly tuition (₹)" },
-          { id: "totalAnnualFee",    label: "Total annual fee (₹)" },
-          { id: "transportFee",      label: "Transport fee (₹)" },
-          { id: "hostelFee",         label: "Hostel fee (₹)" },
-        ].map(({ id, label }) => (
-          <div key={id} className="space-y-1.5">
-            <Label htmlFor={id}>{label}</Label>
-            <Input id={id} className={inputCls} placeholder="0" {...register(id as keyof FormValues)} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const StepContact = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
-        <Input id="phone" type="tel" className={inputCls} placeholder="10-digit mobile number" {...register("phone")} />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="email">School email</Label>
-        <Input id="email" type="email" className={inputCls} placeholder="info@yourschool.com" {...register("email")} />
-        <p className="text-xs text-gray-400 font-body">This is your school's public contact email, not your login email.</p>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="website">Website</Label>
-        <Input id="website" type="url" className={inputCls} placeholder="https://yourschool.com" {...register("website")} />
-      </div>
-    </div>
-  );
-
-  const StepGallery = () => (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-500 font-body">Upload photos of your campus, classrooms, and facilities. These appear on your public listing.</p>
-      <SchoolGalleryManager initialImages={galleryImages} />
-    </div>
-  );
-
-  const stepPanels = [
-    <StepBasicInfo key={0} />,
-    <StepLocation key={1} />,
-    <StepAcademics key={2} />,
-    <StepFees key={3} />,
-    <StepContact key={4} />,
-    <StepGallery key={5} />,
+  // ── Section components list ────────────────────────────────
+  const sections = [
+    <BasicInfoSection key="basic" {...sectionProps} />,
+    <AboutSchoolSection key="about" {...sectionProps} />,
+    <AcademicsSection key="academics" {...sectionProps} />,
+    <AdmissionsSection key="admissions" {...sectionProps} />,
+    <FeeStructureSection key="fees" {...sectionProps} />,
+    <FacilitiesSection key="facilities" {...sectionProps} />,
+    <SportsSection key="sports" {...sectionProps} />,
+    <InfrastructureSection key="infrastructure" {...sectionProps} />,
+    <FacultySection key="faculty" {...sectionProps} />,
+    <ProgramsSection key="programs" {...sectionProps} />,
+    <StudentLifeSection key="studentLife" {...sectionProps} />,
+    <AchievementsSection key="achievements" {...sectionProps} />,
+    <BoardResultsSection key="boardResults" {...sectionProps} />,
+    <ScholarshipsSection key="scholarships" {...sectionProps} />,
+    <HostelSection key="hostel" {...sectionProps} />,
+    <TransportSection key="transport" {...sectionProps} />,
+    <SafetySection key="safety" {...sectionProps} />,
+    <GallerySection key="gallery" {...sectionProps} />,
+    <DownloadsSection key="downloads" {...sectionProps} />,
+    <ContactSection key="contact" {...sectionProps} />,
+    <ReviewsSection key="reviews" {...sectionProps} />,
+    <FAQsSection key="faqs" {...sectionProps} />,
   ];
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  const totalSections = sections.length;
+  const isFirst = activeSection === 0;
+  const isLast = activeSection === totalSections - 1;
 
+  // ── Submit ─────────────────────────────────────────────────
+  const onSubmit = useCallback(
+    async (data: SchoolProfileFormData) => {
+      setSaving(true);
+      setSaveError(null);
+      setSaveSuccess(false);
+
+      try {
+        const payload = {
+          // Basic Info
+          name: data.basicInfo.schoolName,
+          tagline: data.basicInfo.tagline || undefined,
+          establishedYear: data.basicInfo.establishedYear
+            ? Number(data.basicInfo.establishedYear)
+            : undefined,
+          managementType: data.basicInfo.managementType || undefined,
+          schoolCategory: data.basicInfo.category || undefined,
+          schoolFormat: data.basicInfo.format || undefined,
+          schoolType: data.basicInfo.genderType || undefined,
+          board: data.basicInfo.board || undefined,
+          medium: data.basicInfo.medium || undefined,
+          city: data.basicInfo.city || undefined,
+          state: data.basicInfo.state || undefined,
+          affiliationNumber: data.basicInfo.affiliationNumber || undefined,
+          startTime: data.basicInfo.startTime || undefined,
+          endTime: data.basicInfo.endTime || undefined,
+          workingDays: data.basicInfo.workingDays || undefined,
+          logoUrl: data.basicInfo.logoUrl || undefined,
+          coverImageUrl: data.basicInfo.coverImageUrl || undefined,
+          classesOffered: data.basicInfo.classesOffered ?? [],
+
+          // About
+          description: data.about.about || undefined,
+          vision: data.about.vision || undefined,
+          mission: data.about.mission || undefined,
+          principalMessage: data.about.principalMessage || undefined,
+
+          // Academics
+          streamsOffered: data.academics.streamsOffered ?? [],
+          studentTeacherRatio: data.academics.studentTeacherRatio || undefined,
+
+          // Admissions
+          admissionOpen: data.admissions.admissionOpen ?? false,
+          admissionStartDate: data.admissions.startDate || undefined,
+          admissionEndDate: data.admissions.endDate || undefined,
+          ageCriteria: data.admissions.ageCriteria || undefined,
+          requiredDocuments: data.admissions.requiredDocuments || undefined,
+          admissionProcess: data.admissions.admissionProcess || undefined,
+
+          // Fees
+          averageAnnualFee: data.fees.averageAnnualFee
+            ? Number(data.fees.averageAnnualFee)
+            : undefined,
+          prePrimaryFee: data.fees.prePrimaryFee
+            ? Number(data.fees.prePrimaryFee)
+            : undefined,
+          class1to5Fee: data.fees.class1to5Fee
+            ? Number(data.fees.class1to5Fee)
+            : undefined,
+          class6to8Fee: data.fees.class6to8Fee
+            ? Number(data.fees.class6to8Fee)
+            : undefined,
+          class9to10Fee: data.fees.class9to10Fee
+            ? Number(data.fees.class9to10Fee)
+            : undefined,
+          class11to12Fee: data.fees.class11to12Fee
+            ? Number(data.fees.class11to12Fee)
+            : undefined,
+
+          // Facilities & Sports
+          facilitiesList: data.facilities.items ?? [],
+          sportsList: data.sports.items ?? [],
+
+          // Infrastructure
+          campusArea: data.infrastructure.campusArea || undefined,
+          totalClassrooms: data.infrastructure.classrooms
+            ? Number(data.infrastructure.classrooms)
+            : undefined,
+          totalLabs: data.infrastructure.labs
+            ? Number(data.infrastructure.labs)
+            : undefined,
+          libraryBooks: data.infrastructure.libraryBooks
+            ? Number(data.infrastructure.libraryBooks)
+            : undefined,
+          hostelCapacity: data.infrastructure.hostelCapacity
+            ? Number(data.infrastructure.hostelCapacity)
+            : undefined,
+          totalBuses: data.infrastructure.buses
+            ? Number(data.infrastructure.buses)
+            : undefined,
+
+          // Faculty
+          totalTeachers: data.faculty.totalTeachers
+            ? Number(data.faculty.totalTeachers)
+            : undefined,
+          qualifiedTeachers: data.faculty.qualifiedTeachers
+            ? Number(data.faculty.qualifiedTeachers)
+            : undefined,
+          trainingPrograms: data.faculty.trainingPrograms || undefined,
+
+          // Programs
+          programsList: data.programs.items ?? [],
+
+          // Student Life
+          clubsActivities: data.studentLife.clubs || undefined,
+          culturalActivities: data.studentLife.culturalActivities || undefined,
+          annualEvents: data.studentLife.annualEvents || undefined,
+          educationalTours: data.studentLife.educationalTours || undefined,
+
+          // Achievements
+          academicAchievements: data.achievements.academic || undefined,
+          sportsAchievements: data.achievements.sports || undefined,
+          awardsRecognitions: data.achievements.awards || undefined,
+
+          // Hostel
+          hostelAvailable: data.hostel.available ?? false,
+          hostelBoys: data.hostel.boys ?? false,
+          hostelGirls: data.hostel.girls ?? false,
+          hostelMess: data.hostel.mess ?? false,
+
+          // Transport
+          transportAvailable: data.transport.available ?? false,
+          transportAreas: data.transport.coverageAreas || undefined,
+          gpsTracking: data.transport.gpsTracking ?? false,
+          totalVehicles: data.transport.vehicles || undefined,
+
+          // Safety
+          hasCCTV: data.safety.cctv ?? false,
+          hasGuards: data.safety.guards ?? false,
+          hasMedicalRoom: data.safety.medicalRoom ?? false,
+          hasFireSafety: data.safety.fireSafety ?? false,
+          hasVisitorMgmt: data.safety.visitorManagement ?? false,
+
+          // Contact
+          phone: data.contact.phone || undefined,
+          whatsapp: data.contact.whatsapp || undefined,
+          email: data.contact.email || undefined,
+          website: data.contact.website || undefined,
+          address: data.contact.address || undefined,
+          mapUrl: data.contact.mapUrl || undefined,
+          facebook: data.contact.facebook || undefined,
+          instagram: data.contact.instagram || undefined,
+          youtube: data.contact.youtube || undefined,
+          linkedin: data.contact.linkedin || undefined,
+          admissionCoordinatorName:
+            data.contact.admissionCoordinatorName || undefined,
+          admissionPhone: data.contact.admissionPhone || undefined,
+          admissionEmail: data.contact.admissionEmail || undefined,
+
+          // Related arrays — empty entries filter out karo
+          boardResults: (data.boardResults.results ?? [])
+            .filter((r) => r.year?.trim())
+            .map((r) => ({
+              year: r.year,
+              class10Pass: r.class10Percent || undefined,
+              class12Pass: r.class12Percent || undefined,
+              topperName: r.topperName || undefined,
+              topperScore: r.topScore || undefined,
+            })),
+
+          scholarships: (data.scholarships.list ?? [])
+            .filter((s) => s.name?.trim())
+            .map((s) => ({
+              name: s.name,
+              eligibility: s.eligibility || undefined,
+              benefits: s.benefits || undefined,
+            })),
+
+          faqs: (data.faqs.list ?? [])
+            .filter((f) => f.question?.trim() && f.answer?.trim())
+            .map((f) => ({
+              question: f.question,
+              answer: f.answer,
+            })),
+
+          downloads: (data.downloads.files ?? [])
+            .filter((d) => d.label?.trim() && d.url?.trim())
+            .map((d) => ({
+              label: d.label,
+              url: d.url,
+            })),
+        };
+
+        const res = await fetch("/api/school/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof err.message === "string"
+              ? err.message
+              : "Save failed. Please try again.",
+          );
+        }
+
+        localStorage.removeItem(DRAFT_KEY(schoolId));
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } catch (err: unknown) {
+        setSaveError(
+          err instanceof Error ? err.message : "Something went wrong.",
+        );
+      } finally {
+        setSaving(false);
+      }
+    },
+    [schoolId],
+  );
+
+  // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="flex flex-col md:flex-row gap-6">
-      <Sidebar />
+    <div className="flex gap-6 min-h-screen">
+      {/* Sidebar */}
+      <SchoolProfileSidebar
+        sections={SECTION_LABELS.map((label, index) => ({ index, label }))}
+        activeIndex={activeSection}
+        onSelect={setActiveSection}
+      />
 
-      <div className="flex-1 min-w-0">
-        <form onSubmit={handleSubmit(handleSaveAndNext)}>
-          {/* Step header */}
-          <div className="mb-5">
-            <h2 className="font-heading font-bold text-lg text-blue-800">
-              {STEPS[currentStep].label}
-            </h2>
-            <p className="text-xs text-gray-400 font-body mt-0.5">
-              Step {currentStep + 1} of {STEPS.length}
-            </p>
-          </div>
+      {/* Main content */}
+      <div className="flex-1 max-w-3xl">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          {/* Active section */}
+          <div className="mb-6">{sections[activeSection]}</div>
 
-          {/* Alerts */}
-          {message && (
-            <div className="flex items-center gap-2 p-3 mb-4 bg-green-50 rounded-xl border border-green-200">
-              <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-              <p className="text-sm font-body text-green-700">{message}</p>
-            </div>
-          )}
-          {error && (
-            <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 rounded-xl border border-red-200">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-              <p className="text-sm font-body text-red-600">{error}</p>
+          {/* Save feedback */}
+          {saveError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200/60 rounded-xl">
+              <p className="font-body text-body text-red-600">{saveError}</p>
             </div>
           )}
 
-          {/* Step content */}
-          <div className="mb-6">{stepPanels[currentStep]}</div>
+          {saveSuccess && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200/60 rounded-xl flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <p className="font-body text-body text-green-700">
+                Changes saved!
+              </p>
+            </div>
+          )}
 
-          {/* Footer buttons — hide for gallery step */}
-          {currentStep !== 5 && (
-            <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+          {/* Navigation footer */}
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setActiveSection((i) => Math.max(0, i - 1))}
+              disabled={isFirst || saving}
+              className="rounded-xl font-heading text-btn"
+            >
+              ← Previous
+            </Button>
+
+            <div className="flex items-center gap-3">
+              {/* Save current section */}
               <Button
                 type="submit"
-                disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-heading font-semibold rounded-xl h-10 px-5"
+                disabled={saving}
+                variant="outline"
+                className="rounded-xl font-heading text-btn border-blue-200 text-blue-600 hover:bg-blue-50"
               >
-                {isSubmitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving…</>
-                ) : currentStep < STEPS.length - 2 ? (
-                  "Save & Next →"
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Saving…
+                  </>
                 ) : (
-                  "Save"
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save
+                  </>
                 )}
               </Button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleSubmit(handleSaveOnly)}
-                className="text-sm font-heading font-semibold text-gray-500 hover:text-blue-600 transition-colors"
-              >
-                Save only
-              </button>
-              {currentStep > 0 && (
-                <button
-                  type="button"
-                  onClick={() => { setMessage(null); setError(null); setCurrentStep((s) => s - 1); }}
-                  className="ml-auto text-sm font-heading font-semibold text-gray-400 hover:text-gray-600"
+
+              {/* Next or Save All */}
+              {isLast ? (
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  className="h-11 bg-blue-600 hover:bg-blue-700 rounded-xl font-heading text-btn shadow-btn"
                 >
-                  ← Back
-                </button>
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save all changes"
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setActiveSection((i) => Math.min(totalSections - 1, i + 1))
+                  }
+                  disabled={saving}
+                  className="h-11 bg-blue-600 hover:bg-blue-700 rounded-xl font-heading text-btn shadow-btn"
+                >
+                  Next →
+                </Button>
               )}
             </div>
-          )}
+          </div>
         </form>
       </div>
     </div>
