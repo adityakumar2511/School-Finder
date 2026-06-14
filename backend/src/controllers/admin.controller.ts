@@ -20,7 +20,7 @@ import {
   invalidateSchoolCache,
   withCache,
 } from "../lib/cache";
-import { adminSchoolListSelect } from "../lib/queries/schools";
+import { adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect  } from "../lib/queries/schools";
 
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"] as const;
 type RoleValue = (typeof VALID_ROLES)[number];
@@ -83,27 +83,18 @@ export const getStats = async (_req: AuthRequest, res: Response) => {
 };
 
 // GET /api/admin/schools
+// Supports: page, limit, status, search, state, city
 export const getAdminSchools = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit, DEFAULT_ADMIN_PAGE_LIMIT);
   const skip = (page - 1) * limit;
-  const status = req.query.status as string | undefined;
-  const search = req.query.search as string | undefined;
 
-  const where: Record<string, unknown> = {};
-
-  if (status && ["PENDING", "APPROVED", "REJECTED"].includes(status)) {
-    where.status = status;
-  }
-
-  const term = search?.trim();
-  if (term) {
-    where.OR = [
-      { name: { contains: term, mode: "insensitive" } },
-      { city: { contains: term, mode: "insensitive" } },
-      { owner: { email: { contains: term, mode: "insensitive" } } },
-    ];
-  }
+  const where = buildAdminSchoolWhere({
+    status: req.query.status as string | undefined,
+    search: req.query.search as string | undefined,
+    state: req.query.state as string | undefined,
+    city: req.query.city as string | undefined,
+  });
 
   const [rows, total] = await Promise.all([
     prisma.school.findMany({
@@ -118,6 +109,46 @@ export const getAdminSchools = async (req: AuthRequest, res: Response) => {
 
   const pagination = buildPaginationMeta(total, page, limit);
   res.json(paginatedResponse(rows, pagination, "schools"));
+};
+
+// GET /api/admin/schools/states — distinct states across ALL schools (any status)
+// Used to populate the admin state filter dropdown.
+export const getAdminStates = async (_req: AuthRequest, res: Response) => {
+  const cacheKey = buildCacheKey("admin:schools:states", {});
+
+  const states = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
+    prisma.school.findMany({
+      where: { state: { not: "" } },
+      select: { state: true },
+      distinct: ["state"],
+      orderBy: { state: "asc" },
+    })
+  );
+
+  res.json({ data: states.map((s) => s.state).filter(Boolean) });
+};
+
+// GET /api/admin/schools/cities?state=xxx — distinct cities across ALL schools
+// (any status), optionally filtered by state. Used for the admin city dropdown,
+// which is dependent on the selected state.
+export const getAdminCities = async (req: AuthRequest, res: Response) => {
+  const state = (req.query.state as string | undefined)?.trim();
+
+  const cacheKey = buildCacheKey("admin:schools:cities", { state: state || "" });
+
+  const cities = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
+    prisma.school.findMany({
+      where: {
+        city: { not: "" },
+        ...(state ? { state: { equals: state, mode: "insensitive" } } : {}),
+      },
+      select: { city: true },
+      distinct: ["city"],
+      orderBy: { city: "asc" },
+    })
+  );
+
+  res.json({ data: cities.map((c) => c.city).filter(Boolean) });
 };
 
 // PATCH /api/admin/schools/:id/approve
@@ -384,7 +415,6 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
 };
 
 // POST /api/admin/add-school
-// POST /api/admin/add-school
 export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
   if (!req.user?.id) {
     throw Errors.Unauthorized("Authentication required");
@@ -546,4 +576,33 @@ export const checkOwnerEmail = async (req: AuthRequest, res: Response) => {
     hasSchool: school !== null,
     school,
   });
+};
+
+
+// ── ADD this import at top of admin.controller.ts ──────────────────────────
+// import { schoolDetailSelect } from "../lib/queries/schools";
+// (merge with existing: adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect)
+
+// ── ADD this export anywhere in admin.controller.ts ─────────────────────────
+
+// GET /api/admin/schools/:id — full detail by id, any status, for admin edit page
+export const getAdminSchoolById = async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id).trim();
+  if (!id) throw Errors.BadRequest("Invalid school identifier");
+
+  const school = await prisma.school.findUnique({
+    where: { id },
+    select: {
+      ...schoolDetailSelect,
+      customFields: true,
+      boardResults: { orderBy: { year: "desc" } },
+      scholarships: true,
+      faqs: true,
+      downloads: true,
+    },
+  });
+
+  if (!school) throw Errors.NotFound("School");
+
+  res.json({ data: school });
 };

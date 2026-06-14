@@ -198,6 +198,50 @@ export function buildSchoolListWhere(filters: {
   return where;
 }
 
+/**
+ * Admin school list where-builder.
+ * Unlike the public `buildSchoolListWhere`, this:
+ *  - does NOT default status to "APPROVED" (admin needs to see all statuses)
+ *  - supports exact-match state/city filters (admin dropdowns send exact values
+ *    sourced from getStates/getCities, not free-text)
+ *  - supports a free-text `search` across name, city, and owner email (handled
+ *    by the caller for the owner-email OR clause; this builder covers state/city)
+ */
+export function buildAdminSchoolWhere(filters: {
+  status?: string;
+  search?: string;
+  state?: string;
+  city?: string;
+}): Prisma.SchoolWhereInput {
+  const where: Prisma.SchoolWhereInput = {};
+
+  if (
+    filters.status &&
+    ["DRAFT", "PENDING", "APPROVED", "REJECTED"].includes(filters.status)
+  ) {
+    where.status = filters.status as Prisma.EnumSchoolStatusFilter["equals"];
+  }
+
+  const term = filters.search?.trim();
+  if (term) {
+    where.OR = [
+      { name: { contains: term, mode: "insensitive" } },
+      { city: { contains: term, mode: "insensitive" } },
+      { owner: { email: { contains: term, mode: "insensitive" } } },
+    ];
+  }
+
+  if (filters.state?.trim()) {
+    where.state = { equals: filters.state.trim(), mode: "insensitive" };
+  }
+
+  if (filters.city?.trim()) {
+    where.city = { equals: filters.city.trim(), mode: "insensitive" };
+  }
+
+  return where;
+}
+
 /** Public school detail — all 22-section fields + relations */
 export const schoolDetailSelect = {
   id: true,

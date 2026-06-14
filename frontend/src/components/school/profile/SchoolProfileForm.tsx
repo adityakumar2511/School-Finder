@@ -420,6 +420,11 @@ function mapSchoolToFormData(
       recognitions: (school.recognitions as string) || "",
       customFields: [],
     },
+    // NOTE: boardResults, scholarships, gallery, downloads, faqs relation arrays
+    // are left as [] intentionally (Option B — fix tracked separately).
+    // These 5 sections are safe for viewing but saving will wipe existing data
+    // in those relations. Fix before enabling school-admin profile edit or
+    // admin edit for these sections.
     boardResults: {
       results: [],
       customFields: [],
@@ -475,18 +480,26 @@ function mapSchoolToFormData(
 const DRAFT_KEY = (schoolId: string) => `sf_school_profile_draft_${schoolId}`;
 
 // ─────────────────────────────────────────────────────────────
-// Props
+// Props — CHANGE 1
 // ─────────────────────────────────────────────────────────────
 
 interface SchoolProfileFormProps {
   school: Record<string, unknown>;
+  /** Override the PATCH endpoint (admin edit uses /api/admin/schools/[id]) */
+  submitEndpoint?: string;
+  /** When true, skip localStorage draft save/restore (admin edit mode) */
+  disableDraft?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Component
+// Component — CHANGE 2: destructure new props with defaults
 // ─────────────────────────────────────────────────────────────
 
-export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
+export default function SchoolProfileForm({
+  school,
+  submitEndpoint = "/api/school/profile",
+  disableDraft = false,
+}: SchoolProfileFormProps) {
   const [activeSection, setActiveSection] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -509,8 +522,9 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
     defaultValues: mapSchoolToFormData(school),
   });
 
-  // ── Draft restore on mount ─────────────────────────────────
+  // ── Draft restore on mount — CHANGE 3 ─────────────────────
   useEffect(() => {
+    if (disableDraft) return;
     try {
       const draft = localStorage.getItem(DRAFT_KEY(schoolId));
       if (draft) {
@@ -520,18 +534,19 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
     } catch {
       // ignore malformed draft
     }
-  }, [schoolId, reset]);
+  }, [schoolId, reset, disableDraft]);
 
-  // ── Auto-save draft on change ──────────────────────────────
+  // ── Auto-save draft on change — CHANGE 4 ──────────────────
   const watchedValues = watch();
   useEffect(() => {
+    if (disableDraft) return;
     if (!isDirty) return;
     try {
       localStorage.setItem(DRAFT_KEY(schoolId), JSON.stringify(watchedValues));
     } catch {
       // ignore storage errors
     }
-  }, [watchedValues, isDirty, schoolId]);
+  }, [watchedValues, isDirty, schoolId, disableDraft]);
 
   // ── Section props (passed to every section) ────────────────
   const sectionProps: SectionProps = {
@@ -573,7 +588,7 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
   const isFirst = activeSection === 0;
   const isLast = activeSection === totalSections - 1;
 
-  // ── Submit ─────────────────────────────────────────────────
+  // ── Submit — CHANGE 5: use submitEndpoint + conditional draft clear ──
   const onSubmit = useCallback(
     async (data: SchoolProfileFormData) => {
       setSaving(true);
@@ -757,7 +772,8 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
             })),
         };
 
-        const res = await fetch("/api/school/profile", {
+        // CHANGE 5a: use submitEndpoint prop instead of hardcoded URL
+        const res = await fetch(submitEndpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -780,12 +796,13 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
           return;
         }
 
-        // Success
+        // CHANGE 5b: conditionally clear draft
         setFieldErrors({});
-        localStorage.removeItem(DRAFT_KEY(schoolId));
+        if (!disableDraft) {
+          localStorage.removeItem(DRAFT_KEY(schoolId));
+        }
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
-
       } catch (networkErr: unknown) {
         const parsed = await parseApiError(null, networkErr);
         setSaveError(parsed.message);
@@ -793,7 +810,8 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
         setSaving(false);
       }
     },
-    [schoolId],
+    // CHANGE 6: updated dependency array
+    [schoolId, submitEndpoint, disableDraft],
   );
 
   // ── Render ─────────────────────────────────────────────────
@@ -812,7 +830,7 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
           {/* Active section */}
           <div className="mb-6">{sections[activeSection]}</div>
 
-          {/* Field-level errors summary (shown when backend returns VALIDATION_ERROR) */}
+          {/* Field-level errors summary */}
           {Object.keys(fieldErrors).length > 0 && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200/60 rounded-xl">
               <p className="font-heading text-sm text-red-700 font-semibold mb-2">
@@ -858,7 +876,6 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
             </Button>
 
             <div className="flex items-center gap-3">
-              {/* Save current section */}
               <Button
                 type="submit"
                 disabled={saving}
@@ -878,7 +895,6 @@ export default function SchoolProfileForm({ school }: SchoolProfileFormProps) {
                 )}
               </Button>
 
-              {/* Next or Save All */}
               {isLast ? (
                 <Button
                   type="submit"

@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { SchoolStatus } from "@/lib/types/database";
-import { getAdminSchoolsList } from "@/lib/admin/data";
+import {
+  getAdminSchoolsList,
+  getAdminSchoolStates,
+  getAdminSchoolCities,
+} from "@/lib/admin/data";
 import AdminSearchBar from "@/components/admin/search-pagination/AdminSearchBar";
 import AdminPagination from "@/components/admin/search-pagination/AdminPagination";
 import SchoolStatusBadge from "@/components/admin/moderation/SchoolStatusBadge";
@@ -31,6 +35,8 @@ type SearchParams = Promise<{
   status?: string;
   q?: string;
   page?: string;
+  state?: string;
+  city?: string;
 }>;
 
 function formatDate(date: Date | string) {
@@ -50,17 +56,23 @@ async function SchoolsTable({ searchParams }: { searchParams: SearchParams }) {
       ? (statusParam as SchoolStatus)
       : undefined;
   const search = params.q?.trim();
+  const state = params.state?.trim();
+  const city = params.city?.trim();
 
   const result = await getAdminSchoolsList({
     page,
     limit: PAGE_SIZE,
     status,
     search,
+    state,
+    city,
   });
 
   const filterParams = {
     status: status ?? undefined,
     q: search ?? undefined,
+    state: state ?? undefined,
+    city: city ?? undefined,
   };
 
   return (
@@ -132,6 +144,35 @@ function TableSkeleton() {
   return <Skeleton className="h-64 w-full" />;
 }
 
+async function LocationFilterBar({
+  basePath,
+  currentQuery,
+  currentState,
+  currentCity,
+}: {
+  basePath: string;
+  currentQuery: string;
+  currentState: string;
+  currentCity: string;
+}) {
+  const [states, cities] = await Promise.all([
+    getAdminSchoolStates(),
+    getAdminSchoolCities(currentState || undefined),
+  ]);
+
+  return (
+    <AdminSearchBar
+      basePath={basePath}
+      currentQuery={currentQuery}
+      placeholder="Search by school name, city, or owner email"
+      states={states}
+      cities={cities}
+      currentState={currentState}
+      currentCity={currentCity}
+    />
+  );
+}
+
 export default async function AdminSchoolsPage({
   searchParams,
 }: {
@@ -139,6 +180,8 @@ export default async function AdminSchoolsPage({
 }) {
   const params = await searchParams;
   const activeStatus = params.status?.toUpperCase();
+  const currentState = params.state?.trim() ?? "";
+  const currentCity = params.city?.trim() ?? "";
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
@@ -175,12 +218,13 @@ export default async function AdminSchoolsPage({
         })}
       </div>
 
-      <Suspense fallback={<Skeleton className="mb-4 h-10 w-full max-w-sm" />}>
+      <Suspense fallback={<Skeleton className="mb-4 h-20 w-full max-w-sm" />}>
         <div className="mb-6">
-          <AdminSearchBar
+          <LocationFilterBar
             basePath="/admin/schools"
             currentQuery={params.q ?? ""}
-            placeholder="Search by school name, city, or owner email"
+            currentState={currentState}
+            currentCity={currentCity}
           />
         </div>
       </Suspense>

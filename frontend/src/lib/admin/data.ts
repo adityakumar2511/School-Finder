@@ -96,34 +96,33 @@ export async function getRecentModerationActivity(limit = 5) {
     }));
 }
 
-// AdminSchoolRow type mein yeh fields add karo:
 export type AdminSchoolRow = {
   id: string;
   name: string;
   slug: string;
   city: string;
-  state: string;        // ADD
-  address: string;      // ADD
+  state: string;
+  address: string;
   board: string;
-  schoolType: string;   // ADD
-  medium: string;       // ADD
-  classesFrom: number;  // ADD
-  classesTo: number;    // ADD
-  phone: string;        // ADD
-  email: string | null; // ADD
-  website: string | null; // ADD
-  description: string | null; // ADD
+  schoolType: string;
+  medium: string;
+  classesFrom: number;
+  classesTo: number;
+  phone: string;
+  email: string | null;
+  website: string | null;
+  description: string | null;
   status: SchoolStatus;
   createdAt: string;
   rejectionReason: string | null;
-  totalStudents: number | null;   // ADD
-  establishedYear: number | null; // ADD
-  admissionFee: number | null;    // ADD
-  tuitionFeeMonthly: number | null; // ADD
-  totalAnnualFee: number | null;  // ADD
-  transportFee: number | null;    // ADD
-  hostelFee: number | null;       // ADD
-  logoUrl: string | null;         // ADD
+  totalStudents: number | null;
+  establishedYear: number | null;
+  admissionFee: number | null;
+  tuitionFeeMonthly: number | null;
+  totalAnnualFee: number | null;
+  transportFee: number | null;
+  hostelFee: number | null;
+  logoUrl: string | null;
   owner: { name: string | null; email: string };
 };
 
@@ -132,6 +131,8 @@ export async function getAdminSchoolsList(options: {
   limit?: number;
   status?: SchoolStatus;
   search?: string;
+  state?: string;
+  city?: string;
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
@@ -142,6 +143,8 @@ export async function getAdminSchoolsList(options: {
 
   if (options.status) params.set("status", options.status);
   if (options.search?.trim()) params.set("search", options.search.trim());
+  if (options.state?.trim()) params.set("state", options.state.trim());
+  if (options.city?.trim()) params.set("city", options.city.trim());
 
   const { ok, data } = await adminFetch<{
     data?: AdminSchoolRow[];
@@ -167,6 +170,29 @@ export async function getAdminSchoolsList(options: {
     limit: pagination.limit,
     totalPages: pagination.totalPages,
   };
+}
+
+// Distinct states across all schools (any status) — for the admin state filter dropdown
+export async function getAdminSchoolStates(): Promise<string[]> {
+  const { ok, data } = await adminFetch<{ data?: string[] }>(
+    "/api/admin/schools/states"
+  );
+
+  return ok && data?.data ? data.data : [];
+}
+
+// Distinct cities across all schools (any status), optionally scoped to a state —
+// for the admin city filter dropdown (dependent on selected state)
+export async function getAdminSchoolCities(state?: string): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (state?.trim()) params.set("state", state.trim());
+
+  const query = params.toString();
+  const { ok, data } = await adminFetch<{ data?: string[] }>(
+    `/api/admin/schools/cities${query ? `?${query}` : ""}`
+  );
+
+  return ok && data?.data ? data.data : [];
 }
 
 export type AdminUserRow = {
@@ -267,6 +293,20 @@ export async function getAdminInquiriesList(options: {
     limit: pagination.limit,
     totalPages: pagination.totalPages,
   };
+}
+
+// Fetch full school detail by id (admin only) — used by admin edit page
+// Returns complete school with all relations (boardResults, faqs, etc.)
+export async function getAdminSchoolById(
+  id: string
+): Promise<Record<string, unknown> | null> {
+  const { ok, data } = await adminFetch<{ school?: Record<string, unknown>; data?: Record<string, unknown> }>(
+    `/api/admin/schools/${id}`
+  );
+
+  if (!ok || !data) return null;
+
+  return data.school ?? data.data ?? null;
 }
 
 export { ACCOUNT_DISABLED_PHONE };

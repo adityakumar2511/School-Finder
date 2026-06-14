@@ -2,8 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, Eye, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle, XCircle, Eye, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/shared/ui/dialog";
 import type { SchoolStatus } from "@/lib/types/database";
 import SchoolDetailModal from "./SchoolDetailModal";
 
@@ -45,7 +54,8 @@ type Props = {
 export default function SchoolModerationActions({ school, currentStatus }: Props) {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
-  const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [loading, setLoading] = useState<"approve" | "reject" | "delete" | null>(null);
 
   async function handleApprove(id: string) {
     setLoading("approve");
@@ -71,6 +81,17 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
     }
   }
 
+  async function handleDelete(id: string) {
+    setLoading("delete");
+    try {
+      await fetch(`/api/admin/schools/${id}`, { method: "DELETE" });
+      setDeleteOpen(false);
+      router.refresh();
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <>
       <div className="flex items-center gap-2">
@@ -82,6 +103,18 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
         >
           <Eye className="h-3.5 w-3.5 mr-1" />
           View
+        </Button>
+
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
+        >
+          <Link href={`/admin/schools/${school.id}/edit`}>
+            <Pencil className="h-3.5 w-3.5 mr-1" />
+            Edit
+          </Link>
         </Button>
 
         {currentStatus === "PENDING" && (
@@ -119,6 +152,23 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
             </Button>
           </>
         )}
+
+        <Button
+          size="sm"
+          disabled={loading !== null}
+          onClick={() => setDeleteOpen(true)}
+          variant="outline"
+          className="h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 font-heading text-xs rounded-lg"
+        >
+          {loading === "delete" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Delete
+            </>
+          )}
+        </Button>
       </div>
 
       <SchoolDetailModal
@@ -128,6 +178,39 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
         onApprove={handleApprove}
         onReject={handleReject}
       />
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete &quot;{school.name}&quot;?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the school, its profile, gallery,
+              inquiries, and all related data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={loading !== null}
+              className="font-heading text-xs rounded-lg"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleDelete(school.id)}
+              disabled={loading !== null}
+              className="bg-danger hover:bg-danger/90 font-heading text-xs rounded-lg"
+            >
+              {loading === "delete" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Delete School"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
