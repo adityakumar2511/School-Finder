@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { CheckCircle, Clock, XCircle, ArrowRight } from "lucide-react";
 import type { SchoolStatus } from "@/lib/types/database";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/shared/ui/card";
+import { Badge } from "@/components/shared/ui/badge";
 
 type Props = {
   status: SchoolStatus;

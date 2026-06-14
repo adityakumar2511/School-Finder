@@ -9,16 +9,16 @@ import {
   Plus,
   ArrowRight,
 } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import {
   getAdminStats,
   getRecentSchoolRegistrations,
   getRecentInquiries,
   getRecentModerationActivity,
 } from "@/lib/admin/data";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import SchoolStatusBadge from "@/components/admin/SchoolStatusBadge";
-import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
+import SchoolStatusBadge from "@/components/admin/moderation/SchoolStatusBadge";
+import InquiryStatusBadge from "@/components/school/inquiries/InquiryStatusBadge";
 
 function formatDate(date: Date | string) {
   return new Date(date).toLocaleDateString("en-IN", {

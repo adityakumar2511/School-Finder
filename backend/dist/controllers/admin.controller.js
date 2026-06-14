@@ -311,60 +311,39 @@ const updateUserStatus = async (req, res) => {
 };
 exports.updateUserStatus = updateUserStatus;
 // POST /api/admin/add-school
+// POST /api/admin/add-school
 const addSchoolDirect = async (req, res) => {
     if (!req.user?.id) {
         throw AppError_1.Errors.Unauthorized("Authentication required");
     }
-    const { ownerEmail, ownerName, name, city, state, address, pincode, board, schoolType, medium, classesFrom, classesTo, phone, email, website, logoUrl, admissionFee, tuitionFeeMonthly, totalAnnualFee, transportFee, hostelFee, description, totalStudents, establishedYear, } = req.body;
-    if (!ownerEmail || !name) {
-        throw AppError_1.Errors.BadRequest("ownerEmail and school name are required");
+    const { ownerEmail, ownerName, ownerPassword, name, phone } = req.body;
+    if (!ownerEmail || !name || !phone) {
+        throw AppError_1.Errors.BadRequest("ownerEmail, name, and phone are required");
     }
-    const normalizedName = name.trim();
-    const existingSchool = await prisma_1.default.school.findFirst({
-        where: { name: { equals: normalizedName, mode: "insensitive" } },
-        select: { id: true },
-    });
-    if (existingSchool) {
-        throw AppError_1.Errors.Conflict("A school with this name already exists");
-    }
-    let owner = await prisma_1.default.user.findUnique({
+    // ── Unique check: email pe, name pe nahi ──────────────────────────────
+    const existingUserWithSchool = await prisma_1.default.user.findUnique({
         where: { email: ownerEmail },
-        include: {
-            ownedSchools: { select: { id: true }, take: 1 },
-        },
+        include: { ownedSchools: { select: { id: true }, take: 1 } },
     });
-    if (owner) {
-        if (owner.role === "SCHOOL_ADMIN" && owner.ownedSchools.length > 0) {
-            throw AppError_1.Errors.Conflict("This email is already associated with a school");
-        }
-        if (owner.role === "ADMIN") {
+    if (existingUserWithSchool) {
+        if (existingUserWithSchool.role === "ADMIN") {
             throw AppError_1.Errors.BadRequest("Cannot assign a platform admin as school owner");
         }
-        if (owner.role === "PARENT") {
-            owner = await prisma_1.default.user.update({
-                where: { id: owner.id },
-                data: { role: "SCHOOL_ADMIN" },
-                include: {
-                    ownedSchools: { select: { id: true }, take: 1 },
-                },
-            });
+        if (existingUserWithSchool.role === "SCHOOL_ADMIN" &&
+            existingUserWithSchool.ownedSchools.length > 0) {
+            throw AppError_1.Errors.Conflict("This email is already associated with a school");
         }
     }
+    // ── Owner resolve ─────────────────────────────────────────────────────
+    let owner = existingUserWithSchool;
+    if (owner && owner.role === "PARENT") {
+        owner = await prisma_1.default.user.update({
+            where: { id: owner.id },
+            data: { role: "SCHOOL_ADMIN" },
+            include: { ownedSchools: { select: { id: true }, take: 1 } },
+        });
+    }
     if (!owner) {
-        // const tempPassword = await bcrypt.hash(
-        //   Math.random().toString(36).slice(-8),
-        //   parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
-        // );
-        // owner = await prisma.user.create({
-        //   data: {
-        //     name: ownerName || ownerEmail.split("@")[0],
-        //     email: ownerEmail,
-        //     password: tempPassword,
-        //     role: "SCHOOL_ADMIN",
-        //   },
-        // });
-        // NAYA — ownerPassword use karo agar diya ho
-        const { ownerPassword } = req.body;
         const passwordToHash = ownerPassword?.trim() || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcryptjs_1.default.hash(passwordToHash, parseInt(process.env.BCRYPT_ROUNDS || "12", 10));
         owner = await prisma_1.default.user.create({
@@ -373,57 +352,55 @@ const addSchoolDirect = async (req, res) => {
                 email: ownerEmail,
                 password: hashedPassword,
                 role: "SCHOOL_ADMIN",
+                phone,
             },
-            include: {
-                ownedSchools: { select: { id: true }, take: 1 },
-            },
+            include: { ownedSchools: { select: { id: true }, take: 1 } },
         });
     }
     if (!owner) {
         throw new AppError_1.AppError("Failed to resolve school owner", 500, "INTERNAL_ERROR");
     }
-    const slug = name
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "") +
-        "-" +
-        Math.random().toString(36).slice(2, 7);
+    // ── Slug ──────────────────────────────────────────────────────────────
+    const slug = await generateSlug(name.trim());
+    // ── School create — all required fields with defaults ─────────────────
     const school = await prisma_1.default.school.create({
         data: {
-            name: normalizedName,
+            name: name.trim(),
             slug,
-            description: description ?? null,
-            address,
-            city,
-            state,
-            pincode: pincode ?? null,
-            board,
-            schoolType,
-            medium,
-            classesFrom: parseInt(classesFrom, 10),
-            classesTo: parseInt(classesTo, 10),
             phone,
-            email: email ?? null,
-            website: website ?? null,
-            logoUrl: logoUrl ?? null,
-            admissionFee: admissionFee ? parseFloat(admissionFee) : null,
-            tuitionFeeMonthly: tuitionFeeMonthly
-                ? parseFloat(tuitionFeeMonthly)
-                : null,
-            totalAnnualFee: totalAnnualFee ? parseFloat(totalAnnualFee) : null,
-            transportFee: transportFee ? parseFloat(transportFee) : null,
-            hostelFee: hostelFee ? parseFloat(hostelFee) : null,
-            totalStudents: totalStudents ? parseInt(totalStudents, 10) : null,
-            establishedYear: establishedYear ? parseInt(establishedYear, 10) : null,
+            address: "", // filled later from dashboard
+            city: "",
+            state: "",
+            board: "OTHER",
+            schoolType: "CO_ED",
+            medium: "ENGLISH",
+            classesFrom: 1,
+            classesTo: 12,
+            description: null,
+            pincode: null,
+            email: null,
+            website: null,
+            logoUrl: null,
+            admissionFee: null,
+            tuitionFeeMonthly: null,
+            totalAnnualFee: null,
+            transportFee: null,
+            hostelFee: null,
+            totalStudents: null,
+            establishedYear: null,
             status: "APPROVED",
             ownerId: owner.id,
         },
     });
-    // Invalidate: admin-created APPROVED school must appear in public listings immediately
     (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({
         message: "School added successfully",
-        school,
+        school: {
+            id: school.id,
+            name: school.name,
+            slug: school.slug,
+            status: school.status,
+        },
     });
 };
 exports.addSchoolDirect = addSchoolDirect;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminApiBase } from "@/lib/admin-auth";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
 import { resolveBackendToken } from "@/lib/api/resolve-backend-token";
 
 export async function proxyToBackend(

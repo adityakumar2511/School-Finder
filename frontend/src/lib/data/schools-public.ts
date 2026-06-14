@@ -2,7 +2,7 @@ import {
   parsePaginatedResponse,
   type PaginationMeta,
 } from "@/lib/api/pagination";
-import type { SchoolCardProps } from "@/components/SchoolCard";
+import type { SchoolCardProps } from "@/components/public/schools/SchoolCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 

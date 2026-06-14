@@ -13,8 +13,8 @@
     getRecentInquiries,
   } from "@/lib/school/data";
   import SchoolStatusCard from "@/components/school/SchoolStatusCard";
-  import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
-  import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  import InquiryStatusBadge from "@/components/school/inquiries/InquiryStatusBadge";
+  import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
   import {
     Table,
     TableBody,
@@ -22,7 +22,7 @@
     TableHead,
     TableHeader,
     TableRow,
-  } from "@/components/ui/table";
+  } from "@/components/shared/ui/table";
 
   function formatDate(date: Date | string) {
     return new Date(date).toLocaleDateString("en-IN", {

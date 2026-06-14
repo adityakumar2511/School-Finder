@@ -1,6 +1,6 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 2026
+> Last updated: June 14, 2026
 
 > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Brevo · Fast2SMS  
 > **Default port:** `4000` · **Repository path:** `backend/`  
@@ -74,15 +74,15 @@ Express API (port 4000)
 | JWT | jsonwebtoken 9.0 | API auth (HS256, issuer `schoolfinder-api`) |
 | Zod | 4.4 | Request validation |
 | bcryptjs | 3.0 | Password hashing |
-| Brevo | HTTPS API | Password reset OTP email (`BREVO_API_KEY`) |
+| Brevo | HTTPS API (raw `https` module) | Password reset OTP email (`BREVO_API_KEY`) |
 | Fast2SMS | HTTPS API | Phone OTP SMS (`FAST2SMS_API_KEY`) |
 | Helmet | 8.2 | Security headers |
 | express-rate-limit | 8.5 | Rate limiting |
 | compression | 1.8 | Response gzip |
 
-**Installed but unused in `src/`:** `resend`, `axios`, `@getbrevo/brevo` (mailer uses raw HTTPS, not the SDK).
-
 **No background job runner, no file upload middleware, no structured logger.**
+
+> **Cleanup note (June 2026):** Removed unused dependencies `@getbrevo/brevo`, `axios`, and `resend` from `package.json`. The mailer was already calling the Brevo API via Node's built-in `https` module, so none of these were needed. `getListenHost()` (unused, server hardcodes `"0.0.0.0"`) was also removed from `config/production.ts`.
 
 ---
 
@@ -125,7 +125,7 @@ backend/
 │   ├── lib/
 │   │   ├── prisma.ts           # DB client + SSL pool
 │   │   ├── cache.ts            # In-memory TTL cache
-│   │   ├── mailer.ts           # Brevo OTP email
+│   │   ├── mailer.ts           # Brevo OTP email (raw https)
 │   │   ├── otp.ts              # OTP generate/verify + Fast2SMS
 │   │   ├── tokenBlacklist.ts   # JWT jti blacklist
 │   │   ├── favourites.ts       # Shared favourite logic
@@ -200,8 +200,8 @@ Controller handler            Business logic via asyncHandler
 | Forgot password | `POST /api/auth/forgot-password` | Email OTP via Brevo; generic 200 on no match |
 | Verify reset OTP | `POST /api/auth/verify-reset-otp` | Sets `otpVerified` flag |
 | Reset password | `POST /api/auth/reset-password` | Requires prior OTP verification |
-| Send phone OTP | `POST /api/auth/send-otp` | Fast2SMS; **no frontend integration** |
-| Verify phone OTP | `POST /api/auth/verify-otp` | Returns JWT; **no frontend integration** |
+| Send phone OTP | `POST /api/auth/send-otp` | Fast2SMS; **backend ready, frontend integration pending** |
+| Verify phone OTP | `POST /api/auth/verify-otp` | Returns JWT; **backend ready, frontend integration pending** |
 | Google sync | `POST /api/auth/google-sync` | Upsert PARENT user |
 | Profile | `GET/PATCH /api/auth/me` | Bearer required |
 
@@ -235,8 +235,8 @@ Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login re
 | POST | `/login` | auth + bruteForce | `login` |
 | POST | `/forgot-password` | forgotPassword (3/h) | `forgotPassword` |
 | POST | `/verify-reset-otp` | resetPassword (5/h) | `verifyResetOtp` |
-| POST | `/send-otp` | otp (3/10min) | `sendOtp` |
-| POST | `/verify-otp` | auth | `verifyOtp` |
+| POST | `/send-otp` | otp (3/10min) | `sendOtp` — phone OTP, frontend integration pending |
+| POST | `/verify-otp` | auth | `verifyOtp` — phone OTP, frontend integration pending |
 | POST | `/reset-password` | resetPassword (5/h) | `resetPassword` |
 | POST | `/logout` | auth | `logout` |
 | GET | `/me` | auth | `getMe` |
@@ -248,7 +248,7 @@ Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login re
 | Method | Path | Auth | Handler |
 |--------|------|------|---------|
 | GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status |
-| GET | `/search` | Public | `searchSchools` — **no frontend caller** |
+| GET | `/search` | Public | `searchSchools` — no frontend caller yet, kept for future search feature |
 | GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
 | GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` — includes all related models |
 | POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url, caption?, category? }` |
@@ -547,7 +547,7 @@ npx prisma generate   # runs automatically after migrate, but explicit is safer
 |--------|------|
 | `prisma.ts` | DB client + SSL connection pool |
 | `cache.ts` | In-memory TTL cache with invalidation |
-| `mailer.ts` | Brevo OTP email via HTTPS API |
+| `mailer.ts` | Brevo OTP email via raw `https` module |
 | `otp.ts` | Generate/verify OTP hash; Fast2SMS send |
 | `tokenBlacklist.ts` | In-memory jti blacklist (max 10k, 10-min cleanup interval) |
 | `favourites.ts` | Shared add/remove/list for both favourite APIs |
@@ -555,8 +555,6 @@ npx prisma generate   # runs automatically after migrate, but explicit is safer
 | `queries/schools.ts` | Select shapes, filters, cursor pagination |
 | `sanitize.ts` | HTML stripping from request bodies |
 | `account-status.ts` | Disabled account detection (`phone = "__DISABLED__"`) |
-
-**Unused export:** `getListenHost()` in `config/production.ts` — server hardcodes `"0.0.0.0"`.
 
 ---
 
@@ -635,7 +633,7 @@ Only periodic task: `tokenBlacklist` cleanup via `setInterval` every 10 minutes.
 - Backend stores URLs in `School.logoUrl`, `School.coverImageUrl`, and `SchoolImage.url`
 - `addSchoolImage` expects `{ url, caption?, category? }` in request body
 - `updateSchool` accepts `images[]` array in payload; synced via `syncGalleryImages` in transaction
-- Cloudinary env vars in backend are documented but **not read by application code**
+- Cloudinary credentials live entirely on the frontend — the backend has no Cloudinary env vars and never reads them
 
 ---
 
@@ -651,14 +649,14 @@ From `backend/.env.example`. Validated by `validateStartupEnv()` in `config/prod
 | `JWT_SECRET` | Yes | Must match frontend |
 | `JWT_EXPIRES_IN` | No | Default `7d` |
 | `FRONTEND_URL` | Yes in production | CORS; comma-separated OK |
-| `BREVO_API_KEY` | For email | **Actually used by mailer** (not in `.env.example`) |
-| `EMAIL_FROM` | For email | Verified Brevo sender |
-| `RESEND_API_KEY` | Validated in prod | **Not used by mailer** — startup validation mismatch |
+| `BREVO_API_KEY` | Yes in production | Used by mailer for OTP emails |
+| `EMAIL_FROM` | Yes in production | Verified Brevo sender |
 | `FAST2SMS_API_KEY` | Optional | SMS OTP; dev logs OTP if unset |
-| `CLOUDINARY_*` | Documented | Not read by backend code |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder only | `npm run seed:admin` |
 | `BCRYPT_ROUNDS` | No | Default `12` |
 | `TRUST_PROXY` | No | Auto-enabled when `NODE_ENV=production` |
+
+**Removed (June 2026 cleanup):** `RESEND_API_KEY` (was validated at startup but never used by the mailer — mismatch fixed) and `CLOUDINARY_*` (not read by backend code; belongs in the frontend's `.env.example`).
 
 ---
 

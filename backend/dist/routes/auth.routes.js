@@ -14,7 +14,9 @@ router.post("/register-school", security_1.authRateLimiter, bruteForce_1.bruteFo
 router.post("/login", security_1.authRateLimiter, bruteForce_1.bruteForceGuard, (0, validate_1.validate)(auth_validator_1.loginSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.login));
 router.post("/forgot-password", security_1.forgotPasswordRateLimiter, (0, validate_1.validate)(auth_validator_1.forgotPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.forgotPassword));
 router.post("/verify-reset-otp", security_1.resetPasswordRateLimiter, (0, validate_1.validate)(auth_validator_1.verifyResetOtpSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.verifyResetOtp));
+// Phone OTP — backend ready, frontend integration pending
 router.post("/send-otp", security_1.otpRateLimiter, (0, validate_1.validate)(auth_validator_1.sendOtpSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.sendOtp));
+// Phone OTP — backend ready, frontend integration pending
 router.post("/verify-otp", security_1.authRateLimiter, (0, validate_1.validate)(auth_validator_1.verifyOtpSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.verifyOtp));
 router.post("/reset-password", security_1.resetPasswordRateLimiter, (0, validate_1.validate)(auth_validator_1.resetPasswordSchema), (0, asyncHandler_1.asyncHandler)(auth_controller_1.resetPassword));
 router.post("/logout", auth_1.auth, (0, asyncHandler_1.asyncHandler)(auth_controller_1.logout));

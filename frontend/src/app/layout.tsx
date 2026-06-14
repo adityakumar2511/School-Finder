@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import HideOnAdminLogin from "@/components/HideOnAdminLogin";
-import { rootMetadata } from "@/lib/seo";
+import Navbar from "@/components/shared/layout/Navbar";
+import Footer from "@/components/shared/layout/Footer";
+import HideOnAdminLogin from "@/components/shared/layout/HideOnAdminLogin";
+import { rootMetadata } from "@/lib/seo/seo";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],

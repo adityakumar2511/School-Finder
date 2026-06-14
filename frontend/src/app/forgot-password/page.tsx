@@ -3,9 +3,9 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AUTH_ROUTES } from "@/lib/auth-config";
+import { AUTH_ROUTES } from "@/lib/auth/auth-config";
 import type { Role } from "@/lib/types/database";
-import { PasswordInput } from "@/components/ui/PasswordInput";
+import { PasswordInput } from "@/components/shared/ui/PasswordInput";
 
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"

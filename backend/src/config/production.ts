@@ -2,10 +2,6 @@ export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-export function getListenHost(): string {
-  return isProduction() ? "0.0.0.0" : "localhost";
-}
-
 function getEnvValue(key: string): string {
   return process.env[key]?.trim() ?? "";
 }
@@ -20,7 +16,7 @@ export function validateStartupEnv(): void {
 
   const alwaysRequired = ["DATABASE_URL", "JWT_SECRET"] as const;
 
-  const productionRequired = ["FRONTEND_URL", "RESEND_API_KEY", "EMAIL_FROM"] as const;
+  const productionRequired = ["FRONTEND_URL", "BREVO_API_KEY", "EMAIL_FROM"] as const;
 
   for (const key of alwaysRequired) {
     if (isEnvMissing(key)) {
@@ -51,7 +47,7 @@ export function validateStartupEnv(): void {
     console.warn(message);
   }
 
-  const emailVars = ["RESEND_API_KEY", "EMAIL_FROM"] as const;
+  const emailVars = ["BREVO_API_KEY", "EMAIL_FROM"] as const;
   const missingEmail = emailVars.filter((key) => isEnvMissing(key));
   if (missingEmail.length > 0) {
     console.warn(

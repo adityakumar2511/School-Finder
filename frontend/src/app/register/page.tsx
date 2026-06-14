@@ -17,13 +17,13 @@ import {
   User,
 } from "lucide-react";
 import AuthRoleGuard from "@/components/auth/AuthRoleGuard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/PasswordInput";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { getAdminApiBase } from "@/lib/admin-auth";
-import { AUTH_ROUTES } from "@/lib/auth-config";
+import { Button } from "@/components/shared/ui/button";
+import { Input } from "@/components/shared/ui/input";
+import { PasswordInput } from "@/components/shared/ui/PasswordInput";
+import { Label } from "@/components/shared/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/shared/ui/card";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
+import { AUTH_ROUTES } from "@/lib/auth/auth-config";
 
 const parentRegisterSchema = z
   .object({

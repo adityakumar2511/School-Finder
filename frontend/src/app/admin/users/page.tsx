@@ -1,13 +1,13 @@
 import { Suspense } from "react";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import { getAdminUsersList } from "@/lib/admin/data";
 import { isAccountDisabled } from "@/lib/admin/constants";
-import AdminSearchBar from "@/components/admin/AdminSearchBar";
-import AdminPagination from "@/components/admin/AdminPagination";
-import RoleBadge from "@/components/admin/RoleBadge";
-import UserManagementActions from "@/components/admin/UserManagementActions";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import AdminSearchBar from "@/components/admin/search-pagination/AdminSearchBar";
+import AdminPagination from "@/components/admin/search-pagination/AdminPagination";
+import RoleBadge from "@/components/admin/users/RoleBadge";
+import UserManagementActions from "@/components/admin/users/UserManagementActions";
+import { Badge } from "@/components/shared/ui/badge";
+import { Card, CardContent } from "@/components/shared/ui/card";
 import {
   Table,
   TableBody,
@@ -15,8 +15,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/shared/ui/table";
+import { Skeleton } from "@/components/shared/ui/skeleton";
 
 const PAGE_SIZE = 10;
 

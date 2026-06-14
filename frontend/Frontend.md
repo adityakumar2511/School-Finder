@@ -1,6 +1,6 @@
 # SchoolFinder — Frontend Documentation
 
-> Last updated: June 12, 2026
+> Last updated: June 14, 2026
 
 > **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
 > **Default port:** `3000` · **Repository path:** `frontend/`  
@@ -44,6 +44,7 @@ The frontend is a role-separated Next.js application. It handles UI, NextAuth se
 | JWT-only NextAuth | Session strategy `jwt` — no Prisma adapter |
 | BFF pattern | `/api/*` routes proxy mutations with Bearer tokens |
 | Local type enums | `src/lib/types/database.ts` mirrors backend Prisma enums |
+| Role-based folder separation | `components/` split by role: `shared/`, `public/`, `auth/`, `parent/`, `school/`, `admin/` |
 
 ### Execution Flow
 
@@ -97,54 +98,289 @@ Browser / Server Component
 
 ```
 frontend/
-├── middleware.ts                 # Edge middleware → middleware-auth.ts
-├── next.config.js                # Active Next.js config (security headers, images)
-├── next.config.mjs               # Dead stub (commented out — safe to delete)
-├── vercel.json                   # Vercel deployment config
-├── tailwind.config.ts
+├── .env
 ├── .env.example
+├── .env.local
+├── .eslintrc.json
+├── .gitignore
+├── Frontend.md
+├── middleware.ts
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.ts
+├── tsconfig.json
+├── vercel.json
 └── src/
-    ├── app/                      # App Router pages and API routes
-    │   ├── page.tsx              # Home
-    │   ├── layout.tsx            # Root layout (Navbar, Footer, Providers)
-    │   ├── providers.tsx         # SessionProvider + SessionHeartbeat
-    │   ├── schools/              # Public listing + [slug] detail
-    │   ├── login/ register/ forgot-password/ reset-password/
-    │   ├── school-login/ school-register/ school-complete-registration/
+    ├── app/
+    │   ├── admin/
+    │   │   ├── add-school/
+    │   │   │   └── page.tsx
+    │   │   ├── inquiries/
+    │   │   │   └── page.tsx
+    │   │   ├── layout.tsx
+    │   │   ├── page.tsx
+    │   │   ├── schools/
+    │   │   │   └── page.tsx
+    │   │   └── users/
+    │   │       └── page.tsx
     │   ├── admin-login/
-    │   ├── parent/               # Parent dashboard
-    │   ├── dashboard/school/     # School admin dashboard
-    │   ├── admin/                # Platform admin panel
-    │   ├── api/                  # BFF route handlers (19 routes)
-    │   ├── sitemap.ts robots.ts
-    │   └── error.tsx global-error.tsx not-found.tsx
+    │   │   ├── layout.tsx
+    │   │   └── page.tsx
+    │   ├── api/
+    │   │   ├── admin/
+    │   │   │   ├── add-school/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── check-owner/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── schools/
+    │   │   │   │   ├── [id]/
+    │   │   │   │   │   ├── approve/
+    │   │   │   │   │   │   └── route.ts
+    │   │   │   │   │   ├── reject/
+    │   │   │   │   │   │   └── route.ts
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   └── route.ts
+    │   │   │   ├── session/
+    │   │   │   │   └── route.ts
+    │   │   │   └── users/
+    │   │   │       └── [id]/
+    │   │   │           ├── role/
+    │   │   │           │   └── route.ts
+    │   │   │           └── status/
+    │   │   │               └── route.ts
+    │   │   ├── auth/
+    │   │   │   ├── [...nextauth]/
+    │   │   │   │   └── route.ts
+    │   │   │   └── logout/
+    │   │   │       └── route.ts
+    │   │   ├── parent/
+    │   │   │   ├── favourites/
+    │   │   │   │   └── route.ts
+    │   │   │   └── profile/
+    │   │   │       └── route.ts
+    │   │   ├── school/
+    │   │   │   ├── gallery/
+    │   │   │   │   ├── [id]/
+    │   │   │   │   │   └── route.ts
+    │   │   │   │   └── route.ts
+    │   │   │   ├── inquiries/
+    │   │   │   │   └── [id]/
+    │   │   │   │       └── status/
+    │   │   │   │           └── route.ts
+    │   │   │   └── profile/
+    │   │   │       └── route.ts
+    │   │   └── upload/
+    │   │       └── route.ts
+    │   ├── dashboard/
+    │   │   └── school/
+    │   │       ├── inquiries/
+    │   │       │   └── page.tsx
+    │   │       ├── layout.tsx
+    │   │       ├── page.tsx
+    │   │       └── profile/
+    │   │           └── page.tsx
+    │   ├── error.tsx
+    │   ├── favicon.ico
+    │   ├── fonts/
+    │   │   ├── GeistMonoVF.woff
+    │   │   └── GeistVF.woff
+    │   ├── forgot-password/
+    │   │   └── page.tsx
+    │   ├── global-error.tsx
+    │   ├── globals.css
+    │   ├── layout.tsx
+    │   ├── login/
+    │   │   └── page.tsx
+    │   ├── not-found.tsx
+    │   ├── page.tsx
+    │   ├── parent/
+    │   │   ├── favourites/
+    │   │   │   ├── FavouritesPagination.tsx
+    │   │   │   ├── RemoveFavouriteButton.tsx
+    │   │   │   ├── loading.tsx
+    │   │   │   └── page.tsx
+    │   │   ├── inquiries/
+    │   │   │   └── page.tsx
+    │   │   ├── layout.tsx
+    │   │   ├── page.tsx
+    │   │   └── profile/
+    │   │       └── page.tsx
+    │   ├── providers.tsx
+    │   ├── register/
+    │   │   └── page.tsx
+    │   ├── reset-password/
+    │   │   └── page.tsx
+    │   ├── robots.ts
+    │   ├── school-complete-registration/
+    │   │   └── page.tsx
+    │   ├── school-login/
+    │   │   ├── layout.tsx
+    │   │   └── page.tsx
+    │   ├── school-register/
+    │   │   └── page.tsx
+    │   ├── schools/
+    │   │   ├── [slug]/
+    │   │   │   ├── loading.tsx
+    │   │   │   └── page.tsx
+    │   │   ├── loading.tsx
+    │   │   └── page.tsx
+    │   ├── sitemap.ts
+    │   └── template.tsx
+    │
     ├── components/
-    │   ├── admin/                # AdminNav, moderation, pagination
-    │   ├── auth/                 # Login content, AuthRoleGuard
-    │   ├── home/                 # Hero, stats, featured schools
-    │   ├── parent/               # ParentNav, ProfileForm, recent schools
-    │   ├── school/               # Dashboard nav, profile, gallery, wizard
-    │   ├── schools/              # FavouriteButton, InquiryModal, skeletons
-    │   ├── seo/                  # JsonLd
-    │   ├── ui/                   # shadcn primitives
-    │   └── upload/               # ImageUploadField
+    │   ├── shared/                          # Used by 2+ roles or no role
+    │   │   ├── layout/
+    │   │   │   ├── Footer.tsx
+    │   │   │   ├── HideOnAdminLogin.tsx
+    │   │   │   ├── Navbar.tsx
+    │   │   │   └── SessionHeartbeat.tsx
+    │   │   ├── ui/                          # shadcn primitives
+    │   │   │   ├── PasswordInput.tsx
+    │   │   │   ├── badge.tsx
+    │   │   │   ├── button.tsx
+    │   │   │   ├── card.tsx
+    │   │   │   ├── dialog.tsx
+    │   │   │   ├── input.tsx
+    │   │   │   ├── label.tsx
+    │   │   │   ├── select.tsx
+    │   │   │   ├── skeleton.tsx
+    │   │   │   ├── table.tsx
+    │   │   │   └── textarea.tsx
+    │   │   ├── form/                        # Shared form primitives
+    │   │   │   ├── FormField.tsx
+    │   │   │   ├── FormGrid.tsx
+    │   │   │   ├── FormSection.tsx
+    │   │   │   └── index.ts
+    │   │   ├── seo/
+    │   │   │   └── JsonLd.tsx
+    │   │   └── upload/
+    │   │       └── ImageUploadField.tsx
+    │   │
+    │   ├── public/                          # No-auth pages
+    │   │   ├── home/
+    │   │   │   ├── FeaturedSchools.tsx
+    │   │   │   ├── FeaturedSchoolsSkeleton.tsx
+    │   │   │   ├── HomeHero.tsx
+    │   │   │   └── HomeStats.tsx
+    │   │   └── schools/
+    │   │       ├── FavouriteButton.tsx
+    │   │       ├── InquiryModal.tsx
+    │   │       ├── SchoolCard.tsx
+    │   │       ├── SchoolCardSkeleton.tsx
+    │   │       ├── SchoolFilters.tsx
+    │   │       └── SchoolGridSkeleton.tsx
+    │   │
+    │   ├── auth/                            # Login / register content
+    │   │   ├── AuthRoleGuard.tsx
+    │   │   ├── ParentLoginContent.tsx
+    │   │   └── SchoolLoginContent.tsx
+    │   │
+    │   ├── parent/                          # PARENT role only
+    │   │   ├── ParentNav.tsx
+    │   │   ├── ProfileForm.tsx
+    │   │   ├── RecentViewedSchools.tsx
+    │   │   └── TrackSchoolView.tsx
+    │   │
+    │   ├── school/                          # SCHOOL_ADMIN role only
+    │   │   ├── SchoolStatusCard.tsx
+    │   │   ├── gallery/
+    │   │   │   └── SchoolGalleryManager.tsx
+    │   │   ├── inquiries/
+    │   │   │   ├── InquiryFilters.tsx
+    │   │   │   ├── InquiryPagination.tsx
+    │   │   │   ├── InquiryStatusBadge.tsx
+    │   │   │   └── InquiryStatusSelect.tsx
+    │   │   ├── nav/
+    │   │   │   └── SchoolDashboardNav.tsx
+    │   │   ├── profile/
+    │   │   │   ├── SchoolProfileForm.tsx
+    │   │   │   ├── SchoolProfileSidebar.tsx
+    │   │   │   └── formSections/
+    │   │   │       ├── 01_BasicInfoSection.tsx
+    │   │   │       ├── 02_AboutSchoolSection.tsx
+    │   │   │       ├── 03_AcademicsSection.tsx
+    │   │   │       ├── 04_AdmissionsSection.tsx
+    │   │   │       ├── 05_FeeStructureSection.tsx
+    │   │   │       ├── 06_FacilitiesSection.tsx
+    │   │   │       ├── 07_SportsSection.tsx
+    │   │   │       ├── 08_InfrastructureSection.tsx
+    │   │   │       ├── 09_FacultySection.tsx
+    │   │   │       ├── 10_ProgramsSection.tsx
+    │   │   │       ├── 11_StudentLifeSection.tsx
+    │   │   │       ├── 12_AchievementsSection.tsx
+    │   │   │       ├── 13_BoardResultsSection.tsx
+    │   │   │       ├── 14_ScholarshipsSection.tsx
+    │   │   │       ├── 15_HostelSection.tsx
+    │   │   │       ├── 16_TransportSection.tsx
+    │   │   │       ├── 17_SafetySection.tsx
+    │   │   │       ├── 18_GallerySection.tsx
+    │   │   │       ├── 19_DownloadsSection.tsx
+    │   │   │       ├── 20_ContactSection.tsx
+    │   │   │       ├── 21_ReviewsSection.tsx
+    │   │   │       ├── 22_FAQsSection.tsx
+    │   │   │       ├── index.ts
+    │   │   │       └── types.ts
+    │   │   └── registration/
+    │   │       └── SchoolRegisterWizard.tsx
+    │   │
+    │   └── admin/                           # ADMIN role only
+    │       ├── moderation/
+    │       │   ├── SchoolDetailModal.tsx
+    │       │   ├── SchoolModerationActions.tsx
+    │       │   └── SchoolStatusBadge.tsx
+    │       ├── nav/
+    │       │   └── AdminNav.tsx
+    │       ├── search-pagination/
+    │       │   ├── AdminPagination.tsx
+    │       │   └── AdminSearchBar.tsx
+    │       └── users/
+    │           ├── RoleBadge.tsx
+    │           └── UserManagementActions.tsx
+    │
     └── lib/
-        ├── auth.ts               # NextAuth configuration
-        ├── auth-config.ts        # Route constants, role homes
-        ├── backend-jwt.ts        # mintBackendJwt() — HS256
-        ├── middleware-auth.ts    # Middleware redirect logic
+        ├── admin/
+        │   ├── constants.ts
+        │   ├── data.ts
+        │   └── session.ts
         ├── api/
-        │   ├── server.ts         # backendFetch, adminFetch
-        │   ├── proxy.ts          # proxyToBackend (BFF)
-        │   └── resolve-backend-token.ts
-        ├── admin/                # Admin data fetching
-        ├── parent/               # Parent data + recent schools
-        ├── school/               # School dashboard data + gallery
-        ├── data/schools-public.ts # Public ISR fetches
-        ├── types/database.ts     # Local enum mirrors
-        ├── cloudinary.ts         # Server upload helper
-        ├── seo.ts                # Metadata helpers
-        └── upload-client.ts      # Client upload to /api/upload
+        │   ├── error.ts                     # parseApiError() — centralized error handling
+        │   ├── pagination.ts
+        │   ├── proxy.ts
+        │   ├── resolve-backend-token.ts
+        │   └── server.ts
+        ├── auth/                            # Auth / session utilities
+        │   ├── admin-auth.ts
+        │   ├── auth-config.ts
+        │   ├── auth.ts
+        │   ├── backend-jwt.ts
+        │   ├── logout.ts
+        │   ├── middleware-auth.ts
+        │   └── parent-token.ts
+        ├── data/
+        │   └── schools-public.ts
+        ├── parent/
+        │   ├── data.ts
+        │   └── recent-schools.ts
+        ├── school/
+        │   ├── data.ts
+        │   └── gallery.ts
+        ├── seo/
+        │   ├── revalidate-schools.ts
+        │   └── seo.ts
+        ├── types/
+        │   └── database.ts
+        ├── ui/
+        │   └── motion.ts
+        ├── upload/
+        │   ├── cloudinary-url.ts
+        │   ├── cloudinary.ts
+        │   ├── image-placeholder.ts
+        │   ├── upload-client.ts
+        │   └── upload-security.ts
+        └── utils.ts
 ```
 
 ---
@@ -217,12 +453,13 @@ Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
 | `/api/admin/check-owner` | GET | Owner email pre-check |
 | `/api/parent/profile` | PATCH | Update parent profile |
 | `/api/parent/favourites` | GET, POST, DELETE | Favourites CRUD |
-| `/api/school/session` | POST, DELETE | Set/clear `sf_school_token` cookie (legacy) |
 | `/api/school/profile` | PATCH | Update school profile |
 | `/api/school/gallery` | GET, POST | Gallery list / add image |
 | `/api/school/gallery/[id]` | DELETE | Remove gallery image |
 | `/api/school/inquiries/[id]/status` | PATCH | Update inquiry status |
 | `/api/upload` | POST | Cloudinary upload (authenticated) |
+
+> **Note:** `/api/school/session` was removed in the Step 6 cleanup. `sf_school_token` is no longer set or read anywhere.
 
 ---
 
@@ -231,40 +468,38 @@ Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
 ```
 RootLayout (layout.tsx)
 ├── Providers (SessionProvider, SessionHeartbeat)
-├── Navbar
+├── shared/layout/Navbar
 ├── <main> → page content
-└── HideOnAdminLogin → Footer
+└── HideOnAdminLogin → shared/layout/Footer
 
 Public
-├── HomeHero, HomeStats, FeaturedSchools → SchoolCard
-├── SchoolFilters, SchoolCard, SchoolGridSkeleton
-└── schools/[slug]: JsonLd, InquiryModal, FavouriteButton, TrackSchoolView
+├── public/home: HomeHero, HomeStats, FeaturedSchools → public/schools/SchoolCard
+├── public/schools: SchoolFilters, SchoolCard, SchoolGridSkeleton
+└── schools/[slug]: shared/seo/JsonLd, public/schools/InquiryModal,
+                    public/schools/FavouriteButton, parent/TrackSchoolView
 
 Auth
-├── ParentLoginContent, SchoolLoginContent → AuthRoleGuard
-├── SchoolRegisterWizard (4-step, localStorage draft)
+├── auth/ParentLoginContent, auth/SchoolLoginContent → auth/AuthRoleGuard
+├── school/registration/SchoolRegisterWizard (4-step, localStorage draft)
 └── admin-login: inline form
 
 Parent dashboard
-└── ParentNav → ProfileForm, RecentViewedSchools, RemoveFavouriteButton
+└── parent/ParentNav → parent/ProfileForm, parent/RecentViewedSchools,
+                       app/parent/favourites/RemoveFavouriteButton
 
 School dashboard
-└── SchoolDashboardNav → SchoolStatusCard, SchoolProfileForm,
-                          SchoolGalleryManager, InquiryFilters/Select
+└── school/nav/SchoolDashboardNav → school/SchoolStatusCard,
+    school/profile/SchoolProfileForm, school/gallery/SchoolGalleryManager,
+    school/inquiries/InquiryFilters, school/inquiries/InquiryStatusSelect
 
 Admin panel
-└── AdminNav → AdminSearchBar, AdminPagination, SchoolModerationActions,
-               UserManagementActions, RoleBadge, SchoolStatusBadge
+└── admin/nav/AdminNav → admin/search-pagination/AdminSearchBar,
+    admin/search-pagination/AdminPagination,
+    admin/moderation/SchoolModerationActions,
+    admin/users/UserManagementActions,
+    admin/users/RoleBadge,
+    admin/moderation/SchoolStatusBadge
 ```
-
-### Unused Components (candidates for removal)
-
-| File | Status |
-|------|--------|
-| `components/motion/fade-in.tsx` | Never imported |
-| `components/motion/stagger-grid.tsx` | Never imported |
-| `components/ui/stat-card.tsx` | Never imported |
-| `components/ui/empty-state.tsx` | Never imported (inline empty state used in schools page) |
 
 ---
 
@@ -272,16 +507,17 @@ Admin panel
 
 | Mechanism | Location | Purpose |
 |-----------|----------|---------|
-| **NextAuth JWT session** | `lib/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken` |
-| **HTTP-only cookie `sf_admin_token`** | `lib/admin-auth.ts` | Admin backend JWT for `adminFetch()` and BFF |
-| **HTTP-only cookie `sf_school_token`** | `lib/school-auth.ts` | Set at school login; **not used** for API auth |
-| **sessionStorage `sf_parent_token`** | `lib/parent-token.ts` | Client-side token for direct inquiry API calls |
-| **localStorage `sf_school_draft_{email}`** | `SchoolRegisterWizard.tsx` | School registration draft persistence |
+| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken` |
+| **HTTP-only cookie `sf_admin_token`** | `lib/auth/admin-auth.ts` | Admin backend JWT for `adminFetch()` and BFF |
+| **sessionStorage `sf_parent_token`** | `lib/auth/parent-token.ts` | Client-side token for direct inquiry API calls |
+| **localStorage `sf_school_draft_{email}`** | `school/registration/SchoolRegisterWizard.tsx` | School registration draft persistence |
 | **localStorage recent schools** | `lib/parent/recent-schools.ts` | Recently viewed schools on parent dashboard |
 | **React Hook Form + Zod** | Auth forms, wizards, profiles | Client form validation |
 | **URL searchParams** | Filters, pagination, `callbackUrl` | Routing state |
 
 No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
+
+> `sf_school_token` cookie has been removed. It was previously set at school login but never used for API auth. The dead `/api/school/session` route and `lib/school-auth.ts` have been deleted. Any stale browser cookie is cleared on logout via an inlined constant in `api/auth/logout/route.ts`.
 
 ---
 
@@ -296,11 +532,10 @@ No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
 | **BFF proxy** | Client mutations from browser | `proxyToBackend()` via `/api/*` routes |
 | **Direct client fetch** | Auth flows, inquiries | Browser → backend with Bearer token |
 
-### Token Resolution (`resolve-backend-token.ts`)
+### Token Resolution (`lib/api/resolve-backend-token.ts`)
 
 1. **ADMIN** — `sf_admin_token` cookie only (never minted)
 2. **SCHOOL_ADMIN / PARENT** — `session.backendAccessToken`, then `mintBackendJwt()` fallback
-3. **`sf_school_token` is not read** by token resolution despite being set at school login
 
 ### Domain Data Modules
 
@@ -315,10 +550,10 @@ No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
 
 | Caller | Endpoint |
 |--------|----------|
-| `InquiryModal.tsx` | `POST /api/inquiries` (uses sessionStorage token) |
-| `parent/inquiries/page.tsx` | `GET /api/inquiries/my` |
+| `public/schools/InquiryModal.tsx` | `POST /api/inquiries` (uses sessionStorage token) |
+| `app/parent/inquiries/page.tsx` | `GET /api/inquiries/my` |
 | Auth pages | `POST /api/auth/login`, `/register-parent`, `/register-school`, etc. |
-| `forgot-password/page.tsx` | `POST /api/auth/forgot-password`, `/verify-reset-otp`, `/reset-password` |
+| `app/forgot-password/page.tsx` | `POST /api/auth/forgot-password`, `/verify-reset-otp`, `/reset-password` |
 
 ### Type Definitions (`lib/types/database.ts`)
 
@@ -357,11 +592,10 @@ Keep in sync with `backend/prisma/schema.prisma` when enums change.
 
 1. Sign in at `/school-login` or register at `/school-register`
 2. Backend login with `expectedRole: "SCHOOL_ADMIN"`
-3. `POST /api/school/session` sets `sf_school_token` cookie (legacy, not used for API auth)
-4. NextAuth credentials sign-in with `authContext: "school"`
-5. Server-side API: `mintBackendJwt()` fallback (backendAccessToken stripped from NextAuth JWT for non-parent roles)
-6. Registration wizard: `POST /api/auth/register-school` → auto sign-in → `/dashboard/school`
-7. `DRAFT` schools redirected to `/school-complete-registration` by dashboard layout
+3. NextAuth credentials sign-in with `authContext: "school"`
+4. Server-side API: `mintBackendJwt()` fallback (`backendAccessToken` stripped from NextAuth JWT for non-parent roles)
+5. Registration wizard: `POST /api/auth/register-school` → auto sign-in → `/dashboard/school`
+6. `DRAFT` schools redirected to `/school-complete-registration` by dashboard layout
 
 ### Platform Administrator (`ADMIN`)
 
@@ -371,7 +605,7 @@ Keep in sync with `backend/prisma/schema.prisma` when enums change.
 4. NextAuth credentials sign-in syncs session for middleware
 5. All admin data via `adminFetch()` or BFF routes with `useAdminCookie: true`
 
-### NextAuth Configuration (`lib/auth.ts`)
+### NextAuth Configuration (`lib/auth/auth.ts`)
 
 | Setting | Value |
 |---------|-------|
@@ -387,7 +621,7 @@ Keep in sync with `backend/prisma/schema.prisma` when enums change.
 
 ## 9. Route Protection
 
-### Middleware (`middleware.ts` → `lib/middleware-auth.ts`)
+### Middleware (`middleware.ts` → `lib/auth/middleware-auth.ts`)
 
 **Matcher:**
 ```
@@ -455,6 +689,16 @@ Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend 
 | Profile forms | React Hook Form + Zod | Client-side |
 | Inquiry modal | Controlled state + Zod | Client-side |
 
+**Shared form primitives** (`components/shared/form/`):
+
+| Component | Purpose |
+|-----------|---------|
+| `FormSection` | Card-style section wrapper with title + optional description |
+| `FormField` | Label + error display wrapper; exports `inputClass`, `inputErrorClass`, `selectClass` tokens |
+| `FormGrid` | Responsive `columns={1\|2\|3}` grid — fixes mobile overlap |
+
+All 22 profile form sections, `SchoolRegisterWizard`, and the admin add-school wizard use `FormField`/`FormGrid`. Import from `@/components/shared/form`.
+
 **School registration draft:** localStorage key `sf_school_draft_{email}` — saves form data, step, logo URL on step advance; restored on mount; cleared on submit.
 
 **Admin add-school async checks:**
@@ -465,12 +709,28 @@ Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend 
 
 ## 12. Error Handling
 
+### Centralized API Error Parsing (`lib/api/error.ts`)
+
+`parseApiError(response, caughtError?)` returns a `ParsedApiError` with one of these categories:
+
+| Category | Trigger | User-facing behavior |
+|----------|---------|----------------------|
+| `field_errors` | `code === "VALIDATION_ERROR"` + `errors` object | List shown under save button; each field name + message |
+| `conflict` | `code === "CONFLICT"` / status 409 | Toast: specific message from backend |
+| `auth` | status 401/403 | Message + redirect to role login after 2s |
+| `server_error` | status 500, Prisma codes, unrecognized | "Something went wrong on our end. Please try again." |
+| `network` | fetch throws / no response | "Couldn't reach the server. Check your connection." |
+
+`SchoolProfileForm` uses `parseApiError()` to show field-level errors as a list and handle auth expiry with auto-redirect.
+
+### Other Error Layers
+
 | Layer | Implementation |
 |-------|----------------|
 | Route errors | `app/error.tsx` — route-level error boundary |
 | Root errors | `app/global-error.tsx` — root error boundary |
 | 404 | `app/not-found.tsx` |
-| API errors | BFF routes forward backend error envelope `{ success, code, message }` |
+| BFF routes | Forward backend error envelope `{ success, code, message }` |
 | Auth errors | Login pages display inline error messages from backend |
 | Upload errors | `/api/upload` returns 400/401/429 with descriptive messages |
 | Backend offline | Public pages degrade gracefully when API unreachable |
@@ -492,7 +752,7 @@ All uploads go through `POST /api/upload` (Next.js server route).
 
 **Flow:** Client → `/api/upload` → Cloudinary URL → backend PATCH/POST with URL string.
 
-Credentials (`CLOUDINARY_*`) never reach the browser.
+Credentials (`CLOUDINARY_*`) never reach the browser. Upload utilities live in `lib/upload/`.
 
 ---
 
@@ -500,11 +760,12 @@ Credentials (`CLOUDINARY_*`) never reach the browser.
 
 | Feature | Implementation |
 |---------|----------------|
-| Metadata | `lib/seo.ts` — `rootMetadata`, `buildPageMetadata()`, `buildSchoolMetadata()` |
+| Metadata | `lib/seo/seo.ts` — `rootMetadata`, `buildPageMetadata()`, `buildSchoolMetadata()` |
 | Sitemap | `app/sitemap.ts` — approved schools from `GET /api/schools?status=APPROVED&limit=1000` |
 | Robots | `app/robots.ts` — allows public routes, disallows private/auth |
-| JSON-LD | `components/seo/JsonLd.tsx` — WebSite (home), EducationalOrganization (detail) |
+| JSON-LD | `components/shared/seo/JsonLd.tsx` — WebSite (home), EducationalOrganization (detail) |
 | Images | `next/image` with AVIF/WebP, Cloudinary remote patterns |
+| Cache revalidation | `lib/seo/revalidate-schools.ts` — revalidates `schools` tag on profile updates |
 
 ---
 
@@ -580,8 +841,8 @@ Active config: `next.config.js` (CSP, HSTS, security headers, image remote patte
 |---------|-------|-----------------|
 | **Express API** | All data operations | `NEXT_PUBLIC_API_URL` |
 | **Google OAuth** | Parent sign-in | `GOOGLE_CLIENT_ID/SECRET` |
-| **Cloudinary** | Image storage and delivery | `CLOUDINARY_*` (server-only) |
-| **NextAuth** | Session management | `AUTH_SECRET`, `AUTH_URL` |
+| **Cloudinary** | Image storage and delivery | `CLOUDINARY_*` (server-only), `lib/upload/` |
+| **NextAuth** | Session management | `AUTH_SECRET`, `AUTH_URL`, `lib/auth/auth.ts` |
 | **Vercel** | Hosting | `vercel.json`, env vars |
 
 ---
@@ -625,9 +886,14 @@ Active config: `next.config.js` (CSP, HSTS, security headers, image remote patte
 | Dev server | `npm run dev` |
 | Production build | `npm run build` |
 | Type check | `npx tsc --noEmit` |
-| Auth config | `src/lib/auth.ts` |
+| Auth config | `src/lib/auth/auth.ts` |
 | API client | `src/lib/api/server.ts` |
 | BFF proxy | `src/lib/api/proxy.ts` |
-| Middleware | `middleware.ts` |
+| Middleware | `middleware.ts` → `src/lib/auth/middleware-auth.ts` |
 | Public data | `src/lib/data/schools-public.ts` |
 | Type enums | `src/lib/types/database.ts` |
+| Shared form components | `src/components/shared/form/` |
+| Error parsing | `src/lib/api/error.ts` |
+| Upload utilities | `src/lib/upload/` |
+| SEO utilities | `src/lib/seo/` |
+| Import path convention | See §8 of `restructure-plan.md` |

@@ -101,6 +101,7 @@ router.post(
   asyncHandler(verifyResetOtp)
 );
 
+// Phone OTP — backend ready, frontend integration pending
 router.post(
   "/send-otp",
   otpRateLimiter,
@@ -108,6 +109,7 @@ router.post(
   asyncHandler(sendOtp)
 );
 
+// Phone OTP — backend ready, frontend integration pending
 router.post(
   "/verify-otp",
   authRateLimiter,
@@ -133,4 +135,3 @@ router.post("/google-sync", authRateLimiter, asyncHandler(syncGoogleUser));
 
 
 export default router;
-

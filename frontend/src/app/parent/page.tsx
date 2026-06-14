@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import { getParentDashboardData } from "@/lib/parent/data";
 import RecentViewedSchools from "@/components/parent/RecentViewedSchools";
-import SchoolCard from "@/components/SchoolCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import SchoolCard from "@/components/public/schools/SchoolCard";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
+import { Button } from "@/components/shared/ui/button";
 
 export default async function ParentDashboardPage() {
   const { user, favouritesCount, recentSaved } = await getParentDashboardData();

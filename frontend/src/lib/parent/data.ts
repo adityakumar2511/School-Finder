@@ -1,4 +1,4 @@
-import type { SchoolCardProps } from "@/components/SchoolCard";
+import type { SchoolCardProps } from "@/components/public/schools/SchoolCard";
 import { backendFetch } from "@/lib/api/server";
 
 export type ParentSchoolCard = SchoolCardProps;

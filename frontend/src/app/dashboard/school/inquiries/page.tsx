@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import type { InquiryStatus } from "@/lib/types/database";
 import { getOwnedSchool, getSchoolInquiriesList } from "@/lib/school/data";
-import InquiryFilters from "@/components/school/InquiryFilters";
-import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
-import InquiryStatusSelect from "@/components/school/InquiryStatusSelect";
-import InquiryPagination from "@/components/school/InquiryPagination";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import InquiryFilters from "@/components/school/inquiries/InquiryFilters";
+import InquiryStatusBadge from "@/components/school/inquiries/InquiryStatusBadge";
+import InquiryStatusSelect from "@/components/school/inquiries/InquiryStatusSelect";
+import InquiryPagination from "@/components/school/inquiries/InquiryPagination";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
 import {
   Table,
   TableBody,
@@ -13,8 +13,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/shared/ui/table";
+import { Skeleton } from "@/components/shared/ui/skeleton";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 

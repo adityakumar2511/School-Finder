@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 
 export async function requireAdminSession() {
   const session = await auth();

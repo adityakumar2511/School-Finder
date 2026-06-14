@@ -17,10 +17,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@getbrevo/brevo": "^5.0.4",
     "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "^5.22.0",
-    "axios": "^1.17.0",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.0",
     "cors": "^2.8.6",
@@ -31,7 +29,6 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
     "prisma": "^5.22.0",
-    "resend": "^6.12.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

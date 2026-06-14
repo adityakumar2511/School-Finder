@@ -7,19 +7,19 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import { backendFetch } from "@/lib/api/server";
 import { fetchSchoolBySlug } from "@/lib/data/schools-public";
-import { IMAGE_BLUR_DATA_URL } from "@/lib/image-placeholder";
-import { optimizeCloudinaryUrl } from "@/lib/cloudinary-url";
-import JsonLd from "@/components/seo/JsonLd";
-import InquiryModal from "@/components/schools/InquiryModal";
-import FavouriteButton from "@/components/schools/FavouriteButton";
+import { IMAGE_BLUR_DATA_URL } from "@/lib/upload/image-placeholder";
+import { optimizeCloudinaryUrl } from "@/lib/upload/cloudinary-url";
+import JsonLd from "@/components/shared/seo/JsonLd";
+import InquiryModal from "@/components/public/schools/InquiryModal";
+import FavouriteButton from "@/components/public/schools/FavouriteButton";
 import {
   buildSchoolMetadata,
   buildEducationalOrganizationJsonLd,
   buildBreadcrumbJsonLd,
-} from "@/lib/seo";
+} from "@/lib/seo/seo";
 
 const TrackSchoolView = dynamic(
   () => import("@/components/parent/TrackSchoolView"),

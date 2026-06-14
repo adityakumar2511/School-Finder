@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/lib/types/database";
-import { ROLE_HOME } from "@/lib/auth-config";
+import { ROLE_HOME } from "@/lib/auth/auth-config";
 
 type Props = {
   /** Role required to view this page (e.g. PARENT on /login) */

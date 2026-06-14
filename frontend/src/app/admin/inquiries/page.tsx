@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import Link from "next/link";
 import type { InquiryStatus } from "@/lib/types/database";
 import { getAdminInquiriesList } from "@/lib/admin/data";
-import AdminSearchBar from "@/components/admin/AdminSearchBar";
-import AdminPagination from "@/components/admin/AdminPagination";
-import InquiryStatusBadge from "@/components/school/InquiryStatusBadge";
-import { Card, CardContent } from "@/components/ui/card";
+import AdminSearchBar from "@/components/admin/search-pagination/AdminSearchBar";
+import AdminPagination from "@/components/admin/search-pagination/AdminPagination";
+import InquiryStatusBadge from "@/components/school/inquiries/InquiryStatusBadge";
+import { Card, CardContent } from "@/components/shared/ui/card";
 import {
   Table,
   TableBody,
@@ -13,8 +13,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@/components/shared/ui/table";
+import { Skeleton } from "@/components/shared/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;

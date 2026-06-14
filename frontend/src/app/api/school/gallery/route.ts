@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/api/proxy";
-import { revalidateSchoolsCache } from "@/lib/revalidate-schools";
+import { revalidateSchoolsCache } from "@/lib/seo/revalidate-schools";
 
 export async function GET() {
   const schoolResponse = await proxyToBackend("/api/schools/my-school");

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Clock, ArrowRight } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
 import { readRecentSchools, type RecentSchoolEntry } from "@/lib/parent/recent-schools";
 
 export default function RecentViewedSchools() {

@@ -1,5 +1,3 @@
-import https from "https";
-
 export type OtpEmailResult =
   | { success: true }
   | { success: false; reason: "send_failed" | "email_not_configured" };
@@ -18,7 +16,7 @@ export async function sendOtpEmail(
 
   // Brevo configured hai toh email bhejo
   if (process.env.BREVO_API_KEY?.trim() && process.env.EMAIL_FROM?.trim()) {
-    const { default: https } = await import("https");
+    const https = await import("https");
 
     const payload = JSON.stringify({
       sender: { email: process.env.EMAIL_FROM },

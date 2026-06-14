@@ -43,7 +43,7 @@ async function sendOtpEmail(email, otp, name) {
     console.log("[OTP] ----------------------------------------\n");
     // Brevo configured hai toh email bhejo
     if (process.env.BREVO_API_KEY?.trim() && process.env.EMAIL_FROM?.trim()) {
-        const { default: https } = await Promise.resolve().then(() => __importStar(require("https")));
+        const https = await Promise.resolve().then(() => __importStar(require("https")));
         const payload = JSON.stringify({
             sender: { email: process.env.EMAIL_FROM },
             to: [{ email }],

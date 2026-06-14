@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getParentFavourites } from "@/lib/parent/data";
-import SchoolCard from "@/components/SchoolCard";
+import SchoolCard from "@/components/public/schools/SchoolCard";
 import RemoveFavouriteButton from "./RemoveFavouriteButton";
 import FavouritesPagination from "./FavouritesPagination";
 import { Heart, BookOpen, ArrowRight } from "lucide-react";

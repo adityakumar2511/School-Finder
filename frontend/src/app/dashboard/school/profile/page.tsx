@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import { getOwnedSchool } from "@/lib/school/data";
 import { getSchoolGalleryImages } from "@/lib/school/gallery";
-import SchoolProfileForm from "@/components/school/SchoolProfileForm";
+import SchoolProfileForm from "@/components/school/profile/SchoolProfileForm";
 import SchoolStatusCard from "@/components/school/SchoolStatusCard";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/shared/ui/card";
 
 export default async function SchoolProfilePage() {
   const session = await auth();

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
-import { auth } from "@/lib/auth";
-import { ADMIN_TOKEN_COOKIE } from "@/lib/admin-auth";
-import { mintBackendJwt } from "@/lib/backend-jwt";
+import { auth } from "@/lib/auth/auth";
+import { ADMIN_TOKEN_COOKIE } from "@/lib/auth/admin-auth";
+import { mintBackendJwt } from "@/lib/auth/backend-jwt";
 
 /**
  * Resolve the Express-compatible HS256 Bearer token for BFF/SSR calls.

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Role } from "@/lib/types/database";
-import { auth } from "@/lib/auth";
-import { uploadImage } from "@/lib/cloudinary";
+import { auth } from "@/lib/auth/auth";
+import { uploadImage } from "@/lib/upload/cloudinary";
 import {
   detectImageMime,
   isUploadFolder,
   validateImageBuffer,
   validateUploadFile,
   type UploadFolder,
-} from "@/lib/upload-security";
+} from "@/lib/upload/upload-security";
 
 export const runtime = "nodejs";
 

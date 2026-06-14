@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import JsonLd from "@/components/seo/JsonLd";
-import HomeHero from "@/components/home/HomeHero";
-import HomeStats from "@/components/home/HomeStats";
-import FeaturedSchools from "@/components/home/FeaturedSchools";
-import FeaturedSchoolsSkeleton from "@/components/home/FeaturedSchoolsSkeleton";
-import { buildPageMetadata, buildWebsiteJsonLd } from "@/lib/seo";
+import JsonLd from "@/components/shared/seo/JsonLd";
+import HomeHero from "@/components/public/home/HomeHero";
+import HomeStats from "@/components/public/home/HomeStats";
+import FeaturedSchools from "@/components/public/home/FeaturedSchools";
+import FeaturedSchoolsSkeleton from "@/components/public/home/FeaturedSchoolsSkeleton";
+import { buildPageMetadata, buildWebsiteJsonLd } from "@/lib/seo/seo";
 
 export const metadata = buildPageMetadata({
   title: "SchoolFinder — Find the Best Schools Near You",

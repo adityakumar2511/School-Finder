@@ -48,6 +48,7 @@ const router = Router();
 
 router.get("/", asyncHandler(getSchools));
 
+// No frontend caller yet — kept for future search feature
 router.get("/search", asyncHandler(searchSchools));
 
 router.get("/cities", asyncHandler(getCities));
@@ -131,4 +132,3 @@ router.delete(
 
 
 export default router;
-

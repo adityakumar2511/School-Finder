@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import type { Role } from "@/lib/types/database";
-import { authSecret } from "@/lib/auth";
+import { authSecret } from "@/lib/auth/auth";
 import {
   isProtectedDashboard,
   resolveMiddlewareRedirect,
-} from "@/lib/middleware-auth";
+} from "@/lib/auth/middleware-auth";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

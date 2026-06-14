@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import { getOwnedSchool } from "@/lib/school/data";
-import SchoolDashboardNav from "@/components/school/SchoolDashboardNav";
+import SchoolDashboardNav from "@/components/school/nav/SchoolDashboardNav";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },

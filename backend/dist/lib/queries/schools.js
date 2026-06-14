@@ -119,22 +119,28 @@ function buildSchoolListWhere(filters) {
         where.city = { contains: filters.city, mode: "insensitive" };
     }
     if (filters.board) {
-        const boards = Array.isArray(filters.board) ? filters.board : [filters.board];
+        const boards = Array.isArray(filters.board)
+            ? filters.board
+            : [filters.board];
         where.board = { in: boards };
     }
     if (filters.schoolType) {
-        where.schoolType = filters.schoolType;
+        where.schoolType =
+            filters.schoolType;
     }
     if (filters.medium) {
         where.medium = filters.medium;
     }
     return where;
 }
-/** Public school detail — necessary relations only */
+/** Public school detail — all 22-section fields + relations */
 exports.schoolDetailSelect = {
     id: true,
     name: true,
     slug: true,
+    status: true,
+    ownerId: true,
+    // Core
     description: true,
     address: true,
     city: true,
@@ -146,31 +152,139 @@ exports.schoolDetailSelect = {
     classesFrom: true,
     classesTo: true,
     totalStudents: true,
-    establishedYear: true,
     phone: true,
     email: true,
     website: true,
     logoUrl: true,
+    coverImageUrl: true,
+    // Basic Info extras
+    tagline: true,
+    establishedYear: true,
+    managementType: true,
+    schoolCategory: true,
+    schoolFormat: true,
+    affiliationNumber: true,
+    startTime: true,
+    endTime: true,
+    workingDays: true,
+    // About
+    vision: true,
+    mission: true,
+    principalMessage: true,
+    // Academics
+    classesOffered: true,
+    streamsOffered: true,
+    studentTeacherRatio: true,
+    // Admissions
+    admissionOpen: true,
+    admissionStartDate: true,
+    admissionEndDate: true,
+    ageCriteria: true,
+    requiredDocuments: true,
+    admissionProcess: true,
+    // Fees — legacy
     admissionFee: true,
     tuitionFeeMonthly: true,
     totalAnnualFee: true,
     transportFee: true,
     hostelFee: true,
-    status: true,
-    ownerId: true,
+    // Fees — new grade-wise
+    averageAnnualFee: true,
+    prePrimaryFee: true,
+    class1to5Fee: true,
+    class6to8Fee: true,
+    class9to10Fee: true,
+    class11to12Fee: true,
+    // Facilities & Sports
+    facilitiesList: true,
+    sportsList: true,
+    // Infrastructure
+    campusArea: true,
+    totalClassrooms: true,
+    totalLabs: true,
+    libraryBooks: true,
+    hostelCapacity: true,
+    totalBuses: true,
+    // Faculty
+    totalTeachers: true,
+    qualifiedTeachers: true,
+    trainingPrograms: true,
+    // Programs
+    programsList: true,
+    // Student Life
+    clubsActivities: true,
+    culturalActivities: true,
+    annualEvents: true,
+    educationalTours: true,
+    // Achievements
+    academicAchievements: true,
+    sportsAchievements: true,
+    awardsRecognitions: true,
+    // Hostel
+    hostelAvailable: true,
+    hostelBoys: true,
+    hostelGirls: true,
+    hostelMess: true,
+    // Transport
+    transportAvailable: true,
+    transportAreas: true,
+    gpsTracking: true,
+    totalVehicles: true,
+    // Safety
+    hasCCTV: true,
+    hasGuards: true,
+    hasMedicalRoom: true,
+    hasFireSafety: true,
+    hasVisitorMgmt: true,
+    // Contact extras
+    whatsapp: true,
+    mapUrl: true,
+    facebook: true,
+    instagram: true,
+    youtube: true,
+    linkedin: true,
+    admissionCoordinatorName: true,
+    admissionPhone: true,
+    admissionEmail: true,
+    // Relations
+    owner: { select: { name: true } },
     images: {
-        select: { id: true, url: true, caption: true },
+        select: { id: true, url: true, caption: true, category: true },
         orderBy: { createdAt: "asc" },
     },
     facilities: {
         select: {
-            facility: {
-                select: { id: true, name: true, icon: true },
-            },
+            facility: { select: { id: true, name: true, icon: true } },
         },
     },
-    owner: {
-        select: { name: true },
+    boardResults: {
+        select: {
+            id: true,
+            year: true,
+            class10Pass: true,
+            class12Pass: true,
+            topperName: true,
+            topperScore: true,
+        },
+        orderBy: { year: "desc" },
+    },
+    scholarships: {
+        select: { id: true, name: true, eligibility: true, benefits: true },
+    },
+    faqs: {
+        select: { id: true, question: true, answer: true },
+    },
+    downloads: {
+        select: { id: true, label: true, url: true },
+    },
+    customFields: {
+        select: {
+            id: true,
+            section: true,
+            label: true,
+            value: true,
+            fieldType: true,
+        },
     },
 };
 exports.adminSchoolListSelect = {
@@ -178,28 +292,28 @@ exports.adminSchoolListSelect = {
     name: true,
     slug: true,
     city: true,
-    state: true, // ADD
-    address: true, // ADD
+    state: true,
+    address: true,
     board: true,
-    schoolType: true, // ADD
-    medium: true, // ADD
-    classesFrom: true, // ADD
-    classesTo: true, // ADD
-    phone: true, // ADD
-    email: true, // ADD
-    website: true, // ADD
-    description: true, // ADD
+    schoolType: true,
+    medium: true,
+    classesFrom: true,
+    classesTo: true,
+    phone: true,
+    email: true,
+    website: true,
+    description: true,
     status: true,
     createdAt: true,
     rejectionReason: true,
-    totalStudents: true, // ADD
-    establishedYear: true, // ADD
-    admissionFee: true, // ADD
-    tuitionFeeMonthly: true, // ADD
-    totalAnnualFee: true, // ADD
-    transportFee: true, // ADD
-    hostelFee: true, // ADD
-    logoUrl: true, // ADD
+    totalStudents: true,
+    establishedYear: true,
+    admissionFee: true,
+    tuitionFeeMonthly: true,
+    totalAnnualFee: true,
+    transportFee: true,
+    hostelFee: true,
+    logoUrl: true,
     owner: {
         select: { name: true, email: true },
     },

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
-import { getSiteUrl } from "@/lib/seo";
-import { getAdminApiBase } from "@/lib/admin-auth";
+import { getSiteUrl } from "@/lib/seo/seo";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();

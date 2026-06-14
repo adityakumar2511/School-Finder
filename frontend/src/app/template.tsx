@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { pageTransition } from "@/lib/motion";
+import { pageTransition } from "@/lib/ui/motion";
 
 export default function Template({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();

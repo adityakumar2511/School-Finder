@@ -1,7 +1,7 @@
 // "use client";
 
 // import AuthRoleGuard from "@/components/auth/AuthRoleGuard";
-// import SchoolRegisterWizard from "@/components/school/SchoolRegisterWizard";
+// import SchoolRegisterWizard from "@/components/school/registration/SchoolRegisterWizard";
 
 // export default function SchoolRegisterPage() {
 //   return (
@@ -21,7 +21,7 @@
 
 
 
-import SchoolRegisterWizard from "@/components/school/SchoolRegisterWizard";
+import SchoolRegisterWizard from "@/components/school/registration/SchoolRegisterWizard";
 
 export default function SchoolRegisterPage() {
   return <SchoolRegisterWizard />;

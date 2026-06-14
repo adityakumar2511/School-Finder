@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import { getOwnedSchool } from "@/lib/school/data";
 import Link from "next/link";
 import { FileText, ArrowRight, LogOut } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/shared/ui/card";
+import { Button } from "@/components/shared/ui/button";
 
 export const metadata = {
   title: "Complete Registration — SchoolFinder",

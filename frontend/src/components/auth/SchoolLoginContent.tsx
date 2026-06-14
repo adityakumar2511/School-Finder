@@ -9,13 +9,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { GraduationCap, Mail, Lock, ArrowRight } from "lucide-react";
 import AuthRoleGuard from "@/components/auth/AuthRoleGuard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/PasswordInput";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { getAdminApiBase } from "@/lib/admin-auth";
-import { AUTH_ROUTES, ROLE_HOME, UNAUTHORIZED_ACCOUNT_MESSAGE } from "@/lib/auth-config";
+import { Button } from "@/components/shared/ui/button";
+import { Input } from "@/components/shared/ui/input";
+import { PasswordInput } from "@/components/shared/ui/PasswordInput";
+import { Label } from "@/components/shared/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/shared/ui/card";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
+import { AUTH_ROUTES, ROLE_HOME, UNAUTHORIZED_ACCOUNT_MESSAGE } from "@/lib/auth/auth-config";
 
 function sanitizeCallbackUrl(raw: string | null): string | null {
   if (!raw) return null;
@@ -74,17 +74,6 @@ export default function SchoolLoginContent() {
 
       if (!body.token) {
         setError("Sign in failed. No session token received.");
-        return;
-      }
-
-      const sessionRes = await fetch("/api/school/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: body.token }),
-      });
-
-      if (!sessionRes.ok) {
-        setError("Sign in failed. Could not persist session.");
         return;
       }
 

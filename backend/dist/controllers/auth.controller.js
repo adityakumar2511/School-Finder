@@ -73,10 +73,10 @@ const registerParent = async (req, res) => {
 };
 exports.registerParent = registerParent;
 // POST /api/auth/register-school
+// POST /api/auth/register-school
 const registerSchool = async (req, res) => {
     const body = req.body;
-    const { name, ownerEmail, ownerPassword, ownerName, city, state, address, pincode, board, schoolType, medium, classesFrom, classesTo, phone, email, website, description, logoUrl, admissionFee, tuitionFeeMonthly, totalAnnualFee, } = body;
-    // Role-specific duplicate email check
+    const { name, ownerEmail, ownerPassword, phone } = body;
     const existingUser = await prisma_1.default.user.findUnique({
         where: { email: ownerEmail },
     });
@@ -88,24 +88,19 @@ const registerSchool = async (req, res) => {
     }
     const hashedPassword = await bcryptjs_1.default.hash(ownerPassword, parseInt(process.env.BCRYPT_ROUNDS || "12"));
     const result = await prisma_1.default.$transaction(async (tx) => {
-        // School name duplicate check inside transaction
         const existingSchool = await tx.school.findFirst({
-            where: {
-                name: {
-                    equals: name,
-                    mode: "insensitive",
-                },
-            },
+            where: { name: { equals: name, mode: "insensitive" } },
         });
         if (existingSchool) {
             throw AppError_1.Errors.Conflict("A school with this name already exists. Please check if your school is already listed.");
         }
         const user = await tx.user.create({
             data: {
-                name: ownerName || ownerEmail.split("@")[0],
+                name: body.ownerName || ownerEmail.split("@")[0],
                 email: ownerEmail,
                 password: hashedPassword,
                 role: "SCHOOL_ADMIN",
+                phone: phone,
             },
         });
         const slug = await generateUniqueSlug(name, tx);
@@ -113,23 +108,26 @@ const registerSchool = async (req, res) => {
             data: {
                 name,
                 slug,
-                description: description ?? null,
-                address,
-                city,
-                state,
-                pincode: pincode ?? null,
-                board,
-                schoolType,
-                medium,
-                classesFrom,
-                classesTo,
                 phone,
-                email: email ?? null,
-                website: website ?? null,
-                logoUrl: logoUrl ?? null,
-                admissionFee: admissionFee ?? null,
-                tuitionFeeMonthly: tuitionFeeMonthly ?? null,
-                totalAnnualFee: totalAnnualFee ?? null,
+                // Optional fields from body, fallback to DB defaults
+                description: body.description ?? null,
+                address: body.address ?? "", // empty string — filled later
+                city: body.city ?? "",
+                state: body.state ?? "",
+                pincode: body.pincode ?? null,
+                board: body.board ?? "OTHER", // default enum value
+                schoolType: body.schoolType ?? "CO_ED",
+                medium: body.medium ?? "ENGLISH",
+                classesFrom: body.classesFrom ?? 1,
+                classesTo: body.classesTo ?? 12,
+                email: body.email ?? null,
+                website: body.website ?? null,
+                logoUrl: body.logoUrl ?? null,
+                admissionFee: body.admissionFee ?? null,
+                tuitionFeeMonthly: body.tuitionFeeMonthly ?? null,
+                totalAnnualFee: body.totalAnnualFee ?? null,
+                transportFee: body.transportFee ?? null,
+                hostelFee: body.hostelFee ?? null,
                 status: "PENDING",
                 ownerId: user.id,
             },
@@ -227,31 +225,28 @@ const clearOtpAndResetFields = {
 const forgotPassword = async (req, res) => {
     const { email, expectedRole } = req.body;
     const user = await prisma_1.default.user.findUnique({ where: { email } });
-    // User not found — generic response, never reveal account existence
+    // User not found — signal frontend so it can show proper error
     if (!user) {
         res.status(200).json({
             success: true,
             otpSent: false,
+            code: "USER_NOT_FOUND",
             message: GENERIC_FORGOT_PASSWORD_MESSAGE,
         });
         return;
     }
-    // Role mismatch — signal frontend with actualRole so it can show
-    // a helpful "go to correct portal" message, without revealing anything else
+    // Role mismatch — account exists but belongs to a different portal
     if (expectedRole && user.role !== expectedRole) {
         res.status(200).json({
             success: true,
             otpSent: false,
             code: "ROLE_MISMATCH",
-            actualRole: user.role, // "PARENT" | "SCHOOL_ADMIN" | "ADMIN"
+            actualRole: user.role,
             message: GENERIC_FORGOT_PASSWORD_MESSAGE,
         });
         return;
     }
     // ── Resend cooldown check ──────────────────────────────────────────────────
-    // otpExpiry is set to (sendTime + OTP_EXPIRY_MS).
-    // Time since last send = OTP_EXPIRY_MS - timeRemainingMs.
-    // If that elapsed time < RESEND_COOLDOWN_MS → too soon, return 429.
     if (user.otpExpiry) {
         const timeRemainingMs = user.otpExpiry.getTime() - Date.now();
         const elapsedMs = OTP_EXPIRY_MS - timeRemainingMs;

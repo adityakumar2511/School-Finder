@@ -10,6 +10,7 @@ const pagination_1 = require("../lib/pagination");
 const cache_1 = require("../lib/cache");
 const schools_1 = require("../lib/queries/schools");
 const sanitize_1 = require("../lib/sanitize");
+// ── Slug helpers ──────────────────────────────────────────────────────────────
 const slugify = (name) => name
     .trim()
     .toLowerCase()
@@ -19,9 +20,8 @@ const slugify = (name) => name
     .replace(/^-+|-+$/g, "");
 const generateSlug = async (name) => {
     const base = slugify(name);
-    if (!base) {
+    if (!base)
         throw AppError_1.Errors.BadRequest("School name is required");
-    }
     let slug = base;
     let count = 1;
     while (await prisma_1.default.school.findUnique({ where: { slug } })) {
@@ -30,7 +30,178 @@ const generateSlug = async (name) => {
     }
     return slug;
 };
-// GET /api/schools — public listing (offset or cursor pagination)
+// ── Related-model sync helpers ────────────────────────────────────────────────
+// Each helper deletes rows not in the incoming list, then upserts the rest.
+// They run inside the same transaction as the school update.
+async function syncBoardResults(tx, schoolId, items) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.boardResult.deleteMany({
+        where: { schoolId, id: { notIn: incomingIds } },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.boardResult.update({
+                where: { id: item.id },
+                data: {
+                    year: item.year,
+                    class10Pass: item.class10Pass ?? null,
+                    class12Pass: item.class12Pass ?? null,
+                    topperName: item.topperName ?? null,
+                    topperScore: item.topperScore ?? null,
+                },
+            });
+        }
+        else {
+            await tx.boardResult.create({
+                data: {
+                    schoolId,
+                    year: item.year,
+                    class10Pass: item.class10Pass ?? null,
+                    class12Pass: item.class12Pass ?? null,
+                    topperName: item.topperName ?? null,
+                    topperScore: item.topperScore ?? null,
+                },
+            });
+        }
+    }
+}
+async function syncScholarships(tx, schoolId, items) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.scholarship.deleteMany({
+        where: { schoolId, id: { notIn: incomingIds } },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.scholarship.update({
+                where: { id: item.id },
+                data: {
+                    name: item.name,
+                    eligibility: item.eligibility ?? null,
+                    benefits: item.benefits ?? null,
+                },
+            });
+        }
+        else {
+            await tx.scholarship.create({
+                data: {
+                    schoolId,
+                    name: item.name,
+                    eligibility: item.eligibility ?? null,
+                    benefits: item.benefits ?? null,
+                },
+            });
+        }
+    }
+}
+async function syncFAQs(tx, schoolId, items) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.schoolFAQ.deleteMany({
+        where: { schoolId, id: { notIn: incomingIds } },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.schoolFAQ.update({
+                where: { id: item.id },
+                data: { question: item.question, answer: item.answer },
+            });
+        }
+        else {
+            await tx.schoolFAQ.create({
+                data: { schoolId, question: item.question, answer: item.answer },
+            });
+        }
+    }
+}
+async function syncDownloads(tx, schoolId, items) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.schoolDownload.deleteMany({
+        where: { schoolId, id: { notIn: incomingIds } },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.schoolDownload.update({
+                where: { id: item.id },
+                data: { label: item.label, url: item.url },
+            });
+        }
+        else {
+            await tx.schoolDownload.create({
+                data: { schoolId, label: item.label, url: item.url },
+            });
+        }
+    }
+}
+async function syncGalleryImages(tx, schoolId, items) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.schoolImage.deleteMany({
+        where: { schoolId, id: { notIn: incomingIds } },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.schoolImage.update({
+                where: { id: item.id },
+                data: {
+                    url: item.url,
+                    caption: item.caption ?? null,
+                    category: item.category ?? null,
+                },
+            });
+        }
+        else {
+            await tx.schoolImage.create({
+                data: {
+                    schoolId,
+                    url: item.url,
+                    caption: item.caption ?? null,
+                    category: item.category ?? null,
+                },
+            });
+        }
+    }
+}
+async function syncCustomFields(tx, schoolId, items, section // if provided, only touch that section's fields
+) {
+    const incomingIds = items.map((i) => i.id).filter(Boolean);
+    await tx.schoolCustomField.deleteMany({
+        where: {
+            schoolId,
+            ...(section ? { section } : {}),
+            id: { notIn: incomingIds },
+        },
+    });
+    for (const item of items) {
+        if (item.id) {
+            await tx.schoolCustomField.update({
+                where: { id: item.id },
+                data: {
+                    section: item.section,
+                    label: item.label,
+                    value: item.value,
+                    fieldType: item.fieldType,
+                },
+            });
+        }
+        else {
+            await tx.schoolCustomField.create({
+                data: {
+                    schoolId,
+                    section: item.section,
+                    label: item.label,
+                    value: item.value,
+                    fieldType: item.fieldType,
+                },
+            });
+        }
+    }
+}
+// ── Extract scalar fields from validated input ────────────────────────────────
+// Strips the relation arrays so we can pass only scalar fields to school.update()
+function extractScalarFields(data) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { boardResults, scholarships, faqs, downloads, images, customFields, ...scalars } = data;
+    return scalars;
+}
+// ── GET /api/schools — public listing (offset or cursor pagination) ────────────
 const getSchools = async (req, res) => {
     const { search, city, board, schoolType, medium, page: pageQuery, limit: limitQuery, status, cursor, pagination, } = req.query;
     const limit = (0, pagination_1.parseLimit)(limitQuery, pagination_1.DEFAULT_SCHOOL_PAGE_LIMIT);
@@ -55,7 +226,9 @@ const getSchools = async (req, res) => {
             status: String(where.status),
             search: search,
             city: city,
-            board: Array.isArray(board) ? board.join(",") : board,
+            board: Array.isArray(board)
+                ? board.join(",")
+                : board,
             schoolType: schoolType,
             medium: medium,
         });
@@ -91,7 +264,9 @@ const getSchools = async (req, res) => {
         status: String(where.status),
         search: search,
         city: city,
-        board: Array.isArray(board) ? board.join(",") : board,
+        board: Array.isArray(board)
+            ? board.join(",")
+            : board,
         schoolType: schoolType,
         medium: medium,
     });
@@ -114,7 +289,7 @@ const getSchools = async (req, res) => {
     res.json((0, pagination_1.paginatedResponse)(result.data, result.pagination, "schools"));
 };
 exports.getSchools = getSchools;
-// GET /api/schools/search — lightweight autocomplete
+// ── GET /api/schools/search — lightweight autocomplete ────────────────────────
 const searchSchools = async (req, res) => {
     const query = String(req.query.q ?? req.query.search ?? "").trim();
     const limit = (0, pagination_1.parseLimit)(req.query.limit, 10, 20);
@@ -123,10 +298,7 @@ const searchSchools = async (req, res) => {
         return;
     }
     const searchWhere = (0, schools_1.buildSchoolSearchWhere)(query);
-    const where = {
-        status: "APPROVED",
-        ...(searchWhere ?? {}),
-    };
+    const where = { status: "APPROVED", ...(searchWhere ?? {}) };
     const cacheKey = (0, cache_1.buildCacheKey)("schools:search", { query, limit });
     const schools = await (0, cache_1.withCache)(cacheKey, cache_1.CACHE_TTL.SCHOOL_LIST, () => prisma_1.default.school.findMany({
         where,
@@ -137,35 +309,45 @@ const searchSchools = async (req, res) => {
     res.json({ data: schools });
 };
 exports.searchSchools = searchSchools;
-// GET /api/schools/my-school — owner dashboard
+// ── GET /api/schools/my-school — school owner dashboard ──────────────────────
 const getMySchool = async (req, res) => {
     const school = await prisma_1.default.school.findFirst({
         where: { ownerId: req.user.id },
         select: {
             ...schools_1.schoolDetailSelect,
             rejectionReason: true,
+            // New relation includes
+            customFields: true,
+            boardResults: { orderBy: { year: "desc" } },
+            scholarships: true,
+            faqs: true, // relation field name on School model — stays "faqs"
+            downloads: true,
         },
     });
-    if (!school) {
+    if (!school)
         throw AppError_1.Errors.NotFound("School");
-    }
     res.json({ data: school });
 };
 exports.getMySchool = getMySchool;
-// GET /api/schools/:slug — public detail
+// ── GET /api/schools/:slug — public detail ────────────────────────────────────
 const getSchool = async (req, res) => {
     const slug = String(req.params.slug).trim();
-    if (!slug) {
+    if (!slug)
         throw AppError_1.Errors.BadRequest("Invalid school identifier");
-    }
     const cacheKey = (0, cache_1.buildCacheKey)("schools:detail", { slug });
     const school = await (0, cache_1.withCache)(cacheKey, cache_1.CACHE_TTL.SCHOOL_DETAIL, () => prisma_1.default.school.findUnique({
         where: { slug },
-        select: schools_1.schoolDetailSelect,
+        select: {
+            ...schools_1.schoolDetailSelect,
+            customFields: true,
+            boardResults: { orderBy: { year: "desc" } },
+            scholarships: true,
+            faqs: true,
+            downloads: true,
+        },
     }));
-    if (!school) {
+    if (!school)
         throw AppError_1.Errors.NotFound("School");
-    }
     if (school.status !== "APPROVED") {
         const userId = req.user?.id;
         const userRole = req.user?.role;
@@ -176,7 +358,7 @@ const getSchool = async (req, res) => {
     res.json({ data: school, school });
 };
 exports.getSchool = getSchool;
-// POST /api/schools — create school
+// ── POST /api/schools — create school ────────────────────────────────────────
 const createSchool = async (req, res) => {
     const data = (0, sanitize_1.sanitizeSchoolData)(req.body);
     const slug = await generateSlug(data.name);
@@ -198,6 +380,7 @@ const createSchool = async (req, res) => {
             email: data.email ?? null,
             website: data.website ?? null,
             logoUrl: data.logoUrl ?? null,
+            coverImageUrl: data.coverImageUrl ?? null,
             admissionFee: data.admissionFee ?? null,
             tuitionFeeMonthly: data.tuitionFeeMonthly ?? null,
             totalAnnualFee: data.totalAnnualFee ?? null,
@@ -209,76 +392,95 @@ const createSchool = async (req, res) => {
             ownerId: req.user.id,
         },
     });
-    // Invalidate: admin stats (pending count), search, cities — new school may affect filters
     (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({ data: school });
 };
 exports.createSchool = createSchool;
-// PATCH /api/schools/:id — update school
+// ── PATCH /api/schools/:id — update school ────────────────────────────────────
+// Handles both scalar fields and related-model arrays in a single transaction.
 const updateSchool = async (req, res) => {
     const id = String(req.params.id).trim();
-    const data = (0, sanitize_1.sanitizeSchoolData)(req.body);
-    if (!id) {
+    if (!id)
         throw AppError_1.Errors.BadRequest("Invalid school identifier");
-    }
-    const school = await prisma_1.default.school.findUnique({
+    const data = (0, sanitize_1.sanitizeSchoolData)(req.body);
+    const existing = await prisma_1.default.school.findUnique({
         where: { id },
         select: { id: true, ownerId: true },
     });
-    if (!school) {
+    if (!existing)
         throw AppError_1.Errors.NotFound("School");
-    }
-    if (school.ownerId !== req.user.id && req.user.role !== "ADMIN") {
+    if (existing.ownerId !== req.user.id &&
+        req.user.role !== "ADMIN") {
         throw AppError_1.Errors.Forbidden("You do not have permission to update this school");
     }
-    const statusReset = req.user.role === "SCHOOL_ADMIN" ? { status: "PENDING" } : {};
-    const updated = await prisma_1.default.school.update({
-        where: { id },
-        data: { ...data, ...statusReset },
+    // School admins trigger re-review when they update their profile
+    const statusReset = req.user.role === "SCHOOL_ADMIN"
+        ? { status: "PENDING" }
+        : {};
+    const scalars = extractScalarFields(data);
+    const updated = await prisma_1.default.$transaction(async (tx) => {
+        const school = await tx.school.update({
+            where: { id },
+            data: { ...scalars, ...statusReset },
+        });
+        if (data.boardResults !== undefined) {
+            await syncBoardResults(tx, id, data.boardResults);
+        }
+        if (data.scholarships !== undefined) {
+            await syncScholarships(tx, id, data.scholarships);
+        }
+        if (data.faqs !== undefined) {
+            await syncFAQs(tx, id, data.faqs);
+        }
+        if (data.downloads !== undefined) {
+            await syncDownloads(tx, id, data.downloads);
+        }
+        if (data.images !== undefined) {
+            await syncGalleryImages(tx, id, data.images);
+        }
+        if (data.customFields !== undefined) {
+            await syncCustomFields(tx, id, data.customFields);
+        }
+        return school;
     });
-    // Invalidate: list, detail, search, cities — profile fields changed on public pages
     (0, cache_1.invalidateSchoolCache)();
     res.json({ data: updated });
 };
 exports.updateSchool = updateSchool;
-// DELETE /api/schools/:id — admin only
+// ── DELETE /api/schools/:id — admin only ──────────────────────────────────────
 const deleteSchool = async (req, res) => {
     const id = String(req.params.id).trim();
-    if (!id) {
+    if (!id)
         throw AppError_1.Errors.BadRequest("Invalid school identifier");
-    }
     await prisma_1.default.school.delete({ where: { id } });
-    // Invalidate: remove deleted school from list, detail, search, cities, admin stats
     (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "School deleted successfully" });
 };
 exports.deleteSchool = deleteSchool;
-// POST /api/schools/my-school/images
+// ── POST /api/schools/my-school/images ───────────────────────────────────────
 const addSchoolImage = async (req, res) => {
-    const { url, caption } = req.body;
-    if (!url?.trim()) {
+    const { url, caption, category, } = req.body;
+    if (!url?.trim())
         throw AppError_1.Errors.BadRequest("Image URL is required");
-    }
     const school = await prisma_1.default.school.findFirst({
         where: { ownerId: req.user.id },
         select: { id: true },
     });
-    if (!school) {
+    if (!school)
         throw AppError_1.Errors.NotFound("School");
-    }
     const image = await prisma_1.default.schoolImage.create({
         data: {
             schoolId: school.id,
             url: url.trim(),
             caption: caption?.trim() || null,
+            category: category?.trim() || null,
         },
     });
-    // Invalidate: gallery images appear on public school detail page
     (0, cache_1.invalidateSchoolCache)();
     res.status(201).json({ data: image });
 };
 exports.addSchoolImage = addSchoolImage;
-// DELETE /api/schools/images/:id
+// ── DELETE /api/schools/images/:id ───────────────────────────────────────────
 const deleteSchoolImage = async (req, res) => {
     const imageId = String(req.params.id).trim();
     const image = await prisma_1.default.schoolImage.findUnique({
@@ -289,12 +491,11 @@ const deleteSchoolImage = async (req, res) => {
         throw AppError_1.Errors.NotFound("Image");
     }
     await prisma_1.default.schoolImage.delete({ where: { id: imageId } });
-    // Invalidate: removed image must disappear from public school detail page
     (0, cache_1.invalidateSchoolCache)();
     res.json({ message: "Image deleted successfully" });
 };
 exports.deleteSchoolImage = deleteSchoolImage;
-// GET /api/schools/cities — distinct approved cities
+// ── GET /api/schools/cities — distinct approved cities ────────────────────────
 const getCities = async (_req, res) => {
     const cacheKey = (0, cache_1.buildCacheKey)("schools:cities", {});
     const cities = await (0, cache_1.withCache)(cacheKey, cache_1.CACHE_TTL.SCHOOL_LIST, () => prisma_1.default.school.findMany({

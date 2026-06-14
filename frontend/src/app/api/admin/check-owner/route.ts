@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { ADMIN_TOKEN_COOKIE, getAdminApiBase } from "@/lib/admin-auth";
+import { ADMIN_TOKEN_COOKIE, getAdminApiBase } from "@/lib/auth/admin-auth";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();

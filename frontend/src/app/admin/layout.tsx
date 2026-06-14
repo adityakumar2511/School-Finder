@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import AdminNav from "@/components/admin/AdminNav";
+import { auth } from "@/lib/auth/auth";
+import AdminNav from "@/components/admin/nav/AdminNav";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },

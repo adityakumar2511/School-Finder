@@ -1,13 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isProduction = isProduction;
-exports.getListenHost = getListenHost;
 exports.validateStartupEnv = validateStartupEnv;
 function isProduction() {
     return process.env.NODE_ENV === "production";
-}
-function getListenHost() {
-    return isProduction() ? "0.0.0.0" : "localhost";
 }
 function getEnvValue(key) {
     return process.env[key]?.trim() ?? "";
@@ -19,7 +15,7 @@ function validateStartupEnv() {
     const production = isProduction();
     const missing = [];
     const alwaysRequired = ["DATABASE_URL", "JWT_SECRET"];
-    const productionRequired = ["FRONTEND_URL", "RESEND_API_KEY", "EMAIL_FROM"];
+    const productionRequired = ["FRONTEND_URL", "BREVO_API_KEY", "EMAIL_FROM"];
     for (const key of alwaysRequired) {
         if (isEnvMissing(key)) {
             missing.push(key);
@@ -43,7 +39,7 @@ function validateStartupEnv() {
         }
         console.warn(message);
     }
-    const emailVars = ["RESEND_API_KEY", "EMAIL_FROM"];
+    const emailVars = ["BREVO_API_KEY", "EMAIL_FROM"];
     const missingEmail = emailVars.filter((key) => isEnvMissing(key));
     if (missingEmail.length > 0) {
         console.warn(`[Config] Email not configured. Missing: ${missingEmail.join(", ")}. ` +

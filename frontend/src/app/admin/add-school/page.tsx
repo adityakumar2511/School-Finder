@@ -13,7 +13,10 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { PasswordInput } from "@/components/ui/PasswordInput";
+import { Input } from "@/components/shared/ui/input";
+import { PasswordInput } from "@/components/shared/ui/PasswordInput";
+import { FormField, inputClass, inputErrorClass } from "@/components/shared/form/FormField";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -156,9 +159,6 @@ export default function AdminAddSchoolPage() {
   }
 
   // ── Form ────────────────────────────────────────────────────────────────
-  const inputClass =
-    "w-full px-4 py-3 rounded-xl border border-gray-100 font-body text-body text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition bg-gray-50 focus:bg-white";
-
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-md mx-auto">
@@ -188,79 +188,47 @@ export default function AdminAddSchoolPage() {
             <div className="space-y-5">
 
               {/* School Name */}
-              <div>
-                <label className="block font-body text-label text-gray-800 mb-1.5">
-                  School name <span className="text-red-500">*</span>
-                </label>
-                <input
+              <FormField label="School name" required error={errors.schoolName?.message}>
+                <Input
                   {...register("schoolName")}
                   type="text"
                   placeholder="e.g. Delhi Public School, Varanasi"
-                  className={inputClass}
+                  className={cn(inputClass, errors.schoolName && inputErrorClass)}
                 />
-                {errors.schoolName && (
-                  <p className="text-red-500 font-body text-meta mt-1">
-                    {errors.schoolName.message}
-                  </p>
-                )}
-              </div>
+              </FormField>
 
               {/* Owner Email */}
-              <div>
-                <label className="block font-body text-label text-gray-800 mb-1.5">
-                  Owner email <span className="text-red-500">*</span>
-                </label>
-                <input
+              <FormField label="Owner email" required error={errors.ownerEmail?.message}>
+                <Input
                   {...register("ownerEmail")}
                   type="email"
                   placeholder="owner@school.com"
-                  className={inputClass}
+                  className={cn(inputClass, errors.ownerEmail && inputErrorClass)}
                 />
-                {errors.ownerEmail && (
-                  <p className="text-red-500 font-body text-meta mt-1">
-                    {errors.ownerEmail.message}
-                  </p>
-                )}
-              </div>
+              </FormField>
 
               {/* Mobile */}
-              <div>
-                <label className="block font-body text-label text-gray-800 mb-1.5">
-                  Mobile number <span className="text-red-500">*</span>
-                </label>
-                <input
+              <FormField label="Mobile number" required error={errors.phone?.message}>
+                <Input
                   {...register("phone")}
                   type="tel"
                   maxLength={10}
                   placeholder="9876543210"
-                  className={inputClass}
+                  className={cn(inputClass, errors.phone && inputErrorClass)}
                 />
-                {errors.phone && (
-                  <p className="text-red-500 font-body text-meta mt-1">
-                    {errors.phone.message}
-                  </p>
-                )}
-              </div>
+              </FormField>
 
               {/* Password */}
-              <div>
-                <label className="block font-body text-label text-gray-800 mb-1.5">
-                  Password <span className="text-red-500">*</span>
-                </label>
+              <FormField label="Password" required error={errors.ownerPassword?.message}>
                 <PasswordInput
                   {...register("ownerPassword")}
                   placeholder="Min 8 characters"
-                  className={inputClass}
+                  className={cn(inputClass, errors.ownerPassword && inputErrorClass)}
                 />
-                {errors.ownerPassword && (
-                  <p className="text-red-500 font-body text-meta mt-1">
-                    {errors.ownerPassword.message}
-                  </p>
-                )}
                 <p className="text-gray-400 font-body text-meta mt-1">
                   Share these credentials with the school admin to login
                 </p>
-              </div>
+              </FormField>
 
               {/* Info */}
               <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">

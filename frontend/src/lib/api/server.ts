@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
-import { getAdminApiBase } from "@/lib/admin-auth";
-import { ADMIN_TOKEN_COOKIE } from "@/lib/admin-auth";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
+import { ADMIN_TOKEN_COOKIE } from "@/lib/auth/admin-auth";
 import { resolveBackendToken } from "@/lib/api/resolve-backend-token";
 
 export function getApiBase(): string {

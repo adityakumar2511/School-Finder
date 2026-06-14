@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ADMIN_TOKEN_COOKIE } from "@/lib/admin-auth";
+import { ADMIN_TOKEN_COOKIE } from "@/lib/auth/admin-auth";
 
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 

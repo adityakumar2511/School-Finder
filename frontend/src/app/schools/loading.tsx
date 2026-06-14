@@ -1,4 +1,4 @@
-import SchoolGridSkeleton from "@/components/schools/SchoolGridSkeleton";
+import SchoolGridSkeleton from "@/components/public/schools/SchoolGridSkeleton";
 
 export default function SchoolsLoading() {
   return (

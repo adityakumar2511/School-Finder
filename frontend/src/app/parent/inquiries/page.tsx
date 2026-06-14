@@ -2,9 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import type { InquiryStatus } from "@/lib/types/database";
 import { ChevronLeft, ChevronRight, MessageSquare, BookOpen, ArrowRight } from "lucide-react";
-import { getAdminApiBase } from "@/lib/admin-auth";
+import { getAdminApiBase } from "@/lib/auth/admin-auth";
 import { getBackendToken } from "@/lib/api/server";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/shared/ui/button";
 
 const PAGE_SIZE = 10;
 

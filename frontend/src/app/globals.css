@@ -54,16 +54,29 @@
     @apply bg-gray-50 text-gray-900 font-body text-body antialiased;
   }
 
+  /*
+   * Headings intentionally do NOT set a text color here.
+   * Color is inherited from the surrounding context (e.g. body's
+   * text-gray-900 on light sections, or an explicit text-white on
+   * dark/gradient sections like HomeHero). This lets the same h1/h2/h3
+   * work correctly on both light and dark backgrounds without an
+   * !important-style override fight.
+   *
+   * Rule of thumb when building new sections:
+   *   - Light background  -> no extra class needed (inherits text-gray-900)
+   *   - Dark/gradient bg  -> add text-white (or text-hero-text) on the
+   *                          section/container; headings will inherit it
+   */
   h1 {
-    @apply font-heading font-bold text-h1 text-gray-900;
+    @apply font-heading font-bold text-h1;
   }
 
   h2 {
-    @apply font-heading font-bold text-h2 text-gray-900;
+    @apply font-heading font-bold text-h2;
   }
 
   h3 {
-    @apply font-heading font-semibold text-h3 text-gray-900;
+    @apply font-heading font-semibold text-h3;
   }
 
   :focus-visible {

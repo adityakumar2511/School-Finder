@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import SchoolCard from "@/components/SchoolCard";
-import SchoolFilters from "@/components/SchoolFilters";
-import SchoolGridSkeleton from "@/components/schools/SchoolGridSkeleton";
+import SchoolCard from "@/components/public/schools/SchoolCard";
+import SchoolFilters from "@/components/public/schools/SchoolFilters";
+import SchoolGridSkeleton from "@/components/public/schools/SchoolGridSkeleton";
 import { GraduationCap, ServerOff } from "lucide-react";
-import { buildPageMetadata } from "@/lib/seo";
+import { buildPageMetadata } from "@/lib/seo/seo";
 import { fetchSchoolList, fetchCities  } from "@/lib/data/schools-public";
 
 export const metadata: Metadata = buildPageMetadata({

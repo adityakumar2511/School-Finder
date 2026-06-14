@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/auth";
 import ParentNav from "@/components/parent/ParentNav";
 
 export const metadata: Metadata = {
