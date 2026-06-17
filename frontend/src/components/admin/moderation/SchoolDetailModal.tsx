@@ -55,12 +55,13 @@ type SchoolDetail = {
   createdAt: string;
 };
 
+// Props type — line ~49
 type Props = {
   school: SchoolDetail;
   open: boolean;
   onClose: () => void;
-  onApprove: (id: string) => Promise<void>;
-  onReject: (id: string, reason: string) => Promise<void>;
+  onApprove?: (id: string) => Promise<void>; // ? added
+  onReject?: (id: string, reason: string) => Promise<void>; // ? added
 };
 
 export default function SchoolDetailModal({
@@ -82,7 +83,9 @@ export default function SchoolDetailModal({
     onClose();
   }
 
+  // handleApprove function
   async function handleApprove() {
+    if (!onApprove) return; // null guard
     setLoading("approve");
     try {
       await onApprove(school.id);
@@ -92,7 +95,9 @@ export default function SchoolDetailModal({
     }
   }
 
+  // handleReject function
   async function handleReject() {
+    if (!onReject) return; // null guard
     if (!reason.trim()) {
       setReasonError("Rejection reason is required");
       return;
@@ -134,27 +139,33 @@ export default function SchoolDetailModal({
             )}
             <div>
               <p className="font-body text-sm text-gray-500">
-                Owner: <span className="text-gray-800">{school.owner.name ?? "—"}</span>{" "}
+                Owner:{" "}
+                <span className="text-gray-800">
+                  {school.owner.name ?? "—"}
+                </span>{" "}
                 · {school.owner.email}
               </p>
               <p className="font-body text-sm text-gray-400">
-                Registered: {new Date(school.createdAt).toLocaleDateString("en-IN", {
-                  day: "numeric", month: "short", year: "numeric",
+                Registered:{" "}
+                {new Date(school.createdAt).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
                 })}
               </p>
             </div>
           </div>
-
           {/* Academic badges */}
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{school.board.replace("_", " ")}</Badge>
-            <Badge variant="secondary">{school.schoolType.replace("_", " ")}</Badge>
+            <Badge variant="secondary">
+              {school.schoolType.replace("_", " ")}
+            </Badge>
             <Badge variant="secondary">{school.medium}</Badge>
             <Badge variant="secondary">
               Class {school.classesFrom}–{school.classesTo}
             </Badge>
           </div>
-
           {/* Location + contact */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex items-start gap-2">
@@ -170,7 +181,9 @@ export default function SchoolDetailModal({
             {school.email && (
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <p className="font-body text-sm text-gray-700">{school.email}</p>
+                <p className="font-body text-sm text-gray-700">
+                  {school.email}
+                </p>
               </div>
             )}
             {school.website && (
@@ -187,34 +200,39 @@ export default function SchoolDetailModal({
               </div>
             )}
           </div>
-
           {/* Stats row */}
           {(school.totalStudents || school.establishedYear) && (
             <div className="flex gap-4">
               {school.establishedYear && (
                 <div className="flex items-center gap-1.5">
                   <Calendar className="h-4 w-4 text-gray-400" />
-                  <p className="font-body text-sm text-gray-700">Est. {school.establishedYear}</p>
+                  <p className="font-body text-sm text-gray-700">
+                    Est. {school.establishedYear}
+                  </p>
                 </div>
               )}
               {school.totalStudents && (
                 <div className="flex items-center gap-1.5">
                   <Users className="h-4 w-4 text-gray-400" />
-                  <p className="font-body text-sm text-gray-700">{school.totalStudents} students</p>
+                  <p className="font-body text-sm text-gray-700">
+                    {school.totalStudents} students
+                  </p>
                 </div>
               )}
             </div>
           )}
-
           {/* Description */}
           {school.description && (
             <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-              <p className="font-body text-sm text-gray-700">{school.description}</p>
+              <p className="font-body text-sm text-gray-700">
+                {school.description}
+              </p>
             </div>
           )}
-
           {/* Fees */}
-          {(school.admissionFee || school.tuitionFeeMonthly || school.totalAnnualFee) && (
+          {(school.admissionFee ||
+            school.tuitionFeeMonthly ||
+            school.totalAnnualFee) && (
             <div>
               <p className="font-heading font-semibold text-sm text-gray-800 mb-2 flex items-center gap-1.5">
                 <GraduationCap className="h-4 w-4" /> Fee structure
@@ -230,7 +248,9 @@ export default function SchoolDetailModal({
                   .filter((f) => f.value)
                   .map((f) => (
                     <div key={f.label} className="p-2 bg-blue-50 rounded-lg">
-                      <p className="font-body text-xs text-gray-500">{f.label}</p>
+                      <p className="font-body text-xs text-gray-500">
+                        {f.label}
+                      </p>
                       <p className="font-heading font-semibold text-sm text-blue-800">
                         ₹{f.value?.toLocaleString("en-IN")}
                       </p>
@@ -239,17 +259,17 @@ export default function SchoolDetailModal({
               </div>
             </div>
           )}
-
           {/* Existing rejection reason if any */}
           {school.rejectionReason && school.status === "REJECTED" && (
             <div className="p-3 bg-red-50 rounded-xl border border-red-200">
               <p className="font-heading font-semibold text-sm text-red-700 mb-1">
                 Previous rejection reason
               </p>
-              <p className="font-body text-sm text-red-700">{school.rejectionReason}</p>
+              <p className="font-body text-sm text-red-700">
+                {school.rejectionReason}
+              </p>
             </div>
           )}
-
           {/* Reject reason input */}
           {rejectMode && (
             <div className="space-y-1.5">
@@ -271,35 +291,39 @@ export default function SchoolDetailModal({
               )}
             </div>
           )}
-
           {/* Action buttons — only for PENDING */}
-          {isPending && (
+          // Action buttons section —
+          {isPending && (onApprove || onReject) && (
             <div className="flex gap-3 pt-2 border-t border-gray-100">
               {!rejectMode ? (
                 <>
-                  <Button
-                    onClick={handleApprove}
-                    disabled={loading !== null}
-                    className="flex-1 h-10 bg-green-600 hover:bg-green-700 font-heading text-sm rounded-xl"
-                  >
-                    {loading === "approve" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Approve
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => setRejectMode(true)}
-                    disabled={loading !== null}
-                    variant="outline"
-                    className="flex-1 h-10 border-red-200 text-red-600 hover:bg-red-50 font-heading text-sm rounded-xl"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
+                  {onApprove && (
+                    <Button
+                      onClick={handleApprove}
+                      disabled={loading !== null}
+                      className="flex-1 h-10 bg-green-600 hover:bg-green-700 font-heading text-sm rounded-xl"
+                    >
+                      {loading === "approve" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Approve
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {onReject && (
+                    <Button
+                      onClick={() => setRejectMode(true)}
+                      disabled={loading !== null}
+                      variant="outline"
+                      className="flex-1 h-10 border-red-200 text-red-600 hover:bg-red-50 font-heading text-sm rounded-xl"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Reject
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>
@@ -318,7 +342,11 @@ export default function SchoolDetailModal({
                     )}
                   </Button>
                   <Button
-                    onClick={() => { setRejectMode(false); setReason(""); setReasonError(""); }}
+                    onClick={() => {
+                      setRejectMode(false);
+                      setReason("");
+                      setReasonError("");
+                    }}
                     disabled={loading !== null}
                     variant="outline"
                     className="h-10 font-heading text-sm rounded-xl"

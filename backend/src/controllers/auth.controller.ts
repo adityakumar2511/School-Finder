@@ -548,6 +548,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
 };
 
 // GET /api/auth/me
+// GET /api/auth/me
 export const getMe = async (req: AuthRequest, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -559,6 +560,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       image: true,
       phone: true,
       createdAt: true,
+      adminAccessLevel: true, // Phase E
     },
   });
 
@@ -566,7 +568,10 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     throw Errors.NotFound("User");
   }
 
-  res.json(user);
+  res.json({
+    ...user,
+    adminAccessLevel: user.role === "ADMIN" ? user.adminAccessLevel : undefined,
+  });
 };
 
 // PATCH /api/auth/me
