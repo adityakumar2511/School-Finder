@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   School,
@@ -10,6 +11,7 @@ import {
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AdminAccessLevel } from "@/lib/types/database";
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -20,6 +22,8 @@ const links = [
 
 export default function AdminNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const accessLevel = session?.user?.adminAccessLevel as AdminAccessLevel | null;
 
   return (
     <header className="border-b border-gray-200 bg-white">
@@ -44,13 +48,35 @@ export default function AdminNav() {
             );
           })}
         </nav>
-        <Link
-          href="/admin/add-school"
-          className="btn-cta inline-flex items-center justify-center gap-2 text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          Add school
-        </Link>
+        <div className="flex items-center gap-2">
+          {(accessLevel === "READ_WRITE" || accessLevel === "FULL_ACCESS") && (
+            <>
+              <Link
+                href="/admin/add-school"
+                className="btn-cta inline-flex items-center justify-center gap-2 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add school
+              </Link>
+              <Link
+                href="/admin/add-parent"
+                className="btn-secondary inline-flex items-center justify-center gap-2 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add parent
+              </Link>
+            </>
+          )}
+          {accessLevel === "FULL_ACCESS" && (
+            <Link
+              href="/admin/add-admin"
+              className="btn-secondary inline-flex items-center justify-center gap-2 text-sm"
+            >
+              <Plus className="h-4 w-4" />
+              Add admin
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   );

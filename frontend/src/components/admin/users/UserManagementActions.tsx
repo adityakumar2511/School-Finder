@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Role } from "@/lib/types/database";
+import type { Role, AdminAccessLevel } from "@/lib/types/database";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
 import {
@@ -21,26 +21,44 @@ import {
   DialogTitle,
 } from "@/components/shared/ui/dialog";
 
-const ROLES: Role[] = ["PARENT", "SCHOOL_ADMIN", "ADMIN"];
-
 type Props = {
   userId: string;
   currentRole: Role;
   accountStatus: "active" | "disabled";
   isSelf: boolean;
+  viewerAccessLevel: AdminAccessLevel | null; // ADD — viewer ka access level
 };
+
+function getAllowedRoles(currentRole: Role): Role[] {
+  if (currentRole === "PARENT") return ["PARENT", "SCHOOL_ADMIN"];
+  if (currentRole === "SCHOOL_ADMIN") return ["SCHOOL_ADMIN"];
+  return [currentRole];
+}
+
+function RoleBadgeFallback({ role }: { role: Role }) {
+  return (
+    <span className="inline-flex h-9 items-center rounded-md border border-gray-200 bg-gray-50 px-3 font-body text-sm text-gray-600">
+      {role.replace("_", " ")}
+    </span>
+  );
+}
 
 export default function UserManagementActions({
   userId,
   currentRole,
   accountStatus,
   isSelf,
+  viewerAccessLevel,
 }: Props) {
   const router = useRouter();
   const [role, setRole] = useState(currentRole);
   const [loading, setLoading] = useState<string | null>(null);
   const [disableOpen, setDisableOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const allowedRoles = getAllowedRoles(currentRole);
+  const canChangeRole = allowedRoles.length > 1 && !isSelf && viewerAccessLevel === "FULL_ACCESS";
+  const canToggleStatus = !isSelf && viewerAccessLevel === "FULL_ACCESS";
 
   async function updateRole(next: Role) {
     setLoading("role");
@@ -89,24 +107,29 @@ export default function UserManagementActions({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-      <Select
-        value={role}
-        onValueChange={(v) => updateRole(v as Role)}
-        disabled={isSelf || loading !== null}
-      >
-        <SelectTrigger className="h-9 w-[140px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {ROLES.map((r) => (
-            <SelectItem key={r} value={r}>
-              {r.replace("_", " ")}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {canChangeRole ? (
+        <Select
+          value={role}
+          onValueChange={(v) => updateRole(v as Role)}
+          disabled={loading !== null}
+        >
+          <SelectTrigger className="h-9 w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {allowedRoles.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r.replace("_", " ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <RoleBadgeFallback role={currentRole} />
+      )}
 
-      {!isSelf && (
+      {/* Consolidated status toggle — FULL_ACCESS only, not self */}
+      {canToggleStatus && (
         <Button
           size="sm"
           variant="outline"

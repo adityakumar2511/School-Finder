@@ -14,6 +14,7 @@ export interface AuthRequest extends Request {
     id: string;
     role: string;
     email: string;
+    adminAccessLevel?: string | null; // Phase E — present only for ADMIN role
   };
 }
 
@@ -21,6 +22,7 @@ type AccessTokenPayload = {
   id: string;
   role: string;
   email: string;
+  adminAccessLevel?: string | null; // Phase E
   jti?: string;
 };
 
@@ -36,6 +38,7 @@ export function signAccessToken(payload: {
   id: string;
   role: string;
   email: string;
+  adminAccessLevel?: string | null; // Phase E — pass only for ADMIN
 }): string {
   return jwt.sign(
     {
@@ -96,6 +99,7 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction): void 
       id: decoded.id,
       role: decoded.role,
       email: decoded.email,
+      adminAccessLevel: decoded.adminAccessLevel ?? null, // Phase E
     };
     next();
   } catch (error) {

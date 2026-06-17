@@ -21,6 +21,7 @@ import {
   withCache,
 } from "../lib/cache";
 import { adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect  } from "../lib/queries/schools";
+import type { AddAdminInput } from "../validators/auth.validator";
 
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"] as const;
 type RoleValue = (typeof VALID_ROLES)[number];
@@ -217,15 +218,21 @@ export const rejectSchool = async (req: AuthRequest, res: Response) => {
 };
 
 // GET /api/admin/users
+// GET /api/admin/users
 export const getAdminUsers = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit, DEFAULT_ADMIN_PAGE_LIMIT);
   const skip = (page - 1) * limit;
   const search = req.query.search as string | undefined;
+  const role = req.query.role as string | undefined;
 
   const where: Record<string, unknown> = {};
-  const term = search?.trim();
 
+  if (role && VALID_ROLES.includes(role as RoleValue)) {
+    where.role = role;
+  }
+
+  const term = search?.trim();
   if (term) {
     where.OR = [
       { name: { contains: term, mode: "insensitive" } },
@@ -246,6 +253,7 @@ export const getAdminUsers = async (req: AuthRequest, res: Response) => {
         role: true,
         phone: true,
         createdAt: true,
+        adminAccessLevel: true, // ← Phase E field, safe to add now (null until E)
       },
     }),
     prisma.user.count({ where }),
@@ -261,17 +269,23 @@ export const getAdminUsers = async (req: AuthRequest, res: Response) => {
 };
 
 // GET /api/admin/inquiries
+// GET /api/admin/inquiries
 export const getAdminInquiries = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit, DEFAULT_ADMIN_PAGE_LIMIT);
   const skip = (page - 1) * limit;
   const status = req.query.status as string | undefined;
   const search = req.query.search as string | undefined;
+  const schoolId = (req.query.schoolId as string | undefined)?.trim();
 
   const where: Record<string, unknown> = {};
 
   if (status && ["NEW", "CONTACTED", "CLOSED"].includes(status)) {
     where.status = status;
+  }
+
+  if (schoolId) {
+    where.schoolId = schoolId;
   }
 
   const term = search?.trim();
@@ -307,6 +321,7 @@ export const getAdminInquiries = async (req: AuthRequest, res: Response) => {
 };
 
 // PATCH /api/admin/users/:id/role
+// PATCH /api/admin/users/:id/role
 export const updateUserRole = async (req: AuthRequest, res: Response) => {
   const targetId = String(req.params.id).trim();
   const { role } = req.body as { role?: string };
@@ -324,6 +339,20 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   if (!target) {
     throw Errors.NotFound("User");
   }
+
+  // ── NEW: block SCHOOL_ADMIN → PARENT and ANY → ADMIN via this route ──
+  if (target.role === "SCHOOL_ADMIN" && role === "PARENT") {
+    throw Errors.BadRequest(
+      "SCHOOL_ADMIN accounts cannot be converted to PARENT"
+    );
+  }
+
+  if (target.role !== "ADMIN" && role === "ADMIN") {
+    throw Errors.BadRequest(
+      "Use the Add Admin flow to grant administrator access"
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────
 
   if (
     target.id === req.user!.id &&
@@ -605,4 +634,97 @@ export const getAdminSchoolById = async (req: AuthRequest, res: Response) => {
   if (!school) throw Errors.NotFound("School");
 
   res.json({ data: school });
+};
+
+
+// POST /api/admin/add-parent
+export const addParentDirect = async (req: AuthRequest, res: Response) => {
+  if (!req.user?.id) {
+    throw Errors.Unauthorized("Authentication required");
+  }
+
+  const { name, email, phone, password } = req.body;
+
+  // Duplicate email check
+  const existing = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+  });
+
+  if (existing) {
+    throw Errors.Conflict("A user with this email already exists");
+  }
+
+  const hashedPassword = await bcrypt.hash(
+    password,
+    parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
+  );
+
+  const parent = await prisma.user.create({
+    data: {
+      name,
+      email: email.toLowerCase(),
+      phone,
+      password: hashedPassword,
+      role: "PARENT",
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      createdAt: true,
+    },
+  });
+
+  res.status(201).json({
+    message: "Parent account created successfully",
+    user: parent,
+  });
+};
+
+
+export const addAdminDirect = async (req: AuthRequest, res: Response) => {
+  if (!req.user?.id) {
+    throw Errors.Unauthorized("Authentication required");
+  }
+ 
+  const { name, email, password, adminAccessLevel } = req.body as AddAdminInput;
+ 
+  // Duplicate email check
+  const existing = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+  });
+ 
+  if (existing) {
+    throw Errors.Conflict("A user with this email already exists");
+  }
+ 
+  const hashedPassword = await bcrypt.hash(
+    password,
+    parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
+  );
+ 
+  const admin = await prisma.user.create({
+    data: {
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: "ADMIN",
+      adminAccessLevel,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      adminAccessLevel: true,
+      createdAt: true,
+    },
+  });
+ 
+  res.status(201).json({
+    message: "Admin account created successfully",
+    user: admin,
+  });
 };

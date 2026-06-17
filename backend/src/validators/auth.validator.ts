@@ -168,6 +168,42 @@ export const resetPasswordSchema = z
     path: ["confirmPassword"],
   });
 
+// Add this near other schemas in auth.validator.ts
+
+export const updateUserRoleSchema = z.object({
+  role: z.enum(["PARENT", "SCHOOL_ADMIN", "ADMIN"]),
+});
+
+
+export const addParentSchema = z.object({
+  name: z.preprocess(preprocessTrim, z.string().min(1, "Name is required")),
+  email: z.preprocess(
+    preprocessEmail,
+    z.string().email("Enter a valid email address"),
+  ),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  phone: z.preprocess(
+    preprocessTrim,
+    z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number"),
+  ),
+});
+
+export const adminAccessLevelSchema = z.enum([
+  "READ_ONLY",
+  "READ_WRITE",
+  "FULL_ACCESS",
+]);
+ 
+export const addAdminSchema = z.object({
+  name: z.preprocess(preprocessTrim, z.string().min(1, "Name is required")),
+  email: z.preprocess(
+    preprocessEmail,
+    z.string().email("Enter a valid email address"),
+  ),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  adminAccessLevel: adminAccessLevelSchema,
+});
+
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterSchoolInput = z.infer<typeof registerSchoolSchema>;
@@ -176,3 +212,7 @@ export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type VerifyResetOtpInput = z.infer<typeof verifyResetOtpSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
+export type AddParentInput = z.infer<typeof addParentSchema>;
+export type AddAdminInput = z.infer<typeof addAdminSchema>;
+export type AdminAccessLevelValue = z.infer<typeof adminAccessLevelSchema>;

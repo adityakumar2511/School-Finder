@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import type { SchoolStatus } from "@/lib/types/database";
+import type { SchoolStatus, AdminAccessLevel } from "@/lib/types/database";
+import { auth } from "@/lib/auth/auth";
 import {
   getAdminSchoolsList,
   getAdminSchoolStates,
@@ -47,7 +48,13 @@ function formatDate(date: Date | string) {
   });
 }
 
-async function SchoolsTable({ searchParams }: { searchParams: SearchParams }) {
+async function SchoolsTable({
+  searchParams,
+  viewerAccessLevel,
+}: {
+  searchParams: SearchParams;
+  viewerAccessLevel: AdminAccessLevel | null;
+}) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const statusParam = params.status?.toUpperCase();
@@ -121,6 +128,7 @@ async function SchoolsTable({ searchParams }: { searchParams: SearchParams }) {
                       <SchoolModerationActions
                         school={school}
                         currentStatus={school.status}
+                        viewerAccessLevel={viewerAccessLevel}
                       />
                     </TableCell>
                   </TableRow>
@@ -178,6 +186,10 @@ export default async function AdminSchoolsPage({
 }: {
   searchParams: SearchParams;
 }) {
+  const session = await auth();
+  const viewerAccessLevel =
+    (session?.user?.adminAccessLevel as AdminAccessLevel | null) ?? null;
+
   const params = await searchParams;
   const activeStatus = params.status?.toUpperCase();
   const currentState = params.state?.trim() ?? "";
@@ -230,7 +242,10 @@ export default async function AdminSchoolsPage({
       </Suspense>
 
       <Suspense fallback={<TableSkeleton />}>
-        <SchoolsTable searchParams={searchParams} />
+        <SchoolsTable
+          searchParams={searchParams}
+          viewerAccessLevel={viewerAccessLevel}
+        />
       </Suspense>
     </main>
   );

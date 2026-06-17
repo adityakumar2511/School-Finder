@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import type { Role } from "@/lib/types/database";
+import type { Role, AdminAccessLevel } from "@/lib/types/database";
 import {
   AUTH_CONTEXT_ROLE,
   AUTH_ROUTES,
@@ -12,7 +12,8 @@ import { getAdminApiBase } from "@/lib/auth/admin-auth";
 
 const apiBase = () => getAdminApiBase().replace(/\/$/, "");
 
-export const authSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+export const authSecret =
+  process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 
 type AuthUserWithBackendToken = {
   id: string;
@@ -20,6 +21,7 @@ type AuthUserWithBackendToken = {
   name?: string | null;
   image?: string | null;
   role?: Role;
+  adminAccessLevel?: AdminAccessLevel | null;
   backendToken?: string;
 };
 
@@ -31,6 +33,7 @@ type BackendLoginResponse = {
     name?: string | null;
     image?: string | null;
     role: Role;
+    adminAccessLevel?: AdminAccessLevel | null;
   };
   message?: string;
 };
@@ -38,7 +41,7 @@ type BackendLoginResponse = {
 async function loginViaBackend(
   email: string,
   password: string,
-  expectedRole: Role
+  expectedRole: Role,
 ): Promise<AuthUserWithBackendToken> {
   const response = await fetch(`${apiBase()}/api/auth/login`, {
     method: "POST",
@@ -46,7 +49,9 @@ async function loginViaBackend(
     body: JSON.stringify({ email, password, expectedRole }),
   });
 
-  const body = (await response.json().catch(() => ({}))) as BackendLoginResponse;
+  const body = (await response
+    .json()
+    .catch(() => ({}))) as BackendLoginResponse;
 
   if (!response.ok || !body.user || !body.token) {
     throw new Error(body.message ?? "Invalid email or password.");
@@ -58,6 +63,7 @@ async function loginViaBackend(
     name: body.user.name,
     image: body.user.image,
     role: body.user.role,
+    adminAccessLevel: body.user.adminAccessLevel ?? null,
     backendToken: body.token,
   };
 }
@@ -73,7 +79,9 @@ async function syncGoogleViaBackend(profile: {
     body: JSON.stringify(profile),
   });
 
-  const body = (await response.json().catch(() => ({}))) as BackendLoginResponse;
+  const body = (await response
+    .json()
+    .catch(() => ({}))) as BackendLoginResponse;
 
   if (!response.ok || !body.user || !body.token) {
     return null;
@@ -85,13 +93,14 @@ async function syncGoogleViaBackend(profile: {
     name: body.user.name,
     image: body.user.image,
     role: body.user.role,
+    adminAccessLevel: body.user.adminAccessLevel ?? null,
     backendToken: body.token,
   };
 }
 
 async function refreshUserFromBackend(
-  token: string
-): Promise<{ id: string; role: Role; email: string } | null> {
+  token: string,
+): Promise<{ id: string; role: Role; email: string; adminAccessLevel?: AdminAccessLevel | null } | null> {
   const response = await fetch(`${apiBase()}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -101,7 +110,12 @@ async function refreshUserFromBackend(
     return null;
   }
 
-  return (await response.json()) as { id: string; role: Role; email: string };
+  return (await response.json()) as {
+    id: string;
+    role: Role;
+    email: string;
+    adminAccessLevel?: AdminAccessLevel | null;
+  };
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -133,7 +147,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const authUser = await loginViaBackend(
             credentials.email as string,
             credentials.password as string,
-            expectedRole
+            expectedRole,
           );
 
           if (authUser.role !== expectedRole) {
@@ -143,7 +157,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return authUser;
         } catch (error) {
           throw new Error(
-            error instanceof Error ? error.message : "Invalid email or password."
+            error instanceof Error
+              ? error.message
+              : "Invalid email or password.",
           );
         }
       },
@@ -191,11 +207,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!synced) {
-          return { ...token, id: undefined, role: undefined, backendAccessToken: undefined };
+          return {
+            ...token,
+            id: undefined,
+            role: undefined,
+            backendAccessToken: undefined,
+          };
         }
 
         token.id = synced.id;
         token.role = synced.role;
+        token.adminAccessLevel = synced.adminAccessLevel ?? null;
         token.backendAccessToken = synced.backendToken;
         return token;
       }
@@ -204,12 +226,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = (user as AuthUserWithBackendToken).role ?? "PARENT";
+        token.adminAccessLevel =
+          (user as AuthUserWithBackendToken).adminAccessLevel ?? null;
 
         if ((user as AuthUserWithBackendToken).backendToken) {
-          token.backendAccessToken = (user as AuthUserWithBackendToken).backendToken;
+          token.backendAccessToken = (
+            user as AuthUserWithBackendToken
+          ).backendToken;
         }
 
-        // Don't refresh on fresh login — token is already current
         if (token.role !== "PARENT") {
           token.backendAccessToken = undefined;
         }
@@ -221,16 +246,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Only refresh if we have a valid backend token and it's not a
       // manual session update trigger (avoids loop on sign-in)
       const accessToken =
-        typeof token.backendAccessToken === "string" ? token.backendAccessToken : null;
+        typeof token.backendAccessToken === "string"
+          ? token.backendAccessToken
+          : null;
 
       if (accessToken && trigger !== "update") {
         const refreshed = await refreshUserFromBackend(accessToken);
         if (!refreshed) {
-          return { ...token, id: undefined, role: undefined, backendAccessToken: undefined };
+          return {
+            ...token,
+            id: undefined,
+            role: undefined,
+            backendAccessToken: undefined,
+          };
         }
 
         token.id = refreshed.id;
         token.role = refreshed.role;
+        token.adminAccessLevel = refreshed.adminAccessLevel ?? null;
       }
 
       if (token.role !== "PARENT") {
@@ -244,6 +277,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
+        session.user.adminAccessLevel =
+          (token.adminAccessLevel as AdminAccessLevel) ?? null;
       }
 
       if (typeof token.backendAccessToken === "string") {
@@ -258,6 +293,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 declare module "next-auth" {
   interface User {
     role?: Role;
+    adminAccessLevel?: AdminAccessLevel | null;
     backendToken?: string;
   }
   interface Session {
@@ -265,6 +301,7 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      adminAccessLevel?: AdminAccessLevel | null;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -276,6 +313,7 @@ declare module "@auth/core/jwt" {
   interface JWT {
     id?: string;
     role?: Role;
+    adminAccessLevel?: AdminAccessLevel | null;
     backendAccessToken?: string;
   }
 }

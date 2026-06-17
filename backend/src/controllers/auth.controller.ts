@@ -106,6 +106,7 @@ export const registerParent = async (req: Request, res: Response) => {
 
 // POST /api/auth/register-school
 // POST /api/auth/register-school
+// POST /api/auth/register-school
 export const registerSchool = async (req: Request, res: Response) => {
   const body = req.body as RegisterSchoolInput;
   const { name, ownerEmail, ownerPassword, phone } = body;
@@ -131,16 +132,6 @@ export const registerSchool = async (req: Request, res: Response) => {
   );
 
   const result = await prisma.$transaction(async (tx) => {
-    const existingSchool = await tx.school.findFirst({
-      where: { name: { equals: name, mode: "insensitive" } },
-    });
-
-    if (existingSchool) {
-      throw Errors.Conflict(
-        "A school with this name already exists. Please check if your school is already listed."
-      );
-    }
-
     const user = await tx.user.create({
       data: {
         name: body.ownerName || ownerEmail.split("@")[0],
@@ -214,51 +205,65 @@ export const registerSchool = async (req: Request, res: Response) => {
 // POST /api/auth/login
 export const login = async (req: Request, res: Response) => {
   const { email, password, expectedRole } = req.body as LoginInput;
-
+ 
   assertLoginAllowed(req, email);
-
-  const user = await prisma.user.findUnique({ where: { email } });
-
+ 
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      phone: true,
+      password: true,
+      adminAccessLevel: true, // Phase E
+    },
+  });
+ 
   if (!user || !user.password) {
     recordFailedLogin(req, email);
     throw Errors.Unauthorized("Invalid email or password");
   }
-
+ 
   if (user.phone === "__DISABLED__") {
     recordFailedLogin(req, email);
     throw Errors.AccountDisabled();
   }
-
+ 
   const isValid = await bcrypt.compare(password, user.password);
-
+ 
   if (!isValid) {
     recordFailedLogin(req, email);
     throw Errors.Unauthorized("Invalid email or password");
   }
-
+ 
   if (expectedRole === "PARENT" && user.role !== "PARENT") {
     recordFailedLogin(req, email);
     throw Errors.RoleConflict("Unauthorized account type");
   }
-
+ 
   if (expectedRole === "ADMIN" && user.role !== "ADMIN") {
     recordFailedLogin(req, email);
     throw Errors.RoleConflict("Unauthorized account type");
   }
-
+ 
   if (expectedRole === "SCHOOL_ADMIN" && user.role !== "SCHOOL_ADMIN") {
     recordFailedLogin(req, email);
     throw Errors.RoleConflict("Unauthorized account type");
   }
-
+ 
   recordSuccessfulLogin(req, email);
-
+ 
+  // Phase E: include adminAccessLevel in JWT only for ADMIN role
   const token = signAccessToken({
     id: user.id,
     role: user.role,
     email: user.email,
+    adminAccessLevel: user.role === "ADMIN" ? user.adminAccessLevel : undefined,
   });
-
+ 
   res.json({
     token,
     user: {
@@ -267,6 +272,8 @@ export const login = async (req: Request, res: Response) => {
       email: user.email,
       role: user.role,
       image: user.image,
+      // Phase E: expose to frontend so session can surface it
+      adminAccessLevel: user.role === "ADMIN" ? user.adminAccessLevel : undefined,
     },
   });
 };

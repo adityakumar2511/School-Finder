@@ -1,4 +1,4 @@
-import type { InquiryStatus, Role, SchoolStatus } from "@/lib/types/database";
+import type { InquiryStatus, Role, SchoolStatus, AdminAccessLevel  } from "@/lib/types/database";
 import { adminFetch } from "@/lib/api/server";
 import { ACCOUNT_DISABLED_PHONE } from "./constants";
 
@@ -202,12 +202,14 @@ export type AdminUserRow = {
   role: Role;
   phone: string | null;
   createdAt: string;
+  adminAccessLevel?: AdminAccessLevel | null; // ADD
 };
 
 export async function getAdminUsersList(options: {
   page?: number;
   limit?: number;
   search?: string;
+  role?: Role; // ← add
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
@@ -217,6 +219,7 @@ export async function getAdminUsersList(options: {
   });
 
   if (options.search?.trim()) params.set("search", options.search.trim());
+  if (options.role) params.set("role", options.role); // ← add
 
   const { ok, data } = await adminFetch<{
     data?: AdminUserRow[];
@@ -258,6 +261,7 @@ export async function getAdminInquiriesList(options: {
   limit?: number;
   status?: InquiryStatus;
   search?: string;
+  schoolId?: string; // ← add
 }) {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(50, Math.max(1, options.limit ?? 10));
@@ -268,6 +272,7 @@ export async function getAdminInquiriesList(options: {
 
   if (options.status) params.set("status", options.status);
   if (options.search?.trim()) params.set("search", options.search.trim());
+  if (options.schoolId?.trim()) params.set("schoolId", options.schoolId.trim()); // ← add
 
   const { ok, data } = await adminFetch<{
     data?: AdminInquiryRow[];

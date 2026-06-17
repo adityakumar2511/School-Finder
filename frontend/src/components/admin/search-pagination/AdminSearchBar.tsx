@@ -67,7 +67,7 @@ export default function AdminSearchBar({
   }
 
   const hasQuery = Boolean(
-    currentQuery || searchParams.get("q") || currentState || currentCity
+    currentQuery || searchParams.get("q") || currentState || currentCity,
   );
 
   return (
@@ -85,9 +85,24 @@ export default function AdminSearchBar({
         <Button type="submit" disabled={pending}>
           Search
         </Button>
-        {hasQuery && (
+        {/* {hasQuery && (
           <Button type="button" variant="outline" asChild>
             <Link href={basePath}>Clear</Link>
+          </Button>
+        )} */}
+        {hasQuery && (
+          <Button type="button" variant="outline" asChild>
+            <Link
+              href={(() => {
+                const params = new URLSearchParams();
+                const role = searchParams.get("role");
+                if (role) params.set("role", role);
+                const query = params.toString();
+                return query ? `${basePath}?${query}` : basePath;
+              })()}
+            >
+              Clear
+            </Link>
           </Button>
         )}
       </form>

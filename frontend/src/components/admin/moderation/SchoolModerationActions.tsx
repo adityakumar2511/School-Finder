@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, XCircle, Eye, Loader2, Pencil, Trash2 } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  Eye,
+  Loader2,
+  Pencil,
+  Trash2,
+  MessageSquare,
+} from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
 import {
   Dialog,
@@ -13,7 +21,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/shared/ui/dialog";
-import type { SchoolStatus } from "@/lib/types/database";
+import type { SchoolStatus, AdminAccessLevel } from "@/lib/types/database";
 import SchoolDetailModal from "./SchoolDetailModal";
 
 type SchoolDetail = {
@@ -49,13 +57,22 @@ type SchoolDetail = {
 type Props = {
   school: SchoolDetail;
   currentStatus: SchoolStatus;
+  viewerAccessLevel: AdminAccessLevel | null;
 };
 
-export default function SchoolModerationActions({ school, currentStatus }: Props) {
+export default function SchoolModerationActions({
+  school,
+  currentStatus,
+  viewerAccessLevel,
+}: Props) {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState<"approve" | "reject" | "delete" | null>(null);
+
+  const canWrite =
+    viewerAccessLevel === "READ_WRITE" || viewerAccessLevel === "FULL_ACCESS";
+  const canDelete = viewerAccessLevel === "FULL_ACCESS";
 
   async function handleApprove(id: string) {
     setLoading("approve");
@@ -94,7 +111,8 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* View detail modal — always visible */}
         <Button
           size="sm"
           variant="outline"
@@ -105,19 +123,36 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
           View
         </Button>
 
+        {/* Edit school — READ_WRITE+ */}
+        {canWrite && (
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
+          >
+            <Link href={`/admin/schools/${school.id}/edit`}>
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Link>
+          </Button>
+        )}
+
+        {/* View inquiries for this school — always visible */}
         <Button
           asChild
           size="sm"
           variant="outline"
-          className="h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
+          className="h-8 px-3 font-heading text-xs rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50"
         >
-          <Link href={`/admin/schools/${school.id}/edit`}>
-            <Pencil className="h-3.5 w-3.5 mr-1" />
-            Edit
+          <Link href={`/admin/inquiries?schoolId=${school.id}`}>
+            <MessageSquare className="h-3.5 w-3.5 mr-1" />
+            Inquiries
           </Link>
         </Button>
 
-        {currentStatus === "PENDING" && (
+        {/* Approve / Reject — READ_WRITE+, only for PENDING */}
+        {currentStatus === "PENDING" && canWrite && (
           <>
             <Button
               size="sm"
@@ -153,32 +188,37 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
           </>
         )}
 
-        <Button
-          size="sm"
-          disabled={loading !== null}
-          onClick={() => setDeleteOpen(true)}
-          variant="outline"
-          className="h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 font-heading text-xs rounded-lg"
-        >
-          {loading === "delete" ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <>
-              <Trash2 className="h-3.5 w-3.5 mr-1" />
-              Delete
-            </>
-          )}
-        </Button>
+        {/* Delete — FULL_ACCESS only */}
+        {canDelete && (
+          <Button
+            size="sm"
+            disabled={loading !== null}
+            onClick={() => setDeleteOpen(true)}
+            variant="outline"
+            className="h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 font-heading text-xs rounded-lg"
+          >
+            {loading === "delete" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
+      {/* School detail + reject modal */}
       <SchoolDetailModal
         school={school}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onApprove={handleApprove}
-        onReject={handleReject}
+        onApprove={canWrite ? handleApprove : undefined}
+        onReject={canWrite ? handleReject : undefined}
       />
 
+      {/* Delete confirm dialog — only reachable when canDelete is true */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
@@ -200,7 +240,7 @@ export default function SchoolModerationActions({ school, currentStatus }: Props
             <Button
               onClick={() => handleDelete(school.id)}
               disabled={loading !== null}
-              className="bg-danger hover:bg-danger/90 font-heading text-xs rounded-lg"
+              className="bg-red-600 hover:bg-red-700 text-white font-heading text-xs rounded-lg"
             >
               {loading === "delete" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

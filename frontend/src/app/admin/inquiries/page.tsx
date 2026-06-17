@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { InquiryStatus } from "@/lib/types/database";
-import { getAdminInquiriesList } from "@/lib/admin/data";
+import { getAdminInquiriesList, getAdminSchoolById } from "@/lib/admin/data";
 import AdminSearchBar from "@/components/admin/search-pagination/AdminSearchBar";
 import AdminPagination from "@/components/admin/search-pagination/AdminPagination";
 import InquiryStatusBadge from "@/components/school/inquiries/InquiryStatusBadge";
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/shared/ui/table";
 import { Skeleton } from "@/components/shared/ui/skeleton";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -29,6 +30,7 @@ type SearchParams = Promise<{
   status?: string;
   q?: string;
   page?: string;
+  schoolId?: string;
 }>;
 
 function formatDate(date: Date | string) {
@@ -39,6 +41,43 @@ function formatDate(date: Date | string) {
   });
 }
 
+// ── Per-school active filter chip ─────────────────────────────────────────────
+async function SchoolFilterChip({
+  schoolId,
+  currentParams,
+}: {
+  schoolId: string;
+  currentParams: Record<string, string | undefined>;
+}) {
+  // Fetch school directly by id — no limit issue
+  const school = await getAdminSchoolById(schoolId);
+  const schoolName =
+    school && typeof school.name === "string" ? school.name : "Selected school";
+
+  // Clear link — remove schoolId but keep other params
+  const clearParams = new URLSearchParams();
+  if (currentParams.status) clearParams.set("status", currentParams.status);
+  if (currentParams.q) clearParams.set("q", currentParams.q);
+  const clearHref = `/admin/inquiries${clearParams.toString() ? `?${clearParams.toString()}` : ""}`;
+
+  return (
+    <div className="mb-4 flex items-center gap-2">
+      <span className="font-body text-sm text-gray-500">Filtered by school:</span>
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 font-body text-sm text-blue-700">
+        {schoolName}
+        <Link
+          href={clearHref}
+          className="ml-1 rounded-full hover:bg-blue-100 p-0.5 transition-colors"
+          title="Clear filter"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Link>
+      </span>
+    </div>
+  );
+}
+
+// ── Inquiries table ───────────────────────────────────────────────────────────
 async function InquiriesTable({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
@@ -48,12 +87,14 @@ async function InquiriesTable({ searchParams }: { searchParams: SearchParams }) 
       ? (statusParam as InquiryStatus)
       : undefined;
   const search = params.q?.trim();
+  const schoolId = params.schoolId?.trim();
 
   const result = await getAdminInquiriesList({
     page,
     limit: PAGE_SIZE,
     status,
     search,
+    schoolId,
   });
 
   return (
@@ -82,8 +123,9 @@ async function InquiriesTable({ searchParams }: { searchParams: SearchParams }) 
                 {result.inquiries.map((inquiry) => (
                   <TableRow key={inquiry.id}>
                     <TableCell>
+                      {/* Clicking school name filters inquiries by that school */}
                       <Link
-                        href={`/admin/schools`}
+                        href={`/admin/inquiries?schoolId=${inquiry.school.id}`}
                         className="font-heading font-semibold text-blue-800 hover:underline"
                       >
                         {inquiry.school.name}
@@ -98,7 +140,9 @@ async function InquiriesTable({ searchParams }: { searchParams: SearchParams }) 
                       </p>
                     </TableCell>
                     <TableCell className="max-w-xs">
-                      <p className="line-clamp-2 font-body text-sm">{inquiry.message}</p>
+                      <p className="line-clamp-2 font-body text-sm">
+                        {inquiry.message}
+                      </p>
                     </TableCell>
                     <TableCell>
                       <InquiryStatusBadge status={inquiry.status} />
@@ -118,12 +162,14 @@ async function InquiriesTable({ searchParams }: { searchParams: SearchParams }) 
         searchParams={{
           status: status ?? undefined,
           q: search ?? undefined,
+          schoolId: schoolId ?? undefined,
         }}
       />
     </>
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default async function AdminInquiriesPage({
   searchParams,
 }: {
@@ -131,6 +177,15 @@ export default async function AdminInquiriesPage({
 }) {
   const params = await searchParams;
   const activeStatus = params.status?.toUpperCase();
+  const schoolId = params.schoolId?.trim();
+
+  // Build status tab hrefs — preserve schoolId if active
+  function statusTabHref(value?: InquiryStatus) {
+    const p = new URLSearchParams();
+    if (value) p.set("status", value);
+    if (schoolId) p.set("schoolId", schoolId);
+    return `/admin/inquiries${p.toString() ? `?${p.toString()}` : ""}`;
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
@@ -143,17 +198,15 @@ export default async function AdminInquiriesPage({
         </p>
       </div>
 
+      {/* Status tabs */}
       <div className="mb-6 flex flex-wrap gap-2">
         {STATUS_TABS.map((tab) => {
-          const href = tab.value
-            ? `/admin/inquiries?status=${tab.value}`
-            : "/admin/inquiries";
           const isActive =
             (!tab.value && !activeStatus) || activeStatus === tab.value;
           return (
             <Link
               key={tab.label}
-              href={href}
+              href={statusTabHref(tab.value)}
               className={cn(
                 "rounded-lg px-4 py-2 text-sm font-heading font-semibold",
                 isActive
@@ -167,6 +220,20 @@ export default async function AdminInquiriesPage({
         })}
       </div>
 
+      {/* Active school filter chip */}
+      {schoolId && (
+        <Suspense fallback={<Skeleton className="mb-4 h-8 w-48" />}>
+          <SchoolFilterChip
+            schoolId={schoolId}
+            currentParams={{
+              status: activeStatus,
+              q: params.q,
+            }}
+          />
+        </Suspense>
+      )}
+
+      {/* Search bar */}
       <Suspense fallback={<Skeleton className="mb-4 h-10 w-full max-w-sm" />}>
         <div className="mb-6">
           <AdminSearchBar
@@ -177,6 +244,7 @@ export default async function AdminInquiriesPage({
         </div>
       </Suspense>
 
+      {/* Table */}
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
         <InquiriesTable searchParams={searchParams} />
       </Suspense>
