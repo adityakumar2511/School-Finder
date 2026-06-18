@@ -22,9 +22,19 @@ const CONFIG: { [key in AdminAccessLevel]: Config } = {
 
 export default function AdminAccessBadge({
   level,
+  isSuperAdmin = false,
 }: {
   level: AdminAccessLevel | null | undefined;
+  isSuperAdmin?: boolean;
 }) {
+  // Super admin check pehle
+  if (isSuperAdmin) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+        Super Admin
+      </span>
+    );
+  }
   if (!level) {
     return (
       <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-400">

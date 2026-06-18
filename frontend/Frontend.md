@@ -1,6 +1,6 @@
-# SchoolFinder — Frontend Documentation
+# SchoolSetu — Frontend Documentation
 
-> Last updated: June 14, 2026
+> Last updated: June 17, 2026
 
 > **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
 > **Default port:** `3000` · **Repository path:** `frontend/`  
@@ -79,7 +79,7 @@ Browser / Server Component
 | React | 18.3 | UI |
 | TypeScript | 5.4 | Type safety |
 | Tailwind CSS | 3.4 | Styling, design tokens |
-| shadcn/ui | — | Accessible primitives (Button, Card, Table, Dialog, etc.) |
+| shadcn/ui | — | Accessible primitives (Button, Card, Table, Dialog, Tabs, etc.) |
 | NextAuth | 5.0.0-beta.19 | JWT sessions, Google OAuth, credentials |
 | Zod | 3.23 | Validation schemas |
 | React Hook Form | 7.52 | Client form state |
@@ -90,7 +90,7 @@ Browser / Server Component
 
 **Not used:** Prisma, `@auth/prisma-adapter`, database drivers.
 
-**Installed but unused in `src/`:** `jose`; several `@radix-ui/*` packages (accordion, avatar, checkbox, dropdown-menu, separator, tabs, toast).
+**Installed but unused in `src/`:** `jose`; several `@radix-ui/*` packages (accordion, avatar, checkbox, dropdown-menu, separator, toast).
 
 ---
 
@@ -116,6 +116,10 @@ frontend/
 └── src/
     ├── app/
     │   ├── admin/
+    │   │   ├── add-admin/
+    │   │   │   └── page.tsx
+    │   │   ├── add-parent/
+    │   │   │   └── page.tsx
     │   │   ├── add-school/
     │   │   │   └── page.tsx
     │   │   ├── inquiries/
@@ -123,6 +127,9 @@ frontend/
     │   │   ├── layout.tsx
     │   │   ├── page.tsx
     │   │   ├── schools/
+    │   │   │   ├── [id]/
+    │   │   │   │   └── edit/
+    │   │   │   │       └── page.tsx
     │   │   │   └── page.tsx
     │   │   └── users/
     │   │       └── page.tsx
@@ -131,6 +138,10 @@ frontend/
     │   │   └── page.tsx
     │   ├── api/
     │   │   ├── admin/
+    │   │   │   ├── add-admin/
+    │   │   │   │   └── route.ts
+    │   │   │   ├── add-parent/
+    │   │   │   │   └── route.ts
     │   │   │   ├── add-school/
     │   │   │   │   └── route.ts
     │   │   │   ├── check-owner/
@@ -141,7 +152,7 @@ frontend/
     │   │   │   │   │   │   └── route.ts
     │   │   │   │   │   ├── reject/
     │   │   │   │   │   │   └── route.ts
-    │   │   │   │   │   └── route.ts
+    │   │   │   │   │   └── route.ts        ← DELETE + PATCH handlers
     │   │   │   │   └── route.ts
     │   │   │   ├── session/
     │   │   │   │   └── route.ts
@@ -248,6 +259,7 @@ frontend/
     │   │   │   ├── select.tsx
     │   │   │   ├── skeleton.tsx
     │   │   │   ├── table.tsx
+    │   │   │   ├── tabs.tsx
     │   │   │   └── textarea.tsx
     │   │   ├── form/                        # Shared form primitives
     │   │   │   ├── FormField.tsx
@@ -296,7 +308,7 @@ frontend/
     │   │   ├── nav/
     │   │   │   └── SchoolDashboardNav.tsx
     │   │   ├── profile/
-    │   │   │   ├── SchoolProfileForm.tsx
+    │   │   │   ├── SchoolProfileForm.tsx   ← accepts submitEndpoint prop
     │   │   │   ├── SchoolProfileSidebar.tsx
     │   │   │   └── formSections/
     │   │   │       ├── 01_BasicInfoSection.tsx
@@ -329,32 +341,33 @@ frontend/
     │   └── admin/                           # ADMIN role only
     │       ├── moderation/
     │       │   ├── SchoolDetailModal.tsx
-    │       │   ├── SchoolModerationActions.tsx
+    │       │   ├── SchoolModerationActions.tsx  ← Edit, Delete, View Inquiries buttons added
     │       │   └── SchoolStatusBadge.tsx
     │       ├── nav/
-    │       │   └── AdminNav.tsx
+    │       │   └── AdminNav.tsx                 ← Add Parent, Add Admin (FULL_ACCESS only) links
     │       ├── search-pagination/
     │       │   ├── AdminPagination.tsx
-    │       │   └── AdminSearchBar.tsx
+    │       │   └── AdminSearchBar.tsx           ← State + City dependent selects added
     │       └── users/
+    │           ├── AdminAccessBadge.tsx         ← new: displays READ_ONLY / READ_WRITE / FULL_ACCESS
     │           ├── RoleBadge.tsx
-    │           └── UserManagementActions.tsx
+    │           └── UserManagementActions.tsx    ← SCHOOL_ADMIN→PARENT transition removed
     │
     └── lib/
         ├── admin/
-        │   ├── constants.ts
-        │   ├── data.ts
+        │   ├── constants.ts                     ← Indian states/UTs list added
+        │   ├── data.ts                          ← state/city/role/schoolId params added
         │   └── session.ts
         ├── api/
-        │   ├── error.ts                     # parseApiError() — centralized error handling
+        │   ├── error.ts
         │   ├── pagination.ts
         │   ├── proxy.ts
         │   ├── resolve-backend-token.ts
         │   └── server.ts
-        ├── auth/                            # Auth / session utilities
+        ├── auth/
         │   ├── admin-auth.ts
         │   ├── auth-config.ts
-        │   ├── auth.ts
+        │   ├── auth.ts                          ← adminAccessLevel surfaced in session
         │   ├── backend-jwt.ts
         │   ├── logout.ts
         │   ├── middleware-auth.ts
@@ -371,7 +384,7 @@ frontend/
         │   ├── revalidate-schools.ts
         │   └── seo.ts
         ├── types/
-        │   └── database.ts
+        │   └── database.ts                      ← AdminAccessLevel type added
         ├── ui/
         │   └── motion.ts
         ├── upload/
@@ -429,10 +442,13 @@ Layout: `app/dashboard/school/layout.tsx` — requires `SCHOOL_ADMIN`; redirects
 | Route | Purpose |
 |-------|---------|
 | `/admin` | Platform stats |
-| `/admin/schools` | School moderation (approve/reject) |
-| `/admin/users` | User role and status management |
-| `/admin/inquiries` | Cross-school inquiry monitoring |
+| `/admin/schools` | School moderation (approve/reject/edit/delete) with State + City filters |
+| `/admin/schools/[id]/edit` | Full 22-section school profile editor in admin mode |
+| `/admin/users` | Tabbed user management — School Admins \| Parents \| Admins |
+| `/admin/inquiries` | Cross-school inquiry monitoring; filterable by `?schoolId=` |
 | `/admin/add-school` | 4-step wizard to create approved schools |
+| `/admin/add-parent` | Single-step wizard to create parent accounts |
+| `/admin/add-admin` | Form to create admin accounts with access level (FULL_ACCESS only) |
 
 Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
 
@@ -443,13 +459,15 @@ Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
 | `/api/auth/[...nextauth]` | GET, POST | NextAuth handlers |
 | `/api/auth/logout` | POST | Backend token blacklist + cookie cleanup |
 | `/api/admin/session` | POST, DELETE | Set/clear `sf_admin_token` cookie |
-| `/api/admin/schools` | GET | Proxy admin school list (wizard duplicate check) |
-| `/api/admin/schools/[id]` | DELETE | Proxy school delete — **no UI caller** |
+| `/api/admin/schools` | GET | Proxy admin school list |
+| `/api/admin/schools/[id]` | DELETE, PATCH | Delete school; edit school (admin mode) |
 | `/api/admin/schools/[id]/approve` | PATCH | Approve school |
 | `/api/admin/schools/[id]/reject` | PATCH | Reject school |
 | `/api/admin/users/[id]/role` | PATCH | Update user role |
 | `/api/admin/users/[id]/status` | PATCH | Enable/disable user |
 | `/api/admin/add-school` | POST | Create approved school |
+| `/api/admin/add-parent` | POST | Create parent account |
+| `/api/admin/add-admin` | POST | Create admin account with access level |
 | `/api/admin/check-owner` | GET | Owner email pre-check |
 | `/api/parent/profile` | PATCH | Update parent profile |
 | `/api/parent/favourites` | GET, POST, DELETE | Favourites CRUD |
@@ -493,11 +511,12 @@ School dashboard
     school/inquiries/InquiryFilters, school/inquiries/InquiryStatusSelect
 
 Admin panel
-└── admin/nav/AdminNav → admin/search-pagination/AdminSearchBar,
+└── admin/nav/AdminNav → admin/search-pagination/AdminSearchBar (State+City selects),
     admin/search-pagination/AdminPagination,
-    admin/moderation/SchoolModerationActions,
+    admin/moderation/SchoolModerationActions (Edit, Delete, View Inquiries),
     admin/users/UserManagementActions,
     admin/users/RoleBadge,
+    admin/users/AdminAccessBadge,
     admin/moderation/SchoolStatusBadge
 ```
 
@@ -507,17 +526,17 @@ Admin panel
 
 | Mechanism | Location | Purpose |
 |-----------|----------|---------|
-| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken` |
+| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken`, `adminAccessLevel` |
 | **HTTP-only cookie `sf_admin_token`** | `lib/auth/admin-auth.ts` | Admin backend JWT for `adminFetch()` and BFF |
 | **sessionStorage `sf_parent_token`** | `lib/auth/parent-token.ts` | Client-side token for direct inquiry API calls |
 | **localStorage `sf_school_draft_{email}`** | `school/registration/SchoolRegisterWizard.tsx` | School registration draft persistence |
 | **localStorage recent schools** | `lib/parent/recent-schools.ts` | Recently viewed schools on parent dashboard |
 | **React Hook Form + Zod** | Auth forms, wizards, profiles | Client form validation |
-| **URL searchParams** | Filters, pagination, `callbackUrl` | Routing state |
+| **URL searchParams** | Filters, pagination, tabs, `callbackUrl` | Routing state — includes `?state=`, `?city=`, `?role=`, `?schoolId=` |
 
 No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
 
-> `sf_school_token` cookie has been removed. It was previously set at school login but never used for API auth. The dead `/api/school/session` route and `lib/school-auth.ts` have been deleted. Any stale browser cookie is cleared on logout via an inlined constant in `api/auth/logout/route.ts`.
+> `sf_school_token` cookie has been removed. Any stale browser cookie is cleared on logout via an inlined constant in `api/auth/logout/route.ts`.
 
 ---
 
@@ -544,7 +563,7 @@ No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
 | `lib/data/schools-public.ts` | `GET /api/schools`, `/cities`, `/:slug` |
 | `lib/school/data.ts` | `GET /api/schools/my-school`, `GET /api/inquiries/school/:id` |
 | `lib/parent/data.ts` | `GET/PATCH /api/parent/profile`, `GET /api/parent/favourites` |
-| `lib/admin/data.ts` | `GET /api/admin/stats`, `/schools`, `/users`, `/inquiries` |
+| `lib/admin/data.ts` | `GET /api/admin/stats`, `/schools` (state/city params), `/users` (role param), `/inquiries` (schoolId param) |
 
 ### Direct Client Calls (not via BFF)
 
@@ -559,6 +578,7 @@ No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
 
 ```typescript
 export type Role = "PARENT" | "SCHOOL_ADMIN" | "ADMIN";
+export type AdminAccessLevel = "READ_ONLY" | "READ_WRITE" | "FULL_ACCESS";
 export type SchoolStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 export type InquiryStatus = "NEW" | "CONTACTED" | "CLOSED";
 export type BoardType = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
@@ -602,8 +622,19 @@ Keep in sync with `backend/prisma/schema.prisma` when enums change.
 1. Sign in at `/admin-login` (hidden from public navigation)
 2. Backend login with `expectedRole: "ADMIN"`
 3. `POST /api/admin/session` stores JWT in HTTP-only `sf_admin_token` cookie
-4. NextAuth credentials sign-in syncs session for middleware
+4. NextAuth credentials sign-in syncs session for middleware — `adminAccessLevel` included in session payload
 5. All admin data via `adminFetch()` or BFF routes with `useAdminCookie: true`
+6. UI elements are conditionally rendered based on `session.user.adminAccessLevel`
+
+### Admin Access Levels
+
+| Level | Capabilities |
+|-------|-------------|
+| `READ_ONLY` | View stats, schools, users, inquiries — no mutations |
+| `READ_WRITE` | Above + approve/reject, add school/parent, edit school |
+| `FULL_ACCESS` | Everything including delete school, user role/status changes, add admin |
+
+Frontend gating is UX-only — backend `requireAdminLevel` middleware is the actual enforcement.
 
 ### NextAuth Configuration (`lib/auth/auth.ts`)
 
@@ -686,6 +717,8 @@ Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend 
 | Parent login/register | React Hook Form + Zod | Client-side schemas |
 | School registration wizard | React Hook Form + Zod | Per-step `trigger()` validation |
 | Admin add-school wizard | React Hook Form + Zod | Per-step validation + async duplicate checks |
+| Admin add-parent | React Hook Form + Zod | Async email duplicate check on blur |
+| Admin add-admin | React Hook Form + Zod | Email check + access level radio |
 | Profile forms | React Hook Form + Zod | Client-side |
 | Inquiry modal | Controlled state + Zod | Client-side |
 
@@ -697,13 +730,15 @@ Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend 
 | `FormField` | Label + error display wrapper; exports `inputClass`, `inputErrorClass`, `selectClass` tokens |
 | `FormGrid` | Responsive `columns={1\|2\|3}` grid — fixes mobile overlap |
 
-All 22 profile form sections, `SchoolRegisterWizard`, and the admin add-school wizard use `FormField`/`FormGrid`. Import from `@/components/shared/form`.
+All 22 profile form sections, `SchoolRegisterWizard`, add-school, add-parent, and add-admin forms use `FormField`/`FormGrid`. Import from `@/components/shared/form`.
 
-**School registration draft:** localStorage key `sf_school_draft_{email}` — saves form data, step, logo URL on step advance; restored on mount; cleared on submit.
+**`SchoolProfileForm` — admin mode:** Accepts optional `submitEndpoint` prop. Defaults to `/api/school/profile` (school dashboard). Admin edit page passes `/api/admin/schools/[id]`, routing through the admin BFF with `sf_admin_token`.
 
 **Admin add-school async checks:**
 - Step 0: `GET /api/admin/check-owner?email=` — blocks if owner already has school
 - Step 1: `GET /api/admin/schools?search=<name>` — client filters for exact name match
+
+**Admin add-parent async check:** `GET /api/admin/check-owner?email=&role=PARENT` on blur — blocks if email already registered.
 
 ---
 
@@ -720,8 +755,6 @@ All 22 profile form sections, `SchoolRegisterWizard`, and the admin add-school w
 | `auth` | status 401/403 | Message + redirect to role login after 2s |
 | `server_error` | status 500, Prisma codes, unrecognized | "Something went wrong on our end. Please try again." |
 | `network` | fetch throws / no response | "Couldn't reach the server. Check your connection." |
-
-`SchoolProfileForm` uses `parseApiError()` to show field-level errors as a list and handle auth expiry with auto-redirect.
 
 ### Other Error Layers
 
@@ -865,10 +898,15 @@ Active config: `next.config.js` (CSP, HSTS, security headers, image remote patte
 - Status visibility: PENDING, APPROVED, REJECTED (+ DRAFT redirect if assigned)
 
 ### Platform Administrators
-- School moderation (approve/reject)
+- School moderation (approve/reject/edit/delete)
+- School list with State + City filters
 - Add school wizard (creates APPROVED listings)
-- User management (roles, disable accounts)
-- Cross-platform inquiry monitoring
+- Add parent wizard (single-step, email duplicate check)
+- Add admin form with access level selection (FULL_ACCESS only)
+- Tabbed user management: School Admins | Parents | Admins
+- SCHOOL_ADMIN → PARENT role transition blocked (UI + backend)
+- Cross-platform inquiry monitoring with per-school filter (`?schoolId=`)
+- Admin access level enforcement: READ_ONLY / READ_WRITE / FULL_ACCESS
 - Dashboard stats
 
 ### Public
@@ -896,4 +934,4 @@ Active config: `next.config.js` (CSP, HSTS, security headers, image remote patte
 | Error parsing | `src/lib/api/error.ts` |
 | Upload utilities | `src/lib/upload/` |
 | SEO utilities | `src/lib/seo/` |
-| Import path convention | See §8 of `restructure-plan.md` |
+| Indian states list | `src/lib/admin/constants.ts` |

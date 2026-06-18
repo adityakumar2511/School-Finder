@@ -9,6 +9,7 @@ import {
   UNAUTHORIZED_ACCOUNT_MESSAGE,
 } from "@/lib/auth/auth-config";
 import { getAdminApiBase } from "@/lib/auth/admin-auth";
+import { mintBackendJwt } from "@/lib/auth/backend-jwt";
 
 const apiBase = () => getAdminApiBase().replace(/\/$/, "");
 
@@ -216,6 +217,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         token.id = synced.id;
+        token.email = synced.email;
         token.role = synced.role;
         token.adminAccessLevel = synced.adminAccessLevel ?? null;
         token.backendAccessToken = synced.backendToken;
@@ -225,6 +227,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // --- CASE 2: Fresh credentials login (authorize() just ran) ---
       if (user) {
         token.id = user.id;
+        token.email = user.email ?? (token.email as string | undefined);
         token.role = (user as AuthUserWithBackendToken).role ?? "PARENT";
         token.adminAccessLevel =
           (user as AuthUserWithBackendToken).adminAccessLevel ?? null;
@@ -242,30 +245,53 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      // --- CASE 3: Subsequent requests — refresh role from backend ---
-      // Only refresh if we have a valid backend token and it's not a
-      // manual session update trigger (avoids loop on sign-in)
-      const accessToken =
-        typeof token.backendAccessToken === "string"
-          ? token.backendAccessToken
-          : null;
+      // --- CASE 3: Subsequent requests — revalidate against backend ---
+      // FIXED: previously this block only ran when token.backendAccessToken
+      // was already present in the JWT — but backendAccessToken is stripped
+      // for SCHOOL_ADMIN and ADMIN roles right after login (see CASE 2 above
+      // and the bottom of this block). That meant SCHOOL_ADMIN/ADMIN sessions
+      // NEVER re-checked the backend after initial login, so a school admin
+      // disabled mid-session could keep using their existing session for up
+      // to 30 minutes (the JWT maxAge) without ever being re-validated.
+      //
+      // Fix: mint a fresh short-lived backend token via mintBackendJwt() when
+      // we don't already have one, so the revalidation call to /api/auth/me
+      // (which now also checks the disabled-account sentinel) runs for every
+      // role, not just PARENT.
+      if (trigger !== "update" && token.id && token.role && token.email) {
+        const revalidationToken =
+          typeof token.backendAccessToken === "string"
+            ? token.backendAccessToken
+            : mintBackendJwt({
+                id: token.id as string,
+                role: token.role as string,
+                email: token.email as string,
+              });
 
-      if (accessToken && trigger !== "update") {
-        const refreshed = await refreshUserFromBackend(accessToken);
-        if (!refreshed) {
-          return {
-            ...token,
-            id: undefined,
-            role: undefined,
-            backendAccessToken: undefined,
-          };
+        if (revalidationToken) {
+          const refreshed = await refreshUserFromBackend(revalidationToken);
+
+          if (!refreshed) {
+            // Backend rejected the token — user not found, deleted, or
+            // (most importantly) account disabled. Kill the session.
+            return {
+              ...token,
+              id: undefined,
+              role: undefined,
+              backendAccessToken: undefined,
+            };
+          }
+
+          token.id = refreshed.id;
+          token.email = refreshed.email;
+          token.role = refreshed.role;
+          token.adminAccessLevel = refreshed.adminAccessLevel ?? null;
         }
-
-        token.id = refreshed.id;
-        token.role = refreshed.role;
-        token.adminAccessLevel = refreshed.adminAccessLevel ?? null;
       }
 
+      // Strip backendAccessToken for non-PARENT roles AFTER revalidation,
+      // not before — otherwise the check above would never have a token
+      // to revalidate with on the very next request.
       if (token.role !== "PARENT") {
         token.backendAccessToken = undefined;
       }

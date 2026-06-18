@@ -23,6 +23,33 @@ import {
 import { adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect  } from "../lib/queries/schools";
 import type { AddAdminInput } from "../validators/auth.validator";
 
+// ── Audit log helper ───────────────────────────────────────────────────────────
+// Add this after imports, before any exported function
+async function writeAuditLog(params: {
+  actorId: string;
+  actorEmail: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await prisma.adminAuditLog.create({
+      data: {
+        actorId: params.actorId,
+        actorEmail: params.actorEmail,
+        action: params.action,
+        targetType: params.targetType,
+        targetId: params.targetId,
+        metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+      },
+    });
+  } catch (err) {
+    // Audit log failure should never crash the main operation
+    console.error("[AuditLog] Failed to write audit log:", err);
+  }
+}
+
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"] as const;
 type RoleValue = (typeof VALID_ROLES)[number];
 
@@ -84,7 +111,6 @@ export const getStats = async (_req: AuthRequest, res: Response) => {
 };
 
 // GET /api/admin/schools
-// Supports: page, limit, status, search, state, city
 export const getAdminSchools = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit, DEFAULT_ADMIN_PAGE_LIMIT);
@@ -112,8 +138,7 @@ export const getAdminSchools = async (req: AuthRequest, res: Response) => {
   res.json(paginatedResponse(rows, pagination, "schools"));
 };
 
-// GET /api/admin/schools/states — distinct states across ALL schools (any status)
-// Used to populate the admin state filter dropdown.
+// GET /api/admin/schools/states
 export const getAdminStates = async (_req: AuthRequest, res: Response) => {
   const cacheKey = buildCacheKey("admin:schools:states", {});
 
@@ -129,9 +154,7 @@ export const getAdminStates = async (_req: AuthRequest, res: Response) => {
   res.json({ data: states.map((s) => s.state).filter(Boolean) });
 };
 
-// GET /api/admin/schools/cities?state=xxx — distinct cities across ALL schools
-// (any status), optionally filtered by state. Used for the admin city dropdown,
-// which is dependent on the selected state.
+// GET /api/admin/schools/cities?state=xxx
 export const getAdminCities = async (req: AuthRequest, res: Response) => {
   const state = (req.query.state as string | undefined)?.trim();
 
@@ -164,13 +187,13 @@ export const approveSchoolById = async (req: AuthRequest, res: Response) => {
     },
   });
 
-  // Invalidate: approved school must appear in public listings, detail, cities, search
   invalidateSchoolCache();
 
   res.json({ message: "School approved successfully", school });
 };
 
 // PATCH /api/admin/schools/:id/reject
+
 export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
   const { reason } = req.body;
@@ -186,7 +209,6 @@ export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
     },
   });
 
-  // Invalidate: rejected school must disappear from public listings and detail
   invalidateSchoolCache();
 
   res.json({ message: "School rejected successfully", school });
@@ -217,7 +239,6 @@ export const rejectSchool = async (req: AuthRequest, res: Response) => {
   return rejectSchoolById(req, res);
 };
 
-// GET /api/admin/users
 // GET /api/admin/users
 export const getAdminUsers = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
@@ -253,7 +274,8 @@ export const getAdminUsers = async (req: AuthRequest, res: Response) => {
         role: true,
         phone: true,
         createdAt: true,
-        adminAccessLevel: true, // ← Phase E field, safe to add now (null until E)
+        adminAccessLevel: true,
+        isSuperAdmin: true,  // ← yeh add karo
       },
     }),
     prisma.user.count({ where }),
@@ -268,7 +290,6 @@ export const getAdminUsers = async (req: AuthRequest, res: Response) => {
   res.json(paginatedResponse(data, pagination, "users"));
 };
 
-// GET /api/admin/inquiries
 // GET /api/admin/inquiries
 export const getAdminInquiries = async (req: AuthRequest, res: Response) => {
   const page = parsePage(req.query.page);
@@ -334,39 +355,42 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
-  const target = await prisma.user.findUnique({ where: { id: targetId } });
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, role: true, email: true, isSuperAdmin: true },
+  });
 
   if (!target) {
     throw Errors.NotFound("User");
   }
 
-  // ── NEW: block SCHOOL_ADMIN → PARENT and ANY → ADMIN via this route ──
+  // §0 — super admin immune (middleware also blocks, this is defense in depth)
+  if (target.isSuperAdmin) {
+    throw Errors.Forbidden("Super admin role cannot be changed");
+  }
+
   if (target.role === "SCHOOL_ADMIN" && role === "PARENT") {
-    throw Errors.BadRequest(
-      "SCHOOL_ADMIN accounts cannot be converted to PARENT"
-    );
+    throw Errors.BadRequest("SCHOOL_ADMIN accounts cannot be converted to PARENT");
+  }
+
+  if (target.role === "PARENT" && role === "SCHOOL_ADMIN") {
+    throw Errors.BadRequest("PARENT accounts cannot be converted to SCHOOL_ADMIN");
   }
 
   if (target.role !== "ADMIN" && role === "ADMIN") {
-    throw Errors.BadRequest(
-      "Use the Add Admin flow to grant administrator access"
-    );
+    throw Errors.BadRequest("Use the Add Admin flow to grant administrator access");
   }
-  // ──────────────────────────────────────────────────────────────────
 
-  if (
-    target.id === req.user!.id &&
-    target.role === "ADMIN" &&
-    role !== "ADMIN"
-  ) {
+  if (target.id === req.user!.id && target.role === "ADMIN" && role !== "ADMIN") {
     throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
   const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
-
   if (target.role === "ADMIN" && role !== "ADMIN" && adminCount <= 1) {
     throw Errors.Forbidden("Cannot remove the last administrator");
   }
+
+  const previousRole = target.role;
 
   const updated = await prisma.user.update({
     where: { id: targetId },
@@ -381,6 +405,15 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "ROLE_CHANGE",
+    targetType: "USER",
+    targetId: targetId,
+    metadata: { from: previousRole, to: role, targetEmail: target.email },
+  });
+
   res.json({
     message: "User role updated",
     user: {
@@ -390,6 +423,7 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   });
 };
 
+// PATCH /api/admin/users/:id/status
 // PATCH /api/admin/users/:id/status
 export const updateUserStatus = async (req: AuthRequest, res: Response) => {
   const targetId = String(req.params.id).trim();
@@ -403,17 +437,24 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
     throw Errors.Forbidden("You cannot change your own account status");
   }
 
-  const target = await prisma.user.findUnique({ where: { id: targetId } });
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: { id: true, role: true, email: true, isSuperAdmin: true, phone: true },
+  });
 
   if (!target) {
     throw Errors.NotFound("User");
+  }
+
+  // §0 — super admin immune (middleware also blocks, this is defense in depth)
+  if (target.isSuperAdmin) {
+    throw Errors.Forbidden("Super admin account status cannot be changed");
   }
 
   if (target.role === "ADMIN" && status === "disabled") {
     const adminCount = await prisma.user.count({
       where: { role: "ADMIN", phone: { not: ACCOUNT_DISABLED_PHONE } },
     });
-
     if (adminCount <= 1) {
       throw Errors.Forbidden("Cannot disable the last active administrator");
     }
@@ -434,6 +475,15 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "STATUS_CHANGE",
+    targetType: "USER",
+    targetId: targetId,
+    metadata: { status, targetEmail: target.email },
+  });
+
   res.json({
     message: status === "disabled" ? "Account disabled" : "Account enabled",
     user: {
@@ -441,6 +491,69 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
       accountStatus: status,
     },
   });
+};
+
+// DELETE /api/admin/users/:id  — §2
+// PARENT: delete user (Inquiry + Favourite cascade via schema)
+// SCHOOL_ADMIN: delete owned School first (all school cascades), then User
+// ADMIN: delete user (blocked if last admin or self)
+// DELETE /api/admin/users/:id  — §2 + §0
+export const deleteUserDirect = async (req: AuthRequest, res: Response) => {
+  const targetId = String(req.params.id).trim();
+
+  if (targetId === req.user!.id) {
+    throw Errors.Forbidden("You cannot delete your own account");
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      isSuperAdmin: true,
+      ownedSchools: { select: { id: true }, take: 1 },
+    },
+  });
+
+  if (!target) {
+    throw Errors.NotFound("User");
+  }
+
+  // §0 — super admin is immune (middleware blockIfSuperAdminTarget also catches
+  // this, but double-checking here as defense in depth)
+  if (target.isSuperAdmin) {
+    throw Errors.Forbidden("Super admin account cannot be deleted");
+  }
+
+  // Block deleting last admin
+  if (target.role === "ADMIN") {
+    const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+    if (adminCount <= 1) {
+      throw Errors.Forbidden("Cannot delete the last administrator");
+    }
+  }
+
+  if (target.role === "SCHOOL_ADMIN" && target.ownedSchools.length > 0) {
+    await prisma.$transaction([
+      prisma.school.delete({ where: { id: target.ownedSchools[0].id } }),
+      prisma.user.delete({ where: { id: targetId } }),
+    ]);
+    invalidateSchoolCache();
+  } else {
+    await prisma.user.delete({ where: { id: targetId } });
+  }
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "USER_DELETE",
+    targetType: "USER",
+    targetId: targetId,
+    metadata: { deletedRole: target.role, deletedEmail: target.email },
+  });
+
+  res.json({ message: "User deleted successfully", deletedId: targetId });
 };
 
 // POST /api/admin/add-school
@@ -455,7 +568,6 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     throw Errors.BadRequest("ownerEmail, name, and phone are required");
   }
 
-  // ── Unique check: email pe, name pe nahi ──────────────────────────────
   const existingUserWithSchool = await prisma.user.findUnique({
     where: { email: ownerEmail },
     include: { ownedSchools: { select: { id: true }, take: 1 } },
@@ -473,7 +585,6 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     }
   }
 
-  // ── Owner resolve ─────────────────────────────────────────────────────
   let owner = existingUserWithSchool;
 
   if (owner && owner.role === "PARENT") {
@@ -509,16 +620,14 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
     throw new AppError("Failed to resolve school owner", 500, "INTERNAL_ERROR");
   }
 
-  // ── Slug ──────────────────────────────────────────────────────────────
   const slug = await generateSlug(name.trim());
 
-  // ── School create — all required fields with defaults ─────────────────
   const school = await prisma.school.create({
     data: {
       name: name.trim(),
       slug,
       phone,
-      address: "",          // filled later from dashboard
+      address: "",
       city: "",
       state: "",
       board: "OTHER",
@@ -607,14 +716,7 @@ export const checkOwnerEmail = async (req: AuthRequest, res: Response) => {
   });
 };
 
-
-// ── ADD this import at top of admin.controller.ts ──────────────────────────
-// import { schoolDetailSelect } from "../lib/queries/schools";
-// (merge with existing: adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect)
-
-// ── ADD this export anywhere in admin.controller.ts ─────────────────────────
-
-// GET /api/admin/schools/:id — full detail by id, any status, for admin edit page
+// GET /api/admin/schools/:id
 export const getAdminSchoolById = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
   if (!id) throw Errors.BadRequest("Invalid school identifier");
@@ -636,7 +738,6 @@ export const getAdminSchoolById = async (req: AuthRequest, res: Response) => {
   res.json({ data: school });
 };
 
-
 // POST /api/admin/add-parent
 export const addParentDirect = async (req: AuthRequest, res: Response) => {
   if (!req.user?.id) {
@@ -645,7 +746,6 @@ export const addParentDirect = async (req: AuthRequest, res: Response) => {
 
   const { name, email, phone, password } = req.body;
 
-  // Duplicate email check
   const existing = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
   });
@@ -683,28 +783,27 @@ export const addParentDirect = async (req: AuthRequest, res: Response) => {
   });
 };
 
-
+// POST /api/admin/add-admin
 export const addAdminDirect = async (req: AuthRequest, res: Response) => {
   if (!req.user?.id) {
     throw Errors.Unauthorized("Authentication required");
   }
- 
+
   const { name, email, password, adminAccessLevel } = req.body as AddAdminInput;
- 
-  // Duplicate email check
+
   const existing = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
   });
- 
+
   if (existing) {
     throw Errors.Conflict("A user with this email already exists");
   }
- 
+
   const hashedPassword = await bcrypt.hash(
     password,
     parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
   );
- 
+
   const admin = await prisma.user.create({
     data: {
       name,
@@ -722,7 +821,7 @@ export const addAdminDirect = async (req: AuthRequest, res: Response) => {
       createdAt: true,
     },
   });
- 
+
   res.status(201).json({
     message: "Admin account created successfully",
     user: admin,

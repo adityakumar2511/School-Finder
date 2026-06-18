@@ -65,15 +65,17 @@ import {
   addSchoolDirect,
   addParentDirect,
   addAdminDirect,
+  deleteUserDirect,
   getAdminUsers,
   getAdminInquiries,
   updateUserRole,
   updateUserStatus,
   checkOwnerEmail,
   getAdminSchoolById,
+  
 } from "../controllers/admin.controller";
 import { auth } from "../middleware/auth";
-import { requireRole, requireAdminLevel } from "../middleware/roleCheck";
+import { requireRole, requireAdminLevel, blockIfSuperAdminTarget  } from "../middleware/roleCheck";
 import { validate } from "../middleware/validate";
 import { asyncHandler } from "../utils/asyncHandler";
 import { addParentSchema, addAdminSchema } from "../validators/auth.validator";
@@ -181,12 +183,14 @@ router.post(
 router.patch(
   "/users/:id/role",
   requireAdminLevel("FULL_ACCESS"),
+  blockIfSuperAdminTarget,
   asyncHandler(updateUserRole),
 );
 
 router.patch(
   "/users/:id/status",
   requireAdminLevel("FULL_ACCESS"),
+  blockIfSuperAdminTarget,
   asyncHandler(updateUserStatus),
 );
 
@@ -195,6 +199,14 @@ router.post(
   requireAdminLevel("FULL_ACCESS"),
   validate(addAdminSchema),
   asyncHandler(addAdminDirect),
+);
+
+
+router.delete(
+  "/users/:id",
+  requireAdminLevel("FULL_ACCESS"),
+  blockIfSuperAdminTarget,
+  asyncHandler(deleteUserDirect),
 );
 
 export default router;

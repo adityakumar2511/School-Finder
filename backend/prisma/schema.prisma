@@ -115,6 +115,7 @@ model User {
   inquiries    Inquiry[]   @relation("ParentInquiries")
   favourites   Favourite[]
   adminAccessLevel AdminAccessLevel?
+  isSuperAdmin     Boolean           @default(false)
 }
 
 model School {
@@ -392,4 +393,20 @@ model Favourite {
 
   @@unique([parentId, schoolId])
   @@index([parentId])
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  actorEmail  String
+  action      String   // e.g. "USER_DELETE", "ROLE_CHANGE", "STATUS_CHANGE", "ADMIN_CREATE", "SCHOOL_DELETE"
+  targetType  String   // "USER" | "SCHOOL" | "ADMIN"
+  targetId    String
+  metadata    String?  @db.Text  // JSON string for extra context
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([createdAt])
 }

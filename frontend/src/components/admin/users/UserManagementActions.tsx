@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role, AdminAccessLevel } from "@/lib/types/database";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
 import {
   Select,
@@ -26,12 +26,20 @@ type Props = {
   currentRole: Role;
   accountStatus: "active" | "disabled";
   isSelf: boolean;
-  viewerAccessLevel: AdminAccessLevel | null; // ADD — viewer ka access level
+  isSuperAdmin?: boolean;
+  viewerAccessLevel: AdminAccessLevel | null;
+  activeRole: Role; // which tab is currently active
 };
 
+/**
+ * Returns the roles this user can be switched to.
+ *
+ * Rules (§1):
+ * - PARENT        → no role change allowed (dropdown hidden)
+ * - SCHOOL_ADMIN  → no role change allowed (dropdown hidden)
+ * - ADMIN         → no role change allowed via this UI
+ */
 function getAllowedRoles(currentRole: Role): Role[] {
-  if (currentRole === "PARENT") return ["PARENT", "SCHOOL_ADMIN"];
-  if (currentRole === "SCHOOL_ADMIN") return ["SCHOOL_ADMIN"];
   return [currentRole];
 }
 
@@ -48,17 +56,26 @@ export default function UserManagementActions({
   currentRole,
   accountStatus,
   isSelf,
+  isSuperAdmin = false,
   viewerAccessLevel,
 }: Props) {
   const router = useRouter();
   const [role, setRole] = useState(currentRole);
   const [loading, setLoading] = useState<string | null>(null);
   const [disableOpen, setDisableOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const allowedRoles = getAllowedRoles(currentRole);
-  const canChangeRole = allowedRoles.length > 1 && !isSelf && viewerAccessLevel === "FULL_ACCESS";
-  const canToggleStatus = !isSelf && viewerAccessLevel === "FULL_ACCESS";
+  const canChangeRole =
+    allowedRoles.length > 1 &&
+    !isSelf &&
+    !isSuperAdmin &&
+    viewerAccessLevel === "FULL_ACCESS";
+  const canToggleStatus =
+    !isSelf && !isSuperAdmin && viewerAccessLevel === "FULL_ACCESS";
+  const canDelete =
+    !isSelf && !isSuperAdmin && viewerAccessLevel === "FULL_ACCESS";
 
   async function updateRole(next: Role) {
     setLoading("role");
@@ -105,6 +122,25 @@ export default function UserManagementActions({
     }
   }
 
+  async function deleteUser() {
+    setLoading("delete");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? "Failed to delete user");
+      setDeleteOpen(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+      setDeleteOpen(false);
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       {canChangeRole ? (
@@ -128,7 +164,7 @@ export default function UserManagementActions({
         <RoleBadgeFallback role={currentRole} />
       )}
 
-      {/* Consolidated status toggle — FULL_ACCESS only, not self */}
+      {/* Status toggle — FULL_ACCESS only, not self */}
       {canToggleStatus && (
         <Button
           size="sm"
@@ -149,6 +185,26 @@ export default function UserManagementActions({
         </Button>
       )}
 
+      {/* Delete — §2, FULL_ACCESS only, not self */}
+      {canDelete && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9"
+          disabled={loading !== null}
+          onClick={() => setDeleteOpen(true)}
+        >
+          {loading === "delete" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <Trash2 className="mr-1 h-4 w-4" />
+              Delete
+            </>
+          )}
+        </Button>
+      )}
+
       {error && <p className="text-xs text-danger-text">{error}</p>}
 
       <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
@@ -156,7 +212,8 @@ export default function UserManagementActions({
           <DialogHeader>
             <DialogTitle>Disable account?</DialogTitle>
             <DialogDescription>
-              This user will not be able to sign in until the account is re-enabled.
+              This user will not be able to sign in until the account is
+              re-enabled.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -169,6 +226,47 @@ export default function UserManagementActions({
               onClick={toggleStatus}
             >
               Confirm disable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this user?</DialogTitle>
+            <DialogDescription>
+              {currentRole === "SCHOOL_ADMIN" ? (
+                <>
+                  This will permanently delete the user account{" "}
+                  <strong>and</strong> the school listing they own — including
+                  all images, inquiries, board results, scholarships, FAQs, and
+                  downloads. This cannot be undone.
+                </>
+              ) : currentRole === "PARENT" ? (
+                <>
+                  This will permanently delete the user account, along with
+                  their saved favourites and inquiry history. This cannot be
+                  undone.
+                </>
+              ) : (
+                <>
+                  This will permanently delete the admin account. This cannot be
+                  undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={loading === "delete"}
+              onClick={deleteUser}
+            >
+              Confirm delete
             </Button>
           </DialogFooter>
         </DialogContent>

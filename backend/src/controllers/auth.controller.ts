@@ -549,6 +549,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
 
 // GET /api/auth/me
 // GET /api/auth/me
+// GET /api/auth/me
 export const getMe = async (req: AuthRequest, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -566,6 +567,13 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 
   if (!user) {
     throw Errors.NotFound("User");
+  }
+
+  // Re-check disabled status on every /me call. This is what the NextAuth
+  // jwt() callback's session-refresh logic relies on to kill sessions for
+  // accounts that get disabled mid-session (not just at login time).
+  if (user.phone === "__DISABLED__") {
+    throw Errors.AccountDisabled();
   }
 
   res.json({

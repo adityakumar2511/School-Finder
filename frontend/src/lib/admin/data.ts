@@ -202,7 +202,8 @@ export type AdminUserRow = {
   role: Role;
   phone: string | null;
   createdAt: string;
-  adminAccessLevel?: AdminAccessLevel | null; // ADD
+  adminAccessLevel?: AdminAccessLevel | null;
+  isSuperAdmin?: boolean; // ← add karo
 };
 
 export async function getAdminUsersList(options: {

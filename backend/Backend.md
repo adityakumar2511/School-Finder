@@ -1,6 +1,6 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 14, 2026
+> Last updated: June 17, 2026
 
 > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Brevo · Fast2SMS  
 > **Default port:** `4000` · **Repository path:** `backend/`  
@@ -59,7 +59,7 @@ Express API (port 4000)
 | Auth | JWT (HS256), role-separated login, email OTP reset, phone OTP (SMS) |
 | Parent | Profile, favourites, inquiries |
 | School admin | Own school CRUD (scalar + related models), gallery URLs, inquiry status |
-| Platform admin | Moderation, users, stats, direct school creation |
+| Platform admin | Moderation, users, stats, direct school/parent/admin creation |
 
 ---
 
@@ -114,7 +114,7 @@ backend/
 │   │   └── parent.controller.ts
 │   ├── middleware/
 │   │   ├── auth.ts             # JWT verification + blacklist
-│   │   ├── roleCheck.ts        # requireRole()
+│   │   ├── roleCheck.ts        # requireRole() + requireAdminLevel()
 │   │   ├── security.ts         # Helmet, CORS, rate limiters
 │   │   ├── validate.ts         # Zod validation + sanitize
 │   │   ├── bruteForce.ts       # Login throttling
@@ -160,7 +160,7 @@ compression + express.json    2MB body limit
 generalRateLimiter            100 req / 15 min / IP
     │
     ▼
-Route-specific middleware     auth, requireRole, validate, rate limiters
+Route-specific middleware     auth, requireRole, requireAdminLevel, validate, rate limiters
     │
     ▼
 Controller handler            Business logic via asyncHandler
@@ -185,9 +185,11 @@ Controller handler            Business logic via asyncHandler
 | Issuer | `schoolfinder-api` |
 | Secret | `JWT_SECRET` (must match frontend) |
 | Expiry | `JWT_EXPIRES_IN` (default `7d`) |
-| Payload | `id`, `role`, `email`, `jti` (UUID per token) |
+| Payload | `id`, `role`, `email`, `jti` (UUID per token), `adminAccessLevel` (ADMIN role only) |
 | Header | `Authorization: Bearer <token>` |
 | Logout | `jti` added to in-memory blacklist |
+
+> `adminAccessLevel` is included in the JWT payload at login for `ADMIN` role users only (`null` for PARENT/SCHOOL_ADMIN). Frontend reads this to gate UI elements without extra API calls.
 
 ### Auth Flows
 
@@ -195,7 +197,7 @@ Controller handler            Business logic via asyncHandler
 |------|----------|-------|
 | Register parent | `POST /api/auth/register-parent` | Returns JWT |
 | Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT |
-| Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard |
+| Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard; includes `adminAccessLevel` in JWT for ADMIN |
 | Logout | `POST /api/auth/logout` | Blacklists `jti` |
 | Forgot password | `POST /api/auth/forgot-password` | Email OTP via Brevo; generic 200 on no match |
 | Verify reset OTP | `POST /api/auth/verify-reset-otp` | Sets `otpVerified` flag |
@@ -211,9 +213,23 @@ Roles: `PARENT` · `SCHOOL_ADMIN` · `ADMIN`
 
 Applied via `auth` middleware + `requireRole()` on protected routes.
 
+Admin-level mutations are further gated by `requireAdminLevel()` — see [Middleware](#8-middleware) and [Phase E route map](#admin-access-level-route-map).
+
 ### Account Disable
 
 Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login returns 403.
+
+### Admin Access Level Route Map
+
+All routes below already require `requireRole(ADMIN)`. `requireAdminLevel` is applied as an additional guard:
+
+| Minimum Level | Routes |
+|---|---|
+| `READ_ONLY` | `GET /stats`, `GET /schools`, `GET /users`, `GET /inquiries`, `GET /check-owner` |
+| `READ_WRITE` | `PATCH /schools/:id/approve`, `PATCH /schools/:id/reject`, `POST /add-school`, `POST /add-parent` |
+| `FULL_ACCESS` | `PATCH /schools/:id` (edit), `DELETE /schools/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/status`, `POST /add-admin` |
+
+> Frontend gating is UX-only — `requireAdminLevel` middleware is the actual enforcement.
 
 ---
 
@@ -249,7 +265,7 @@ Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login re
 |--------|------|------|---------|
 | GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status |
 | GET | `/search` | Public | `searchSchools` — no frontend caller yet, kept for future search feature |
-| GET | `/cities` | Public | `getCities` — distinct approved cities (cached) |
+| GET | `/cities` | Public | `getCities` — distinct approved cities; accepts optional `?state=` to filter by state (cached, cache key varies by state) |
 | GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` — includes all related models |
 | POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url, caption?, category? }` |
 | DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
@@ -258,22 +274,26 @@ Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login re
 | PATCH | `/:id` | auth | `updateSchool` — owner or ADMIN; runs in Prisma transaction |
 | DELETE | `/:id` | ADMIN | `deleteSchool` |
 
-### `/api/admin` (all routes: ADMIN)
+### `/api/admin` (all routes: ADMIN + `requireAdminLevel` per route)
 
-| Method | Path | Handler |
-|--------|------|---------|
-| GET | `/stats` | `getStats` |
-| GET | `/schools` | `getAdminSchools` — paginated; query: page, limit, status, search |
-| GET | `/check-owner` | `checkOwnerEmail` — query: email |
-| GET | `/users` | `getAdminUsers` |
-| GET | `/inquiries` | `getAdminInquiries` |
-| PATCH | `/schools/:id/approve` | `approveSchoolById` |
-| PATCH | `/schools/:id/reject` | `rejectSchoolById` |
-| POST | `/approve` | `approveSchool` — **legacy**, delegates to PATCH |
-| POST | `/reject` | `rejectSchool` — **legacy**, delegates to PATCH |
-| POST | `/add-school` | `addSchoolDirect` — creates APPROVED school |
-| PATCH | `/users/:id/role` | `updateUserRole` |
-| PATCH | `/users/:id/status` | `updateUserStatus` |
+| Method | Path | Min Level | Handler |
+|--------|------|-----------|---------|
+| GET | `/stats` | READ_ONLY | `getStats` |
+| GET | `/schools` | READ_ONLY | `getAdminSchools` — paginated; query: `page`, `limit`, `status`, `search`, `state`, `city` |
+| GET | `/check-owner` | READ_ONLY | `checkOwnerEmail` — query: `email`, optional `role` (e.g. `?role=PARENT` for parent duplicate check) |
+| GET | `/users` | READ_ONLY | `getAdminUsers` — paginated; query: `role` (required: PARENT \| SCHOOL_ADMIN \| ADMIN), `search`, `page`, `limit` |
+| GET | `/inquiries` | READ_ONLY | `getAdminInquiries` — paginated; optional `?schoolId=` to filter per school |
+| PATCH | `/schools/:id/approve` | READ_WRITE | `approveSchoolById` |
+| PATCH | `/schools/:id/reject` | READ_WRITE | `rejectSchoolById` |
+| POST | `/approve` | READ_WRITE | `approveSchool` — **legacy**, delegates to PATCH |
+| POST | `/reject` | READ_WRITE | `rejectSchool` — **legacy**, delegates to PATCH |
+| POST | `/add-school` | READ_WRITE | `addSchoolDirect` — creates APPROVED school |
+| POST | `/add-parent` | READ_WRITE | `addParentDirect` — creates PARENT user directly |
+| POST | `/add-admin` | FULL_ACCESS | `addAdminDirect` — creates ADMIN user with chosen `adminAccessLevel` |
+| PATCH | `/schools/:id` | FULL_ACCESS | proxied via frontend BFF; handled by `updateSchool` in `schools.controller.ts` |
+| DELETE | `/schools/:id` | FULL_ACCESS | proxied via frontend BFF; handled by `deleteSchool` in `schools.controller.ts` |
+| PATCH | `/users/:id/role` | FULL_ACCESS | `updateUserRole` — SCHOOL_ADMIN→PARENT transition blocked |
+| PATCH | `/users/:id/status` | FULL_ACCESS | `updateUserStatus` |
 
 ### `/api/inquiries`
 
@@ -313,9 +333,9 @@ Router-level: `auth` + `requireRole(PARENT)`. Sets `Deprecation: Use /api/parent
 
 | Controller | Handlers | Responsibility |
 |------------|----------|----------------|
-| `auth.controller.ts` | 12 | Registration, login, OTP reset, phone OTP, logout, profile, Google sync |
-| `schools.controller.ts` | 10 | Public list/search/detail, school admin CRUD, image URLs, admin delete |
-| `admin.controller.ts` | 12 | Stats, moderation, user management, direct add-school, owner check |
+| `auth.controller.ts` | 12 | Registration, login (includes `adminAccessLevel` in JWT for ADMIN), OTP reset, phone OTP, logout, profile, Google sync |
+| `schools.controller.ts` | 10 | Public list/search/detail, school admin CRUD, image URLs, admin delete/edit |
+| `admin.controller.ts` | 15 | Stats, moderation, user management, direct add-school/parent/admin, owner check, school/inquiry filtering |
 | `inquiry.controller.ts` | 4 | Create, list (parent/school), status updates |
 | `parent.controller.ts` | 6 | Profile, favourites (rich shape), inquiries |
 | `favourite.controller.ts` | 3 | Legacy favourites with deprecation header |
@@ -339,6 +359,18 @@ Each array is only synced if present in the request body (`!== undefined`), allo
 
 `extractScalarFields()` strips relation arrays before passing data to `school.update()` to avoid Prisma type errors.
 
+### `admin.controller.ts` — Key Handler Notes
+
+| Handler | Notes |
+|---------|-------|
+| `getAdminSchools` | Accepts `state` + `city` query params added to Prisma `where` clause alongside existing `status` + `search` filters |
+| `getAdminUsers` | Requires `role` query param (PARENT \| SCHOOL_ADMIN \| ADMIN); returns paginated list per tab |
+| `getAdminInquiries` | Accepts optional `?schoolId=` query param; filters `where` clause if present |
+| `addParentDirect` | Creates `User` with role `PARENT` and hashed password; validates email uniqueness |
+| `addAdminDirect` | Creates `User` with role `ADMIN` + chosen `adminAccessLevel`; `FULL_ACCESS` only |
+| `updateUserRole` | SCHOOL_ADMIN→PARENT transition blocked at validator and controller level |
+| `checkOwnerEmail` | Accepts optional `?role=PARENT` param for parent duplicate check (in addition to school owner check) |
+
 ---
 
 ## 8. Middleware
@@ -353,11 +385,34 @@ Each array is only synced if present in the request body (`!== undefined`), allo
 | `otpRateLimiter` | `security.ts` | 3 / 10 min |
 | `auth` | `auth.ts` | JWT verify, issuer check, jti blacklist |
 | `requireRole` | `roleCheck.ts` | Role gate after auth |
+| `requireAdminLevel` | `roleCheck.ts` | Admin permission tier gate — READ_ONLY \| READ_WRITE \| FULL_ACCESS; applied after `requireRole(ADMIN)` on admin routes |
 | `validate` | `validate.ts` | Zod schema + body sanitize |
 | `bruteForceGuard` | `bruteForce.ts` | 5 failures / 15 min per IP+email |
 | `errorHandler` | `errorHandler.ts` | Standardized error responses |
 | `notFoundHandler` | `errorHandler.ts` | 404 with `NOT_FOUND` code |
 | `asyncHandler` | `asyncHandler.ts` | Wraps async route handlers |
+
+### `requireAdminLevel` Pattern
+
+```typescript
+// middleware/roleCheck.ts
+export const requireAdminLevel = (...levels: AdminAccessLevel[]) =>
+  asyncHandler(async (req, res, next) => {
+    if (req.user.role !== 'ADMIN') {
+      throw AppError.forbidden('Admin access required');
+    }
+    if (!levels.includes(req.user.adminAccessLevel)) {
+      throw AppError.forbidden('Insufficient admin permission level');
+    }
+    next();
+  });
+```
+
+Usage in `admin.routes.ts`:
+```typescript
+router.post('/add-admin', requireAdminLevel('FULL_ACCESS'), validate(addAdminSchema), addAdminDirect);
+router.post('/add-parent', requireAdminLevel('READ_WRITE', 'FULL_ACCESS'), validate(addParentSchema), addParentDirect);
+```
 
 ---
 
@@ -367,7 +422,7 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 
 | Validator | Schemas |
 |-----------|---------|
-| `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp |
+| `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp, addParentSchema (admin add-parent), addAdminSchema (admin add-admin); role transition guard blocks SCHOOL_ADMIN→PARENT in updateUserRole schema |
 | `school.validator.ts` | createSchool, updateSchool (see field inventory below) |
 
 ### `school.validator.ts` — Field Inventory
@@ -430,17 +485,24 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 | Enum | Values |
 |------|--------|
 | `Role` | PARENT, SCHOOL_ADMIN, ADMIN |
+| `AdminAccessLevel` | READ_ONLY, READ_WRITE, FULL_ACCESS |
 | `SchoolStatus` | DRAFT, PENDING, APPROVED, REJECTED |
 | `BoardType` | CBSE, ICSE, UP_BOARD, OTHER |
 | `SchoolType` | BOYS, GIRLS, CO_ED |
 | `MediumType` | HINDI, ENGLISH, BOTH |
 | `InquiryStatus` | NEW, CONTACTED, CLOSED |
 
+> **Migration note:** `AdminAccessLevel` enum was added in migration `add_admin_access_level`. After running, existing ADMIN rows must be backfilled:
+> ```sql
+> UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
+> ```
+> This must run before `requireAdminLevel` middleware goes live — otherwise all existing admins are locked out.
+
 ### Models
 
 | Model | Purpose | Notes |
 |-------|---------|-------|
-| `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; legacy `resetToken*` unused |
+| `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; `adminAccessLevel AdminAccessLevel?` (null for PARENT/SCHOOL_ADMIN); legacy `resetToken*` unused |
 | `School` | Listing — scalar fields for all 22 profile sections | See field inventory below |
 | `SchoolImage` | Gallery URLs | `category` field added; cascade delete with school |
 | `BoardResult` | Per-year board exam results | Section 13; cascade delete |
@@ -518,7 +580,8 @@ id, schoolId, url, caption?, category?    ← category is new
 ### Indexes
 
 - **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`
-- **Inquiry:** `[schoolId, status]`, `[parentId]`
+- **User:** `[role]`, `[adminAccessLevel]` ← added for admin user list queries
+- **Inquiry:** `[schoolId, status]`, `[schoolId, createdAt]` ← added for per-school inquiry filtering, `[parentId]`
 - **Favourite:** `[parentId]`, unique `[parentId, schoolId]`
 - **SchoolCustomField:** `[schoolId, section]`
 - **BoardResult, Scholarship, SchoolFAQ, SchoolDownload:** `[schoolId]`
@@ -528,8 +591,13 @@ id, schoolId, url, caption?, category?    ← category is new
 After replacing `schema.prisma`, run from `backend/`:
 
 ```bash
-npx prisma migrate dev --name add_school_profile_sections
+npx prisma migrate dev --name add_admin_access_level
 npx prisma generate   # runs automatically after migrate, but explicit is safer
+```
+
+**Post-migration required:**
+```sql
+UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
 ```
 
 ### Partial Implementation Notes
@@ -538,6 +606,7 @@ npx prisma generate   # runs automatically after migrate, but explicit is safer
 - **`resetToken`/`resetTokenExpiry`:** Schema fields exist but are never set; only cleared in reset flow
 - **`Facility` model:** Readable via relations but no API to manage facilities
 - **Reviews (Section 21):** Read-only on frontend, no backend model — system generated from `Inquiry` data or future review model
+- **`adminAccessLevel`:** `null` for PARENT and SCHOOL_ADMIN users; only populated for ADMIN role
 
 ---
 
@@ -552,7 +621,7 @@ npx prisma generate   # runs automatically after migrate, but explicit is safer
 | `tokenBlacklist.ts` | In-memory jti blacklist (max 10k, 10-min cleanup interval) |
 | `favourites.ts` | Shared add/remove/list for both favourite APIs |
 | `pagination.ts` | Page/limit parsing and response helpers |
-| `queries/schools.ts` | Select shapes, filters, cursor pagination |
+| `queries/schools.ts` | Select shapes, filters, cursor pagination; updated to accept `state`/`city` in filter builder |
 | `sanitize.ts` | HTML stripping from request bodies |
 | `account-status.ts` | Disabled account detection (`phone = "__DISABLED__"`) |
 
@@ -564,7 +633,8 @@ npx prisma generate   # runs automatically after migrate, but explicit is safer
 
 | Namespace | TTL | Invalidated On |
 |-----------|-----|----------------|
-| School list/search/cities | 60s | School mutations |
+| School list/search | 60s | School mutations |
+| School cities | 60s | School mutations; cache key varies by `state` param (`sf:schools:cities:<state>\|all`) |
 | School detail | 300s | School update/delete |
 | Admin stats | 30s | School approve/reject/create |
 

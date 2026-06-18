@@ -57,9 +57,8 @@ function UserTabs({
   q?: string;
   viewerAccessLevel: AdminAccessLevel | null;
 }) {
-  // Admins tab — sirf FULL_ACCESS wale dekh sakte hain
   const visibleTabs = TABS.filter(
-    (tab) => tab.role !== "ADMIN" || viewerAccessLevel === "FULL_ACCESS"
+    (tab) => tab.role !== "ADMIN" || viewerAccessLevel === "FULL_ACCESS",
   );
 
   return (
@@ -74,7 +73,7 @@ function UserTabs({
               "border-b-2 px-4 py-2 font-body text-sm font-medium transition-colors",
               isActive
                 ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                : "border-transparent text-gray-500 hover:text-gray-700",
             )}
           >
             {tab.label}
@@ -144,9 +143,13 @@ async function UsersTable({
                       <TableCell>
                         <AdminAccessBadge
                           level={
-                            (user as { adminAccessLevel?: AdminAccessLevel | null })
-                              .adminAccessLevel ?? null
+                            (
+                              user as {
+                                adminAccessLevel?: AdminAccessLevel | null;
+                              }
+                            ).adminAccessLevel ?? null
                           }
+                          isSuperAdmin={user.isSuperAdmin ?? false} // ← add karo
                         />
                       </TableCell>
                     )}
@@ -162,7 +165,9 @@ async function UsersTable({
                         currentRole={user.role}
                         accountStatus={disabled ? "disabled" : "active"}
                         isSelf={user.id === currentUserId}
+                        isSuperAdmin={user.isSuperAdmin ?? false} // ← add karo
                         viewerAccessLevel={viewerAccessLevel}
+                        activeRole={activeRole}
                       />
                     </TableCell>
                   </TableRow>

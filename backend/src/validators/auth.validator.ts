@@ -194,15 +194,17 @@ export const adminAccessLevelSchema = z.enum([
   "FULL_ACCESS",
 ]);
  
-export const addAdminSchema = z.object({
-  name: z.preprocess(preprocessTrim, z.string().min(1, "Name is required")),
-  email: z.preprocess(
-    preprocessEmail,
-    z.string().email("Enter a valid email address"),
-  ),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  adminAccessLevel: adminAccessLevelSchema,
-});
+export const addAdminSchema = z
+  .object({
+    name: z.preprocess(preprocessTrim, z.string().min(1, "Name is required")),
+    email: z.preprocess(
+      preprocessEmail,
+      z.string().email("Enter a valid email address"),
+    ),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    adminAccessLevel: adminAccessLevelSchema,
+  })
+  .strict(); // rejects any extra keys including isSuperAdmin injection attempts
 
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
