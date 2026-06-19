@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth";
 import { Errors, AppError } from "../utils/AppError";
+import { writeAuditLog } from "../lib/auditLog";
 import {
   ACCOUNT_DISABLED_PHONE,
   isAccountDisabled,
@@ -25,30 +26,30 @@ import type { AddAdminInput } from "../validators/auth.validator";
 
 // ── Audit log helper ───────────────────────────────────────────────────────────
 // Add this after imports, before any exported function
-async function writeAuditLog(params: {
-  actorId: string;
-  actorEmail: string;
-  action: string;
-  targetType: string;
-  targetId: string;
-  metadata?: Record<string, unknown>;
-}) {
-  try {
-    await prisma.adminAuditLog.create({
-      data: {
-        actorId: params.actorId,
-        actorEmail: params.actorEmail,
-        action: params.action,
-        targetType: params.targetType,
-        targetId: params.targetId,
-        metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-      },
-    });
-  } catch (err) {
-    // Audit log failure should never crash the main operation
-    console.error("[AuditLog] Failed to write audit log:", err);
-  }
-}
+// async function writeAuditLog(params: {
+//   actorId: string;
+//   actorEmail: string;
+//   action: string;
+//   targetType: string;
+//   targetId: string;
+//   metadata?: Record<string, unknown>;
+// }) {
+//   try {
+//     await prisma.adminAuditLog.create({
+//       data: {
+//         actorId: params.actorId,
+//         actorEmail: params.actorEmail,
+//         action: params.action,
+//         targetType: params.targetType,
+//         targetId: params.targetId,
+//         metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+//       },
+//     });
+//   } catch (err) {
+//     // Audit log failure should never crash the main operation
+//     console.error("[AuditLog] Failed to write audit log:", err);
+//   }
+// }
 
 const VALID_ROLES = ["PARENT", "SCHOOL_ADMIN", "ADMIN"] as const;
 type RoleValue = (typeof VALID_ROLES)[number];
@@ -189,11 +190,19 @@ export const approveSchoolById = async (req: AuthRequest, res: Response) => {
 
   invalidateSchoolCache();
 
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "SCHOOL_APPROVE",
+    targetType: "SCHOOL",
+    targetId: id,
+    metadata: { schoolName: school.name },
+  });
+
   res.json({ message: "School approved successfully", school });
 };
 
 // PATCH /api/admin/schools/:id/reject
-
 export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
   const { reason } = req.body;
@@ -211,32 +220,16 @@ export const rejectSchoolById = async (req: AuthRequest, res: Response) => {
 
   invalidateSchoolCache();
 
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "SCHOOL_REJECT",
+    targetType: "SCHOOL",
+    targetId: id,
+    metadata: { reason: school.rejectionReason, schoolName: school.name },
+  });
+
   res.json({ message: "School rejected successfully", school });
-};
-
-// POST /api/admin/approve (legacy)
-export const approveSchool = async (req: AuthRequest, res: Response) => {
-  const { schoolId } = req.body;
-
-  if (!schoolId) {
-    throw Errors.BadRequest("schoolId is required");
-  }
-
-  req.params = { id: schoolId };
-  return approveSchoolById(req, res);
-};
-
-// POST /api/admin/reject (legacy)
-export const rejectSchool = async (req: AuthRequest, res: Response) => {
-  const { schoolId, reason } = req.body;
-
-  if (!schoolId) {
-    throw Errors.BadRequest("schoolId is required");
-  }
-
-  req.params = { id: schoolId };
-  req.body = { reason };
-  return rejectSchoolById(req, res);
 };
 
 // GET /api/admin/users
@@ -822,8 +815,88 @@ export const addAdminDirect = async (req: AuthRequest, res: Response) => {
     },
   });
 
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "ADMIN_CREATE",
+    targetType: "ADMIN",
+    targetId: admin.id,
+    metadata: { adminAccessLevel, targetEmail: email },
+  });
+
   res.status(201).json({
     message: "Admin account created successfully",
     user: admin,
   });
+};
+
+// PATCH /api/admin/schools/:id/visibility — §4
+// Body: { isVisible?: boolean } — agar diya hai to explicit set karta hai,
+// nahi diya to current value flip karta hai.
+export const toggleSchoolVisibility = async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id).trim();
+  const { isVisible } = req.body as { isVisible?: boolean };
+
+  const school = await prisma.school.findUnique({
+    where: { id },
+    select: { id: true, isVisible: true, name: true },
+  });
+
+  if (!school) {
+    throw Errors.NotFound("School");
+  }
+
+  const nextValue =
+    typeof isVisible === "boolean" ? isVisible : !school.isVisible;
+
+  const updated = await prisma.school.update({
+    where: { id },
+    data: { isVisible: nextValue },
+    select: { id: true, name: true, isVisible: true },
+  });
+
+  invalidateSchoolCache();
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "SCHOOL_VISIBILITY_TOGGLE",
+    targetType: "SCHOOL",
+    targetId: id,
+    metadata: { isVisible: updated.isVisible, schoolName: updated.name },
+  });
+
+  res.json({
+    message: updated.isVisible
+      ? "School listing is now visible to the public"
+      : "School listing has been hidden from public view",
+    school: updated,
+  });
+};
+
+
+
+// POST /api/admin/approve (legacy)
+export const approveSchool = async (req: AuthRequest, res: Response) => {
+  const { schoolId } = req.body;
+
+  if (!schoolId) {
+    throw Errors.BadRequest("schoolId is required");
+  }
+
+  req.params = { id: schoolId };
+  return approveSchoolById(req, res);
+};
+
+// POST /api/admin/reject (legacy)
+export const rejectSchool = async (req: AuthRequest, res: Response) => {
+  const { schoolId, reason } = req.body;
+
+  if (!schoolId) {
+    throw Errors.BadRequest("schoolId is required");
+  }
+
+  req.params = { id: schoolId };
+  req.body = { reason };
+  return rejectSchoolById(req, res);
 };

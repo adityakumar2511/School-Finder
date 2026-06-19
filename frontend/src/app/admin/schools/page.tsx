@@ -121,7 +121,7 @@ async function SchoolsTable({
                     <TableCell>{school.board.replace("_", " ")}</TableCell>
                     <TableCell>{school.owner.email}</TableCell>
                     <TableCell>
-                      <SchoolStatusBadge status={school.status} />
+                     <SchoolStatusBadge status={school.status} isVisible={school.isVisible} />
                     </TableCell>
                     <TableCell>{formatDate(school.createdAt)}</TableCell>
                     <TableCell>

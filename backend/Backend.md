@@ -1,6 +1,6 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 17, 2026
+> Last updated: June 19, 2026
 
 > **Stack:** Express.js 5 · TypeScript · Prisma 5 · PostgreSQL (Neon) · JWT · Brevo · Fast2SMS  
 > **Default port:** `4000` · **Repository path:** `backend/`  
@@ -59,7 +59,7 @@ Express API (port 4000)
 | Auth | JWT (HS256), role-separated login, email OTP reset, phone OTP (SMS) |
 | Parent | Profile, favourites, inquiries |
 | School admin | Own school CRUD (scalar + related models), gallery URLs, inquiry status |
-| Platform admin | Moderation, users, stats, direct school/parent/admin creation |
+| Platform admin | Moderation, users, stats, direct school/parent/admin creation, user delete, school visibility toggle |
 
 ---
 
@@ -108,20 +108,20 @@ backend/
 │   ├── controllers/
 │   │   ├── auth.controller.ts
 │   │   ├── schools.controller.ts   # Updated: transaction-based sync helpers
-│   │   ├── admin.controller.ts
+│   │   ├── admin.controller.ts     # Updated: deleteUserDirect, toggleSchoolVisibility
 │   │   ├── inquiry.controller.ts
 │   │   ├── favourite.controller.ts
 │   │   └── parent.controller.ts
 │   ├── middleware/
 │   │   ├── auth.ts             # JWT verification + blacklist
-│   │   ├── roleCheck.ts        # requireRole() + requireAdminLevel()
+│   │   ├── roleCheck.ts        # requireRole() + requireAdminLevel() + blockIfSuperAdminTarget()
 │   │   ├── security.ts         # Helmet, CORS, rate limiters
 │   │   ├── validate.ts         # Zod validation + sanitize
 │   │   ├── bruteForce.ts       # Login throttling
 │   │   └── errorHandler.ts     # Global error pipeline
 │   ├── validators/
-│   │   ├── auth.validator.ts
-│   │   └── school.validator.ts     # Updated: all 22-section fields + nested schemas
+│   │   ├── auth.validator.ts   # Updated: PARENT→SCHOOL_ADMIN blocked; isSuperAdmin stripped
+│   │   └── school.validator.ts # Updated: all 22-section fields + nested schemas
 │   ├── lib/
 │   │   ├── prisma.ts           # DB client + SSL pool
 │   │   ├── cache.ts            # In-memory TTL cache
@@ -130,14 +130,15 @@ backend/
 │   │   ├── tokenBlacklist.ts   # JWT jti blacklist
 │   │   ├── favourites.ts       # Shared favourite logic
 │   │   ├── pagination.ts       # Page/limit helpers
-│   │   ├── queries/schools.ts  # School selects and filters
+│   │   ├── queries/schools.ts  # School selects and filters; isVisible filter added
 │   │   ├── sanitize.ts         # Input sanitization
 │   │   └── account-status.ts   # Disabled account sentinel
 │   ├── utils/
 │   │   ├── AppError.ts         # Typed error factory
 │   │   └── asyncHandler.ts     # Async route wrapper
 │   └── scripts/
-│       └── seed-admin.ts       # Initial admin seeder
+│       ├── seed-admin.ts       # Initial admin seeder
+│       └── seed-super-admin.ts # One-time super admin flag setter
 ├── render.yaml                 # Render deployment blueprint
 ├── .env.example
 └── package.json
@@ -185,11 +186,11 @@ Controller handler            Business logic via asyncHandler
 | Issuer | `schoolfinder-api` |
 | Secret | `JWT_SECRET` (must match frontend) |
 | Expiry | `JWT_EXPIRES_IN` (default `7d`) |
-| Payload | `id`, `role`, `email`, `jti` (UUID per token), `adminAccessLevel` (ADMIN role only) |
+| Payload | `id`, `role`, `email`, `jti` (UUID per token), `adminAccessLevel` (ADMIN role only), `isSuperAdmin` (ADMIN role only) |
 | Header | `Authorization: Bearer <token>` |
 | Logout | `jti` added to in-memory blacklist |
 
-> `adminAccessLevel` is included in the JWT payload at login for `ADMIN` role users only (`null` for PARENT/SCHOOL_ADMIN). Frontend reads this to gate UI elements without extra API calls.
+> `adminAccessLevel` and `isSuperAdmin` are included in the JWT payload at login for `ADMIN` role users only (`null`/`false` for PARENT/SCHOOL_ADMIN). Frontend reads these to gate UI elements without extra API calls. **Backend always re-checks DB for super admin status — JWT value is for UI convenience only.**
 
 ### Auth Flows
 
@@ -197,7 +198,7 @@ Controller handler            Business logic via asyncHandler
 |------|----------|-------|
 | Register parent | `POST /api/auth/register-parent` | Returns JWT |
 | Register school | `POST /api/auth/register-school` | User + `PENDING` school, returns JWT |
-| Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard; includes `adminAccessLevel` in JWT for ADMIN |
+| Login | `POST /api/auth/login` | Optional `expectedRole`; brute-force guard; includes `adminAccessLevel` + `isSuperAdmin` in JWT for ADMIN |
 | Logout | `POST /api/auth/logout` | Blacklists `jti` |
 | Forgot password | `POST /api/auth/forgot-password` | Email OTP via Brevo; generic 200 on no match |
 | Verify reset OTP | `POST /api/auth/verify-reset-otp` | Sets `otpVerified` flag |
@@ -213,11 +214,27 @@ Roles: `PARENT` · `SCHOOL_ADMIN` · `ADMIN`
 
 Applied via `auth` middleware + `requireRole()` on protected routes.
 
-Admin-level mutations are further gated by `requireAdminLevel()` — see [Middleware](#8-middleware) and [Phase E route map](#admin-access-level-route-map).
+Admin-level mutations are further gated by `requireAdminLevel()` — see [Middleware](#8-middleware) and the route map below.
+
+### Super Admin
+
+- Exactly **one** super admin account per system; created only via `seed-super-admin.ts` — never via the add-admin API.
+- `User.isSuperAdmin Boolean @default(false)` — enforced unique by a Postgres partial index (`WHERE "isSuperAdmin" = true`).
+- `addAdminSchema` and `addAdminDirect` controller explicitly strip/reject any `isSuperAdmin` field in request body.
+- `blockIfSuperAdminTarget(targetUserId)` guard (in `roleCheck.ts`) returns `403` when any mutation targets the super admin — used in `deleteUserDirect`, `updateUserRole`, `updateUserStatus`, and access-level changes. Backend re-checks DB; JWT `isSuperAdmin` is never trusted for enforcement.
+- Super admin's actions are audit-logged like all other admins.
 
 ### Account Disable
 
-Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login returns 403.
+Disabled users have `phone = "__DISABLED__"` (`lib/account-status.ts`). Login returns 403. The disabled-check is applied to **all roles** in the `login` controller — not just PARENT. Bug fix (June 2026): confirmed `updateUserStatus` correctly sets the sentinel in DB and `login` now checks it across all role branches.
+
+### Role Transition Rules
+
+| Transition | Allowed | Enforcement |
+|---|---|---|
+| `SCHOOL_ADMIN → PARENT` | ❌ Blocked | Validator + controller |
+| `PARENT → SCHOOL_ADMIN` | ❌ Blocked | Validator + controller |
+| Any → Super Admin target | ❌ Blocked | `blockIfSuperAdminTarget` guard |
 
 ### Admin Access Level Route Map
 
@@ -226,8 +243,8 @@ All routes below already require `requireRole(ADMIN)`. `requireAdminLevel` is ap
 | Minimum Level | Routes |
 |---|---|
 | `READ_ONLY` | `GET /stats`, `GET /schools`, `GET /users`, `GET /inquiries`, `GET /check-owner` |
-| `READ_WRITE` | `PATCH /schools/:id/approve`, `PATCH /schools/:id/reject`, `POST /add-school`, `POST /add-parent` |
-| `FULL_ACCESS` | `PATCH /schools/:id` (edit), `DELETE /schools/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/status`, `POST /add-admin` |
+| `READ_WRITE` | `PATCH /schools/:id/approve`, `PATCH /schools/:id/reject`, `POST /add-school`, `POST /add-parent`, `PATCH /schools/:id/visibility` |
+| `FULL_ACCESS` | `PATCH /schools/:id` (edit), `DELETE /schools/:id`, `DELETE /users/:id`, `PATCH /users/:id/role`, `PATCH /users/:id/status`, `POST /add-admin` |
 
 > Frontend gating is UX-only — `requireAdminLevel` middleware is the actual enforcement.
 
@@ -263,13 +280,13 @@ All routes below already require `requireRole(ADMIN)`. `requireAdminLevel` is ap
 
 | Method | Path | Auth | Handler |
 |--------|------|------|---------|
-| GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status |
+| GET | `/` | Public | `getSchools` — filters: city, board, schoolType, medium, search, status; always includes `isVisible: true` for public calls |
 | GET | `/search` | Public | `searchSchools` — no frontend caller yet, kept for future search feature |
-| GET | `/cities` | Public | `getCities` — distinct approved cities; accepts optional `?state=` to filter by state (cached, cache key varies by state) |
+| GET | `/cities` | Public | `getCities` — distinct approved **and visible** cities; accepts optional `?state=` (cached, cache key varies by state) |
 | GET | `/my-school` | SCHOOL_ADMIN | `getMySchool` — includes all related models |
 | POST | `/my-school/images` | SCHOOL_ADMIN | `addSchoolImage` — JSON `{ url, caption?, category? }` |
 | DELETE | `/images/:id` | SCHOOL_ADMIN | `deleteSchoolImage` |
-| GET | `/:slug` | Public | `getSchool` — cached detail, includes all related models |
+| GET | `/:slug` | Public | `getSchool` — cached detail; only serves schools where `isVisible: true` |
 | POST | `/` | SCHOOL_ADMIN | `createSchool` — **superseded by register-school** |
 | PATCH | `/:id` | auth | `updateSchool` — owner or ADMIN; runs in Prisma transaction |
 | DELETE | `/:id` | ADMIN | `deleteSchool` |
@@ -279,21 +296,23 @@ All routes below already require `requireRole(ADMIN)`. `requireAdminLevel` is ap
 | Method | Path | Min Level | Handler |
 |--------|------|-----------|---------|
 | GET | `/stats` | READ_ONLY | `getStats` |
-| GET | `/schools` | READ_ONLY | `getAdminSchools` — paginated; query: `page`, `limit`, `status`, `search`, `state`, `city` |
-| GET | `/check-owner` | READ_ONLY | `checkOwnerEmail` — query: `email`, optional `role` (e.g. `?role=PARENT` for parent duplicate check) |
+| GET | `/schools` | READ_ONLY | `getAdminSchools` — paginated; query: `page`, `limit`, `status`, `search`, `state`, `city`; returns all schools regardless of `isVisible` |
+| GET | `/check-owner` | READ_ONLY | `checkOwnerEmail` — query: `email`, optional `role` (e.g. `?role=PARENT`) |
 | GET | `/users` | READ_ONLY | `getAdminUsers` — paginated; query: `role` (required: PARENT \| SCHOOL_ADMIN \| ADMIN), `search`, `page`, `limit` |
 | GET | `/inquiries` | READ_ONLY | `getAdminInquiries` — paginated; optional `?schoolId=` to filter per school |
 | PATCH | `/schools/:id/approve` | READ_WRITE | `approveSchoolById` |
 | PATCH | `/schools/:id/reject` | READ_WRITE | `rejectSchoolById` |
+| PATCH | `/schools/:id/visibility` | READ_WRITE | `toggleSchoolVisibility` — flips `isVisible`, invalidates cache, writes audit log |
 | POST | `/approve` | READ_WRITE | `approveSchool` — **legacy**, delegates to PATCH |
 | POST | `/reject` | READ_WRITE | `rejectSchool` — **legacy**, delegates to PATCH |
 | POST | `/add-school` | READ_WRITE | `addSchoolDirect` — creates APPROVED school |
 | POST | `/add-parent` | READ_WRITE | `addParentDirect` — creates PARENT user directly |
-| POST | `/add-admin` | FULL_ACCESS | `addAdminDirect` — creates ADMIN user with chosen `adminAccessLevel` |
+| POST | `/add-admin` | FULL_ACCESS | `addAdminDirect` — creates ADMIN user with chosen `adminAccessLevel`; `isSuperAdmin` field stripped/rejected |
 | PATCH | `/schools/:id` | FULL_ACCESS | proxied via frontend BFF; handled by `updateSchool` in `schools.controller.ts` |
 | DELETE | `/schools/:id` | FULL_ACCESS | proxied via frontend BFF; handled by `deleteSchool` in `schools.controller.ts` |
-| PATCH | `/users/:id/role` | FULL_ACCESS | `updateUserRole` — SCHOOL_ADMIN→PARENT transition blocked |
-| PATCH | `/users/:id/status` | FULL_ACCESS | `updateUserStatus` |
+| DELETE | `/users/:id` | FULL_ACCESS | `deleteUserDirect` — blocks super admin target; cascades School for SCHOOL_ADMIN; writes audit log |
+| PATCH | `/users/:id/role` | FULL_ACCESS | `updateUserRole` — both SCHOOL_ADMIN↔PARENT transitions blocked; super admin target blocked |
+| PATCH | `/users/:id/status` | FULL_ACCESS | `updateUserStatus` — super admin target blocked |
 
 ### `/api/inquiries`
 
@@ -333,9 +352,9 @@ Router-level: `auth` + `requireRole(PARENT)`. Sets `Deprecation: Use /api/parent
 
 | Controller | Handlers | Responsibility |
 |------------|----------|----------------|
-| `auth.controller.ts` | 12 | Registration, login (includes `adminAccessLevel` in JWT for ADMIN), OTP reset, phone OTP, logout, profile, Google sync |
-| `schools.controller.ts` | 10 | Public list/search/detail, school admin CRUD, image URLs, admin delete/edit |
-| `admin.controller.ts` | 15 | Stats, moderation, user management, direct add-school/parent/admin, owner check, school/inquiry filtering |
+| `auth.controller.ts` | 12 | Registration, login (includes `adminAccessLevel` + `isSuperAdmin` in JWT for ADMIN), OTP reset, phone OTP, logout, profile, Google sync |
+| `schools.controller.ts` | 10 | Public list/search/detail (filtered by `isVisible`), school admin CRUD, image URLs, admin delete/edit |
+| `admin.controller.ts` | 17 | Stats, moderation, user management, direct add-school/parent/admin, owner check, school/inquiry filtering, `deleteUserDirect`, `toggleSchoolVisibility` |
 | `inquiry.controller.ts` | 4 | Create, list (parent/school), status updates |
 | `parent.controller.ts` | 6 | Profile, favourites (rich shape), inquiries |
 | `favourite.controller.ts` | 3 | Legacy favourites with deprecation header |
@@ -363,13 +382,16 @@ Each array is only synced if present in the request body (`!== undefined`), allo
 
 | Handler | Notes |
 |---------|-------|
-| `getAdminSchools` | Accepts `state` + `city` query params added to Prisma `where` clause alongside existing `status` + `search` filters |
+| `getAdminSchools` | Accepts `state` + `city` query params; returns schools regardless of `isVisible` (admin sees all) |
 | `getAdminUsers` | Requires `role` query param (PARENT \| SCHOOL_ADMIN \| ADMIN); returns paginated list per tab |
-| `getAdminInquiries` | Accepts optional `?schoolId=` query param; filters `where` clause if present |
+| `getAdminInquiries` | Accepts optional `?schoolId=` query param |
 | `addParentDirect` | Creates `User` with role `PARENT` and hashed password; validates email uniqueness |
-| `addAdminDirect` | Creates `User` with role `ADMIN` + chosen `adminAccessLevel`; `FULL_ACCESS` only |
-| `updateUserRole` | SCHOOL_ADMIN→PARENT transition blocked at validator and controller level |
-| `checkOwnerEmail` | Accepts optional `?role=PARENT` param for parent duplicate check (in addition to school owner check) |
+| `addAdminDirect` | Creates `User` with role `ADMIN` + chosen `adminAccessLevel`; strips `isSuperAdmin` from body |
+| `updateUserRole` | Both `SCHOOL_ADMIN→PARENT` and `PARENT→SCHOOL_ADMIN` transitions blocked; `blockIfSuperAdminTarget` called first |
+| `updateUserStatus` | `blockIfSuperAdminTarget` called first |
+| `deleteUserDirect` | Calls `blockIfSuperAdminTarget`; if `SCHOOL_ADMIN`: `prisma.$transaction` — delete owned `School` then `User`; if `PARENT`/`ADMIN`: delete `User` directly; writes `AdminAuditLog` entry |
+| `toggleSchoolVisibility` | Flips `School.isVisible`; calls `invalidateSchoolCache()`; writes `AdminAuditLog` entry |
+| `checkOwnerEmail` | Accepts optional `?role=PARENT` param |
 
 ---
 
@@ -386,6 +408,7 @@ Each array is only synced if present in the request body (`!== undefined`), allo
 | `auth` | `auth.ts` | JWT verify, issuer check, jti blacklist |
 | `requireRole` | `roleCheck.ts` | Role gate after auth |
 | `requireAdminLevel` | `roleCheck.ts` | Admin permission tier gate — READ_ONLY \| READ_WRITE \| FULL_ACCESS; applied after `requireRole(ADMIN)` on admin routes |
+| `blockIfSuperAdminTarget` | `roleCheck.ts` | 403 if target user has `isSuperAdmin = true`; re-checks DB, never trusts JWT |
 | `validate` | `validate.ts` | Zod schema + body sanitize |
 | `bruteForceGuard` | `bruteForce.ts` | 5 failures / 15 min per IP+email |
 | `errorHandler` | `errorHandler.ts` | Standardized error responses |
@@ -408,10 +431,26 @@ export const requireAdminLevel = (...levels: AdminAccessLevel[]) =>
   });
 ```
 
+### `blockIfSuperAdminTarget` Pattern
+
+```typescript
+// middleware/roleCheck.ts
+export const blockIfSuperAdminTarget = (targetUserId: string) =>
+  asyncHandler(async (req, res, next) => {
+    const target = await prisma.user.findUnique({ where: { id: targetUserId }, select: { isSuperAdmin: true } });
+    if (target?.isSuperAdmin) {
+      throw AppError.forbidden('Cannot modify the super admin account');
+    }
+    next();
+  });
+```
+
 Usage in `admin.routes.ts`:
 ```typescript
-router.post('/add-admin', requireAdminLevel('FULL_ACCESS'), validate(addAdminSchema), addAdminDirect);
-router.post('/add-parent', requireAdminLevel('READ_WRITE', 'FULL_ACCESS'), validate(addParentSchema), addParentDirect);
+router.delete('/users/:id', requireAdminLevel('FULL_ACCESS'), deleteUserDirect);
+router.patch('/users/:id/role', requireAdminLevel('FULL_ACCESS'), validate(updateUserRoleSchema), updateUserRole);
+router.patch('/users/:id/status', requireAdminLevel('FULL_ACCESS'), validate(updateUserStatusSchema), updateUserStatus);
+router.patch('/schools/:id/visibility', requireAdminLevel('READ_WRITE', 'FULL_ACCESS'), toggleSchoolVisibility);
 ```
 
 ---
@@ -422,7 +461,7 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 
 | Validator | Schemas |
 |-----------|---------|
-| `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp, addParentSchema (admin add-parent), addAdminSchema (admin add-admin); role transition guard blocks SCHOOL_ADMIN→PARENT in updateUserRole schema |
+| `auth.validator.ts` | registerParent, registerSchool, login, forgotPassword, verifyResetOtp, resetPassword, sendOtp, verifyOtp, addParentSchema, addAdminSchema (strips `isSuperAdmin`); role transition guard blocks both `SCHOOL_ADMIN→PARENT` and `PARENT→SCHOOL_ADMIN` in updateUserRole schema |
 | `school.validator.ts` | createSchool, updateSchool (see field inventory below) |
 
 ### `school.validator.ts` — Field Inventory
@@ -496,14 +535,13 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 > ```sql
 > UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
 > ```
-> This must run before `requireAdminLevel` middleware goes live — otherwise all existing admins are locked out.
 
 ### Models
 
 | Model | Purpose | Notes |
 |-------|---------|-------|
-| `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; `adminAccessLevel AdminAccessLevel?` (null for PARENT/SCHOOL_ADMIN); legacy `resetToken*` unused |
-| `School` | Listing — scalar fields for all 22 profile sections | See field inventory below |
+| `User` | Auth, profile, OTP fields | `otpCode`, `otpExpiry`, `otpVerified`; `adminAccessLevel AdminAccessLevel?` (null for PARENT/SCHOOL_ADMIN); `isSuperAdmin Boolean @default(false)` — partial unique index ensures only one true row; legacy `resetToken*` unused |
+| `School` | Listing — scalar fields for all 22 profile sections | `isVisible Boolean @default(true)` added; see field inventory below |
 | `SchoolImage` | Gallery URLs | `category` field added; cascade delete with school |
 | `BoardResult` | Per-year board exam results | Section 13; cascade delete |
 | `Scholarship` | Scholarship listings | Section 14; cascade delete |
@@ -513,16 +551,16 @@ Validation uses **Zod schemas** in `src/validators/` applied via `validate()` mi
 | `Facility` / `SchoolFacility` | M:N facilities | **Read-only** — no write API |
 | `Inquiry` | Parent → school messages | Status workflow |
 | `Favourite` | Parent saved schools | Unique `[parentId, schoolId]` |
+| `AdminAuditLog` | Immutable action log | `id, actorId, actorEmail, action, targetType, targetId, metadata, createdAt` — written on: admin create, user delete, role change, status change, school delete, access-level change, visibility toggle |
 | `Account`, `Session`, `VerificationToken` | NextAuth-shaped | **Not used by backend routes** |
 
 ### School Model — Scalar Field Inventory
-
-The `School` model carries scalar fields for all sections that don't need a separate table. Fields are grouped by section for readability; all are optional except core identity fields.
 
 | Group | Fields |
 |-------|--------|
 | Core (required) | `name`, `slug`, `address`, `city`, `state`, `board`, `schoolType`, `medium`, `classesFrom`, `classesTo`, `phone`, `status`, `ownerId` |
 | Core (optional) | `description`, `pincode`, `email`, `website`, `logoUrl`, `coverImageUrl`, `totalStudents`, `rejectionReason` |
+| Visibility | `isVisible Boolean @default(true)` — toggled by admin; public queries always filter `isVisible: true` |
 | Legacy fees | `admissionFee`, `tuitionFeeMonthly`, `totalAnnualFee`, `transportFee`, `hostelFee` |
 | Basic Info extras | `tagline`, `establishedYear`, `managementType`, `schoolCategory`, `schoolFormat`, `affiliationNumber`, `startTime`, `endTime`, `workingDays` |
 | About | `vision`, `mission`, `principalMessage` |
@@ -541,6 +579,15 @@ The `School` model carries scalar fields for all sections that don't need a sepa
 | Contact extras | `whatsapp`, `mapUrl`, `facebook`, `instagram`, `youtube`, `linkedin`, `admissionCoordinatorName`, `admissionPhone`, `admissionEmail` |
 
 ### Related Models — Field Detail
+
+**`AdminAuditLog`** (new)
+```
+id, actorId, actorEmail, action (string e.g. "USER_DELETE"), targetType ("USER"|"SCHOOL"),
+targetId, metadata (Json?), createdAt
+@@index([actorId])
+@@index([targetId])
+@@index([createdAt])
+```
 
 **`SchoolCustomField`**
 ```
@@ -579,25 +626,29 @@ id, schoolId, url, caption?, category?    ← category is new
 
 ### Indexes
 
-- **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`
-- **User:** `[role]`, `[adminAccessLevel]` ← added for admin user list queries
-- **Inquiry:** `[schoolId, status]`, `[schoolId, createdAt]` ← added for per-school inquiry filtering, `[parentId]`
+- **School:** `[status, createdAt]`, `[city, status]`, `[board, status]`, `[ownerId]`, `[isVisible, status]` ← added for public visibility filter
+- **User:** `[role]`, `[adminAccessLevel]`; partial unique index `WHERE "isSuperAdmin" = true`
+- **Inquiry:** `[schoolId, status]`, `[schoolId, createdAt]`, `[parentId]`
 - **Favourite:** `[parentId]`, unique `[parentId, schoolId]`
 - **SchoolCustomField:** `[schoolId, section]`
 - **BoardResult, Scholarship, SchoolFAQ, SchoolDownload:** `[schoolId]`
+- **AdminAuditLog:** `[actorId]`, `[targetId]`, `[createdAt]`
 
-### Migration
-
-After replacing `schema.prisma`, run from `backend/`:
+### Migrations
 
 ```bash
-npx prisma migrate dev --name add_admin_access_level
-npx prisma generate   # runs automatically after migrate, but explicit is safer
-```
+# Run from backend/
+npx prisma migrate dev --name add_super_admin_visibility_audit
+npx prisma generate
 
-**Post-migration required:**
-```sql
+# Post-migration backfill
 UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
+
+# Partial unique index for super admin (raw SQL migration)
+CREATE UNIQUE INDEX "User_isSuperAdmin_unique" ON "User" ("isSuperAdmin") WHERE "isSuperAdmin" = true;
+
+# Seed super admin (one-time)
+npm run seed:super-admin
 ```
 
 ### Partial Implementation Notes
@@ -607,6 +658,7 @@ UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
 - **`Facility` model:** Readable via relations but no API to manage facilities
 - **Reviews (Section 21):** Read-only on frontend, no backend model — system generated from `Inquiry` data or future review model
 - **`adminAccessLevel`:** `null` for PARENT and SCHOOL_ADMIN users; only populated for ADMIN role
+- **`isSuperAdmin`:** `false` for all users except the single super admin row; never set via API
 
 ---
 
@@ -621,7 +673,7 @@ UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
 | `tokenBlacklist.ts` | In-memory jti blacklist (max 10k, 10-min cleanup interval) |
 | `favourites.ts` | Shared add/remove/list for both favourite APIs |
 | `pagination.ts` | Page/limit parsing and response helpers |
-| `queries/schools.ts` | Select shapes, filters, cursor pagination; updated to accept `state`/`city` in filter builder |
+| `queries/schools.ts` | Select shapes, filters, cursor pagination; `isVisible: true` added to public filter builder; accepts `state`/`city` params |
 | `sanitize.ts` | HTML stripping from request bodies |
 | `account-status.ts` | Disabled account detection (`phone = "__DISABLED__"`) |
 
@@ -634,17 +686,17 @@ UPDATE "User" SET "adminAccessLevel" = 'FULL_ACCESS' WHERE role = 'ADMIN';
 | Namespace | TTL | Invalidated On |
 |-----------|-----|----------------|
 | School list/search | 60s | School mutations |
-| School cities | 60s | School mutations; cache key varies by `state` param (`sf:schools:cities:<state>\|all`) |
-| School detail | 300s | School update/delete |
+| School cities | 60s | School mutations + visibility toggle; cache key varies by `state` param (`sf:schools:cities:<state>\|all`) |
+| School detail | 300s | School update/delete/visibility change |
 | Admin stats | 30s | School approve/reject/create |
 
 **Pattern:** `withCache(key, ttl, fetchFn)` + `buildCacheKey(namespace, parts)`
 
 **Invalidation:** `invalidateSchoolCache()` clears `sf:schools:*`, `sf:admin:stats*`, legacy `schools:cities`
 
-**Note:** `updateSchool` runs in a transaction and calls `invalidateSchoolCache()` after commit — related model changes (board results, FAQs, etc.) correctly bust the cache.
+**Note:** `updateSchool` and `toggleSchoolVisibility` both call `invalidateSchoolCache()` after commit.
 
-**Not cached:** Auth, inquiries, favourites, user lists.
+**Not cached:** Auth, inquiries, favourites, user lists, audit logs.
 
 ---
 
@@ -685,6 +737,8 @@ Standard error envelope:
 | Config warnings | warn |
 | Process hooks | unhandledRejection, uncaughtException (exit in prod) |
 
+> Admin actions (user delete, role/status change, visibility toggle, school delete) are recorded in `AdminAuditLog` DB table — not just console logs.
+
 ---
 
 ## 15. Background Jobs
@@ -703,7 +757,7 @@ Only periodic task: `tokenBlacklist` cleanup via `setInterval` every 10 minutes.
 - Backend stores URLs in `School.logoUrl`, `School.coverImageUrl`, and `SchoolImage.url`
 - `addSchoolImage` expects `{ url, caption?, category? }` in request body
 - `updateSchool` accepts `images[]` array in payload; synced via `syncGalleryImages` in transaction
-- Cloudinary credentials live entirely on the frontend — the backend has no Cloudinary env vars and never reads them
+- Cloudinary credentials live entirely on the frontend — the backend has no Cloudinary env vars
 
 ---
 
@@ -723,10 +777,11 @@ From `backend/.env.example`. Validated by `validateStartupEnv()` in `config/prod
 | `EMAIL_FROM` | Yes in production | Verified Brevo sender |
 | `FAST2SMS_API_KEY` | Optional | SMS OTP; dev logs OTP if unset |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seeder only | `npm run seed:admin` |
+| `SUPER_ADMIN_EMAIL` | Seeder only | `npm run seed:super-admin` |
 | `BCRYPT_ROUNDS` | No | Default `12` |
 | `TRUST_PROXY` | No | Auto-enabled when `NODE_ENV=production` |
 
-**Removed (June 2026 cleanup):** `RESEND_API_KEY` (was validated at startup but never used by the mailer — mismatch fixed) and `CLOUDINARY_*` (not read by backend code; belongs in the frontend's `.env.example`).
+**Removed (June 2026 cleanup):** `RESEND_API_KEY` and `CLOUDINARY_*`.
 
 ---
 
@@ -743,6 +798,7 @@ From `backend/.env.example`. Validated by `validateStartupEnv()` in `config/prod
 | `migrate:deploy` | `prisma migrate deploy` |
 | `migrate:dev` | `prisma migrate dev` |
 | `seed:admin` | `ts-node src/scripts/seed-admin.ts` |
+| `seed:super-admin` | `ts-node src/scripts/seed-super-admin.ts` |
 
 ### Render (`render.yaml`)
 

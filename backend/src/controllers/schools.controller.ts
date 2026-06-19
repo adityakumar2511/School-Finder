@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
+import { writeAuditLog } from "../lib/auditLog";
 import { AuthRequest } from "../middleware/auth";
 import { Errors } from "../utils/AppError";
+
 import type {
   BoardResultInput,
   CreateSchoolInput,
@@ -408,7 +410,7 @@ export const searchSchools = async (req: Request, res: Response) => {
   }
 
   const searchWhere = buildSchoolSearchWhere(query);
-  const where = { status: "APPROVED" as const, ...(searchWhere ?? {}) };
+  const where = { status: "APPROVED" as const, isVisible: true, ...(searchWhere ?? {}) };
 
   const cacheKey = buildCacheKey("schools:search", { query, limit });
   const schools = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
@@ -469,7 +471,7 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
 
   if (!school) throw Errors.NotFound("School");
 
-  if (school.status !== "APPROVED") {
+   if (school.status !== "APPROVED" || !school.isVisible) {
     const userId = req.user?.id;
     const userRole = req.user?.role;
     if (!userId || (school.ownerId !== userId && userRole !== "ADMIN")) {
@@ -590,9 +592,24 @@ export const deleteSchool = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
   if (!id) throw Errors.BadRequest("Invalid school identifier");
 
+  const school = await prisma.school.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+
   await prisma.school.delete({ where: { id } });
 
   invalidateSchoolCache();
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "SCHOOL_DELETE",
+    targetType: "SCHOOL",
+    targetId: id,
+    metadata: { schoolName: school?.name },
+  });
+
   res.json({ message: "School deleted successfully" });
 };
 
@@ -652,7 +669,7 @@ export const getCities = async (_req: Request, res: Response) => {
 
   const cities = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
     prisma.school.findMany({
-      where: { status: "APPROVED" },
+      where: { status: "APPROVED", isVisible: true },
       select: { city: true },
       distinct: ["city"],
       orderBy: { city: "asc" },

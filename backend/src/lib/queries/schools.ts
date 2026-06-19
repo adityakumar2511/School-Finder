@@ -168,6 +168,7 @@ export function buildSchoolListWhere(filters: {
   const where: Prisma.SchoolWhereInput = {
     status:
       (filters.status as Prisma.EnumSchoolStatusFilter["equals"]) || "APPROVED",
+      isVisible: true,
   };
 
   const searchWhere = buildSchoolSearchWhere(filters.search);
@@ -248,6 +249,7 @@ export const schoolDetailSelect = {
   name: true,
   slug: true,
   status: true,
+  isVisible: true,
   ownerId: true,
 
   // Core
@@ -431,6 +433,7 @@ export const adminSchoolListSelect = {
   website: true,
   description: true,
   status: true,
+  isVisible: true,
   createdAt: true,
   rejectionReason: true,
   totalStudents: true,

@@ -113,6 +113,7 @@ export type AdminSchoolRow = {
   website: string | null;
   description: string | null;
   status: SchoolStatus;
+  isVisible: boolean;          // ← naya — §4
   createdAt: string;
   rejectionReason: string | null;
   totalStudents: number | null;

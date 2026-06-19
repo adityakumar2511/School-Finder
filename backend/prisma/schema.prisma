@@ -140,6 +140,7 @@ model School {
   coverImageUrl String?
   rejectionReason String?    @db.Text
   status        SchoolStatus @default(PENDING)
+  isVisible     Boolean      @default(true) 
 
   // Fee fields (existing — kept for backward compat)
   admissionFee      Float?
@@ -266,6 +267,7 @@ model School {
   @@index([city, status])
   @@index([board, status])
   @@index([ownerId])
+   @@index([status, isVisible]) 
 }
 
 // ── Section 18: Gallery ───────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Trash2,
@@ -41,6 +42,7 @@ type SchoolDetail = {
   website: string | null;
   description: string | null;
   status: SchoolStatus;
+  isVisible: boolean;          // ← naya — §4
   rejectionReason: string | null;
   totalStudents: number | null;
   establishedYear: number | null;
@@ -68,7 +70,10 @@ export default function SchoolModerationActions({
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [loading, setLoading] = useState<"approve" | "reject" | "delete" | null>(null);
+  const [loading, setLoading] = useState<
+  "approve" | "reject" | "delete" | "visibility" | null
+>(null);
+  const [isVisible, setIsVisible] = useState(school.isVisible);
 
   const canWrite =
     viewerAccessLevel === "READ_WRITE" || viewerAccessLevel === "FULL_ACCESS";
@@ -104,6 +109,29 @@ export default function SchoolModerationActions({
       await fetch(`/api/admin/schools/${id}`, { method: "DELETE" });
       setDeleteOpen(false);
       router.refresh();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  // §4 — toggle public listing visibility, independent of approve/reject status
+  async function handleToggleVisibility() {
+    const next = !isVisible;
+    setLoading("visibility");
+    setIsVisible(next); // optimistic
+    try {
+      const res = await fetch(`/api/admin/schools/${school.id}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isVisible: next }),
+      });
+      if (!res.ok) {
+        setIsVisible(!next); // revert on failure
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setIsVisible(!next);
     } finally {
       setLoading(null);
     }
@@ -150,6 +178,35 @@ export default function SchoolModerationActions({
             Inquiries
           </Link>
         </Button>
+
+        {/* List/Unlist — §4, READ_WRITE+, independent of approve/reject */}
+        {canWrite && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading !== null}
+            onClick={handleToggleVisibility}
+            className={
+              isVisible
+                ? "h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
+                : "h-8 px-3 font-heading text-xs rounded-lg border-amber-200 text-amber-700 hover:bg-amber-50"
+            }
+          >
+            {loading === "visibility" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isVisible ? (
+              <>
+                <EyeOff className="h-3.5 w-3.5 mr-1" />
+                Unlist
+              </>
+            ) : (
+              <>
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                List
+              </>
+            )}
+          </Button>
+        )}
 
         {/* Approve / Reject — READ_WRITE+, only for PENDING */}
         {currentStatus === "PENDING" && canWrite && (

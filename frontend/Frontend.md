@@ -1,6 +1,6 @@
 # SchoolSetu — Frontend Documentation
 
-> Last updated: June 17, 2026
+> Last updated: June 19, 2026
 
 > **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
 > **Default port:** `3000` · **Repository path:** `frontend/`  
@@ -152,6 +152,8 @@ frontend/
     │   │   │   │   │   │   └── route.ts
     │   │   │   │   │   ├── reject/
     │   │   │   │   │   │   └── route.ts
+    │   │   │   │   │   ├── visibility/
+    │   │   │   │   │   │   └── route.ts    ← PATCH — toggle isVisible
     │   │   │   │   │   └── route.ts        ← DELETE + PATCH handlers
     │   │   │   │   └── route.ts
     │   │   │   ├── session/
@@ -160,8 +162,9 @@ frontend/
     │   │   │       └── [id]/
     │   │   │           ├── role/
     │   │   │           │   └── route.ts
-    │   │   │           └── status/
-    │   │   │               └── route.ts
+    │   │   │           ├── status/
+    │   │   │           │   └── route.ts
+    │   │   │           └── route.ts        ← DELETE handler
     │   │   ├── auth/
     │   │   │   ├── [...nextauth]/
     │   │   │   │   └── route.ts
@@ -341,22 +344,22 @@ frontend/
     │   └── admin/                           # ADMIN role only
     │       ├── moderation/
     │       │   ├── SchoolDetailModal.tsx
-    │       │   ├── SchoolModerationActions.tsx  ← Edit, Delete, View Inquiries buttons added
-    │       │   └── SchoolStatusBadge.tsx
+    │       │   ├── SchoolModerationActions.tsx  ← Edit, Delete, View Inquiries, List/Unlist buttons
+    │       │   └── SchoolStatusBadge.tsx        ← shows "Hidden" state distinctly
     │       ├── nav/
     │       │   └── AdminNav.tsx                 ← Add Parent, Add Admin (FULL_ACCESS only) links
     │       ├── search-pagination/
     │       │   ├── AdminPagination.tsx
-    │       │   └── AdminSearchBar.tsx           ← State + City dependent selects added
+    │       │   └── AdminSearchBar.tsx           ← State + City dependent selects
     │       └── users/
-    │           ├── AdminAccessBadge.tsx         ← new: displays READ_ONLY / READ_WRITE / FULL_ACCESS
-    │           ├── RoleBadge.tsx
-    │           └── UserManagementActions.tsx    ← SCHOOL_ADMIN→PARENT transition removed
+    │           ├── AdminAccessBadge.tsx         ← READ_ONLY / READ_WRITE / FULL_ACCESS
+    │           ├── RoleBadge.tsx                ← shows "Super Admin" tag for isSuperAdmin row
+    │           └── UserManagementActions.tsx    ← Delete button added; both role-switch directions blocked; super admin row action buttons hidden
     │
     └── lib/
         ├── admin/
-        │   ├── constants.ts                     ← Indian states/UTs list added
-        │   ├── data.ts                          ← state/city/role/schoolId params added
+        │   ├── constants.ts                     ← Indian states/UTs list
+        │   ├── data.ts                          ← state/city/role/schoolId params
         │   └── session.ts
         ├── api/
         │   ├── error.ts
@@ -367,7 +370,7 @@ frontend/
         ├── auth/
         │   ├── admin-auth.ts
         │   ├── auth-config.ts
-        │   ├── auth.ts                          ← adminAccessLevel surfaced in session
+        │   ├── auth.ts                          ← adminAccessLevel + isSuperAdmin in session
         │   ├── backend-jwt.ts
         │   ├── logout.ts
         │   ├── middleware-auth.ts
@@ -384,7 +387,7 @@ frontend/
         │   ├── revalidate-schools.ts
         │   └── seo.ts
         ├── types/
-        │   └── database.ts                      ← AdminAccessLevel type added
+        │   └── database.ts                      ← AdminAccessLevel type; isSuperAdmin on session user
         ├── ui/
         │   └── motion.ts
         ├── upload/
@@ -442,9 +445,9 @@ Layout: `app/dashboard/school/layout.tsx` — requires `SCHOOL_ADMIN`; redirects
 | Route | Purpose |
 |-------|---------|
 | `/admin` | Platform stats |
-| `/admin/schools` | School moderation (approve/reject/edit/delete) with State + City filters |
+| `/admin/schools` | School moderation (approve/reject/edit/delete/list-unlist) with State + City filters |
 | `/admin/schools/[id]/edit` | Full 22-section school profile editor in admin mode |
-| `/admin/users` | Tabbed user management — School Admins \| Parents \| Admins |
+| `/admin/users` | Tabbed user management — School Admins \| Parents \| Admins; Delete button on all tabs |
 | `/admin/inquiries` | Cross-school inquiry monitoring; filterable by `?schoolId=` |
 | `/admin/add-school` | 4-step wizard to create approved schools |
 | `/admin/add-parent` | Single-step wizard to create parent accounts |
@@ -463,6 +466,8 @@ Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
 | `/api/admin/schools/[id]` | DELETE, PATCH | Delete school; edit school (admin mode) |
 | `/api/admin/schools/[id]/approve` | PATCH | Approve school |
 | `/api/admin/schools/[id]/reject` | PATCH | Reject school |
+| `/api/admin/schools/[id]/visibility` | PATCH | Toggle `isVisible` (List/Unlist) |
+| `/api/admin/users/[id]` | DELETE | Delete user (FULL_ACCESS); proxies `DELETE /api/admin/users/:id` |
 | `/api/admin/users/[id]/role` | PATCH | Update user role |
 | `/api/admin/users/[id]/status` | PATCH | Enable/disable user |
 | `/api/admin/add-school` | POST | Create approved school |
@@ -513,11 +518,11 @@ School dashboard
 Admin panel
 └── admin/nav/AdminNav → admin/search-pagination/AdminSearchBar (State+City selects),
     admin/search-pagination/AdminPagination,
-    admin/moderation/SchoolModerationActions (Edit, Delete, View Inquiries),
-    admin/users/UserManagementActions,
-    admin/users/RoleBadge,
-    admin/users/AdminAccessBadge,
-    admin/moderation/SchoolStatusBadge
+    admin/moderation/SchoolModerationActions (Edit, Delete, View Inquiries, List/Unlist),
+    admin/moderation/SchoolStatusBadge (shows Hidden state),
+    admin/users/UserManagementActions (Delete on all tabs; role-switch fully removed for parents; super admin row actions hidden),
+    admin/users/RoleBadge (Super Admin tag),
+    admin/users/AdminAccessBadge
 ```
 
 ---
@@ -526,7 +531,7 @@ Admin panel
 
 | Mechanism | Location | Purpose |
 |-----------|----------|---------|
-| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken`, `adminAccessLevel` |
+| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken`, `adminAccessLevel`, `isSuperAdmin` |
 | **HTTP-only cookie `sf_admin_token`** | `lib/auth/admin-auth.ts` | Admin backend JWT for `adminFetch()` and BFF |
 | **sessionStorage `sf_parent_token`** | `lib/auth/parent-token.ts` | Client-side token for direct inquiry API calls |
 | **localStorage `sf_school_draft_{email}`** | `school/registration/SchoolRegisterWizard.tsx` | School registration draft persistence |
@@ -622,19 +627,26 @@ Keep in sync with `backend/prisma/schema.prisma` when enums change.
 1. Sign in at `/admin-login` (hidden from public navigation)
 2. Backend login with `expectedRole: "ADMIN"`
 3. `POST /api/admin/session` stores JWT in HTTP-only `sf_admin_token` cookie
-4. NextAuth credentials sign-in syncs session for middleware — `adminAccessLevel` included in session payload
+4. NextAuth credentials sign-in syncs session for middleware — `adminAccessLevel` and `isSuperAdmin` included in session payload
 5. All admin data via `adminFetch()` or BFF routes with `useAdminCookie: true`
-6. UI elements are conditionally rendered based on `session.user.adminAccessLevel`
+6. UI elements are conditionally rendered based on `session.user.adminAccessLevel` and `session.user.isSuperAdmin`
 
 ### Admin Access Levels
 
 | Level | Capabilities |
 |-------|-------------|
 | `READ_ONLY` | View stats, schools, users, inquiries — no mutations |
-| `READ_WRITE` | Above + approve/reject, add school/parent, edit school |
-| `FULL_ACCESS` | Everything including delete school, user role/status changes, add admin |
+| `READ_WRITE` | Above + approve/reject, add school/parent, edit school, toggle visibility |
+| `FULL_ACCESS` | Everything including delete school, delete user, user role/status changes, add admin |
 
 Frontend gating is UX-only — backend `requireAdminLevel` middleware is the actual enforcement.
+
+### Super Admin
+
+- `session.user.isSuperAdmin` is surfaced from the backend JWT into the NextAuth session.
+- UI uses this **only** to hide action buttons on the super admin's row — never for access-level enforcement.
+- Backend always re-checks DB; the session value is convenience-only.
+- No "Add Super Admin" option exists anywhere in the UI.
 
 ### NextAuth Configuration (`lib/auth/auth.ts`)
 
@@ -695,6 +707,8 @@ Via `robots.ts` and layout metadata: `/admin/*`, `/dashboard/*`, `/parent/*`, au
 
 Uses `fetch(..., { next: { revalidate, tags } })`.
 
+> Public school queries only receive schools where `isVisible: true` (enforced backend-side). Admin panel fetches bypass this — admins see all schools regardless of visibility.
+
 ### Authenticated Data
 
 Server dashboards use `backendFetch()` / `adminFetch()` with `cache: "no-store"`.
@@ -718,7 +732,7 @@ Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend 
 | School registration wizard | React Hook Form + Zod | Per-step `trigger()` validation |
 | Admin add-school wizard | React Hook Form + Zod | Per-step validation + async duplicate checks |
 | Admin add-parent | React Hook Form + Zod | Async email duplicate check on blur |
-| Admin add-admin | React Hook Form + Zod | Email check + access level radio |
+| Admin add-admin | React Hook Form + Zod | Email check + access level radio; no `isSuperAdmin` field |
 | Profile forms | React Hook Form + Zod | Client-side |
 | Inquiry modal | Controlled state + Zod | Client-side |
 
@@ -794,7 +808,7 @@ Credentials (`CLOUDINARY_*`) never reach the browser. Upload utilities live in `
 | Feature | Implementation |
 |---------|----------------|
 | Metadata | `lib/seo/seo.ts` — `rootMetadata`, `buildPageMetadata()`, `buildSchoolMetadata()` |
-| Sitemap | `app/sitemap.ts` — approved schools from `GET /api/schools?status=APPROVED&limit=1000` |
+| Sitemap | `app/sitemap.ts` — approved + visible schools from `GET /api/schools?status=APPROVED&limit=1000` |
 | Robots | `app/robots.ts` — allows public routes, disallows private/auth |
 | JSON-LD | `components/shared/seo/JsonLd.tsx` — WebSite (home), EducationalOrganization (detail) |
 | Images | `next/image` with AVIF/WebP, Cloudinary remote patterns |
@@ -899,18 +913,22 @@ Active config: `next.config.js` (CSP, HSTS, security headers, image remote patte
 
 ### Platform Administrators
 - School moderation (approve/reject/edit/delete)
+- School visibility toggle (List/Unlist) — independent of account disable; `READ_WRITE` minimum
 - School list with State + City filters
 - Add school wizard (creates APPROVED listings)
 - Add parent wizard (single-step, email duplicate check)
-- Add admin form with access level selection (FULL_ACCESS only)
-- Tabbed user management: School Admins | Parents | Admins
-- SCHOOL_ADMIN → PARENT role transition blocked (UI + backend)
+- Add admin form with access level selection (FULL_ACCESS only); no super admin option
+- Tabbed user management: School Admins \| Parents \| Admins
+  - Delete button on all three tabs (FULL_ACCESS only); confirmation dialog with cascade warning for School Admin rows
+  - Role-switch dropdown removed from Parents tab; both PARENT↔SCHOOL_ADMIN transitions blocked (UI + backend)
+  - Super admin row: action buttons (Delete/Role/Status) hidden entirely; "Super Admin" badge on RoleBadge
 - Cross-platform inquiry monitoring with per-school filter (`?schoolId=`)
 - Admin access level enforcement: READ_ONLY / READ_WRITE / FULL_ACCESS
 - Dashboard stats
+- Super admin system: single DB-only account; immune to delete/role/status/access-level changes; `isSuperAdmin` surfaced in session for UI gating
 
 ### Public
-- SEO-optimized home, listing, and detail pages
+- SEO-optimized home, listing, and detail pages (only `isVisible: true` schools appear publicly)
 - Dynamic sitemap and robots.txt
 - JSON-LD structured data
 - Responsive mobile-first design
