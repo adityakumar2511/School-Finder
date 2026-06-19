@@ -18,6 +18,9 @@ import {
   generalRateLimiter,
 } from "./middleware/security";
 import { validateStartupEnv } from "./config/production";
+import contactRoutes from "./routes/contact.routes";
+
+
 
 const app = express();
 
@@ -86,6 +89,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/favourites", favouriteRoutes);
 app.use("/api/parent", parentRoutes);
+app.use("/api/contact", contactRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

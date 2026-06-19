@@ -412,3 +412,15 @@ model AdminAuditLog {
   @@index([targetId])
   @@index([createdAt])
 }
+
+
+// ── Contact Submissions ───────────────────────────────────────────────────────
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
