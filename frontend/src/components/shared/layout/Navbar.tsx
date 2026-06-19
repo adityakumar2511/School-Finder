@@ -23,6 +23,7 @@ import { performLogout } from "@/lib/auth/logout";
 import type { Role } from "@/lib/types/database";
 
 const PUBLIC_NAV_LINKS = [
+  { href: "/", label: "Home" },
   { href: "/schools", label: "Schools" },
   { href: "/compare", label: "Compare" },
   { href: "/about", label: "About" },
