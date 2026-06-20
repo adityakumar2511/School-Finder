@@ -17,7 +17,12 @@ const siteOrigin = getOriginFromEnv(
     : undefined
 );
 
-const connectSrc = ["'self'", "https://res.cloudinary.com"];
+const connectSrc = [
+  "'self'",
+  "https://res.cloudinary.com",
+  "https://script.google.com",
+  "https://api.emailjs.com",
+];
 if (apiOrigin) connectSrc.push(apiOrigin);
 if (siteOrigin && siteOrigin !== apiOrigin) connectSrc.push(siteOrigin);
 

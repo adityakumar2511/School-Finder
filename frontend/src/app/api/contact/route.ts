@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, message } = body ?? {};
+    const { name, email, phone, message } = body ?? {};
 
-    if (!name?.trim() || !email?.trim() || !message?.trim()) {
+    if (!name?.trim() || !email?.trim() || !phone?.trim() || !message?.trim()) {
       return NextResponse.json(
         { success: false, message: "All fields are required." },
         { status: 400 }
@@ -17,7 +17,12 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${backendUrl}/api/contact`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), email: email.trim(), message: message.trim() }),
+      body: JSON.stringify({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        message: message.trim(),
+      }),
     });
 
     const data = await res.json();

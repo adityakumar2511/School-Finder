@@ -1,15 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import emailjs from "@emailjs/browser";
 import { Button } from "@/components/shared/ui/button";
 import { CheckCircle, Loader2 } from "lucide-react";
 
 type FormState = "idle" | "loading" | "success" | "error";
 
+const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!;
+const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!;
+const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY!;
+const SHEET_WEBHOOK_URL = process.env.NEXT_PUBLIC_CONTACT_SHEET_URL!;
+
 export default function ContactForm() {
   const [state, setState] = useState<FormState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -21,14 +27,20 @@ export default function ContactForm() {
     e.preventDefault();
     setError(null);
 
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim() || !form.message.trim()) {
       setError("Please fill in all fields.");
+      return;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(form.phone.trim())) {
+      setError("Enter a valid 10-digit phone number.");
       return;
     }
 
     setState("loading");
 
     try {
+      // 1. Primary save — must succeed for success state
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,6 +54,31 @@ export default function ContactForm() {
       }
 
       setState("success");
+
+      // 2. Non-blocking side effects — failures here never affect the success UI
+      emailjs
+  .send(
+    EMAILJS_SERVICE_ID,
+    EMAILJS_TEMPLATE_ID,
+    {
+      name: form.name,
+      email: form.email,
+      phone: form.phone,
+      message: form.message,
+      time: new Date().toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }),
+    },
+    EMAILJS_PUBLIC_KEY
+  )
+  .catch((err) => console.error("EmailJS send failed:", err));
+      fetch(SHEET_WEBHOOK_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(form),
+      }).catch((err) => console.error("Sheets sync failed:", err));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setState("error");
@@ -58,7 +95,7 @@ export default function ContactForm() {
         </p>
         <button
           onClick={() => {
-            setForm({ name: "", email: "", message: "" });
+            setForm({ name: "", email: "", phone: "", message: "" });
             setState("idle");
           }}
           className="text-sm text-blue-600 hover:underline mt-2"
@@ -75,9 +112,7 @@ export default function ContactForm() {
 
       <div className="space-y-4">
         <div>
-          <label htmlFor="name" className="form-label block mb-1.5">
-            Name
-          </label>
+          <label htmlFor="name" className="form-label block mb-1.5">Name</label>
           <input
             id="name"
             name="name"
@@ -91,9 +126,7 @@ export default function ContactForm() {
         </div>
 
         <div>
-          <label htmlFor="email" className="form-label block mb-1.5">
-            Email
-          </label>
+          <label htmlFor="email" className="form-label block mb-1.5">Email</label>
           <input
             id="email"
             name="email"
@@ -107,9 +140,23 @@ export default function ContactForm() {
         </div>
 
         <div>
-          <label htmlFor="message" className="form-label block mb-1.5">
-            Message
-          </label>
+          <label htmlFor="phone" className="form-label block mb-1.5">Phone</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputMode="numeric"
+            maxLength={10}
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="10-digit mobile number"
+            className="form-input"
+            disabled={state === "loading"}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="message" className="form-label block mb-1.5">Message</label>
           <textarea
             id="message"
             name="message"
@@ -122,9 +169,7 @@ export default function ContactForm() {
           />
         </div>
 
-        {error && (
-          <div className="alert-danger text-sm">{error}</div>
-        )}
+        {error && <div className="alert-danger text-sm">{error}</div>}
 
         <Button
           onClick={handleSubmit}
