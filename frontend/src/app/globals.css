@@ -121,8 +121,12 @@
   }
 
   .form-input {
-    @apply flex h-11 w-full rounded-xl border border-gray-100 bg-white px-4 font-body text-body text-gray-900 placeholder:text-gray-400 transition-colors focus-visible:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-  }
+  @apply flex h-11 w-full rounded-xl border border-gray-100 bg-white px-4 font-body text-body text-gray-900 placeholder:text-gray-400 transition-colors focus-visible:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.form-textarea {
+  @apply w-full min-h-[120px] rounded-xl border border-gray-100 bg-white px-4 py-3 font-body text-body text-gray-900 placeholder:text-gray-400 transition-colors focus-visible:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+}
 
   .form-input-error {
     @apply border-danger-text/40 focus-visible:ring-danger-text;

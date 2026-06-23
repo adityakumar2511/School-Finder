@@ -5,4 +5,4 @@
 
 */
 -- AlterTable
-ALTER TABLE "ContactSubmission" ADD COLUMN     "phone" TEXT NOT NULL;
+ALTER TABLE "ContactSubmission" ADD COLUMN "phone" TEXT;

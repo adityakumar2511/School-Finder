@@ -900,3 +900,61 @@ export const rejectSchool = async (req: AuthRequest, res: Response) => {
   req.body = { reason };
   return rejectSchoolById(req, res);
 };
+
+
+// PATCH /api/admin/schools/:id/featured
+export const setSchoolFeatured = async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id).trim();
+  const { featured, featuredUntil } = req.body as {
+    featured: boolean;
+    featuredUntil?: string;
+  };
+
+  if (typeof featured !== "boolean") {
+    throw Errors.BadRequest("featured (boolean) is required");
+  }
+
+  const school = await prisma.school.findUnique({
+    where: { id },
+    select: { id: true, name: true, status: true },
+  });
+
+  if (!school) throw Errors.NotFound("School");
+
+  if (featured && school.status !== "APPROVED") {
+    throw Errors.BadRequest("Only APPROVED schools can be featured");
+  }
+
+  const until = featured && featuredUntil ? new Date(featuredUntil) : null;
+
+  if (until && isNaN(until.getTime())) {
+    throw Errors.BadRequest("Invalid featuredUntil date");
+  }
+
+  const updated = await prisma.school.update({
+    where: { id },
+    data: {
+      isFeatured: featured,
+      featuredUntil: until,
+    },
+    select: { id: true, name: true, isFeatured: true, featuredUntil: true },
+  });
+
+  invalidateSchoolCache();
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: featured ? "SCHOOL_FEATURED" : "SCHOOL_UNFEATURED",
+    targetType: "SCHOOL",
+    targetId: id,
+    metadata: { featuredUntil: until?.toISOString(), schoolName: school.name },
+  });
+
+  res.json({
+    message: featured
+      ? `School marked as featured until ${until?.toLocaleDateString() ?? "indefinitely"}`
+      : "School removed from featured listings",
+    school: updated,
+  });
+};

@@ -1,10 +1,12 @@
 import { Response } from "express";
 import prisma from "../lib/prisma";
+import type { InquiryStatus } from "../../generated/prisma";
 import { AuthRequest } from "../middleware/auth";
 import { Errors } from "../utils/AppError";
 
-const VALID_STATUSES = ["NEW", "CONTACTED", "CLOSED"] as const;
-type InquiryStatusValue = (typeof VALID_STATUSES)[number];
+const VALID_STATUSES: InquiryStatus[] = ["NEW", "CONTACTED", "INTERESTED", "CONVERTED", "CLOSED"];
+
+const DUPLICATE_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
 
 async function assertSchoolInquiryAccess(
   schoolId: string,
@@ -29,14 +31,10 @@ async function assertSchoolInquiryAccess(
   return school;
 }
 
-function buildInquiryWhere(
-  schoolId: string,
-  status?: string,
-  search?: string
-) {
+function buildInquiryWhere(schoolId: string, status?: string, search?: string) {
   const where: {
     schoolId: string;
-    status?: InquiryStatusValue;
+    status?: InquiryStatus;
     OR?: Array<{
       parent: {
         name?: { contains: string; mode: "insensitive" };
@@ -45,8 +43,8 @@ function buildInquiryWhere(
     }>;
   } = { schoolId };
 
-  if (status && VALID_STATUSES.includes(status as InquiryStatusValue)) {
-    where.status = status as InquiryStatusValue;
+  if (status && VALID_STATUSES.includes(status as InquiryStatus)) {
+    where.status = status as InquiryStatus;
   }
 
   const term = search?.trim();
@@ -73,15 +71,46 @@ export const createInquiry = async (req: AuthRequest, res: Response) => {
     throw Errors.NotFound("School");
   }
 
-  const inquiry = await prisma.inquiry.create({
-    data: {
+  const parentId = req.user!.id;
+  const windowStart = new Date(Date.now() - DUPLICATE_WINDOW_MS);
+
+  const existing = await prisma.inquiry.findFirst({
+    where: {
       schoolId,
-      parentId: req.user!.id,
-      message,
+      parentId,
+      createdAt: { gte: windowStart },
     },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, status: true, createdAt: true },
   });
 
-  res.status(201).json(inquiry);
+  if (existing) {
+    if (existing.status !== "NEW") {
+      const messageMap: Record<string, string> = {
+        CONTACTED: "The school has already contacted you regarding your inquiry.",
+        INTERESTED: "Your inquiry is being actively followed up by the school.",
+        CONVERTED: "Your admission process is already in progress with this school.",
+        CLOSED: "Your inquiry has been closed by the school.",
+      };
+
+      res.status(409).json({
+        success: false,
+        code: "INQUIRY_EXISTS",
+        message: messageMap[existing.status] ?? "An inquiry already exists for this school.",
+        existingStatus: existing.status,
+        existingInquiryId: existing.id,
+      });
+      return;
+    }
+
+    await prisma.inquiry.delete({ where: { id: existing.id } });
+  }
+
+  const inquiry = await prisma.inquiry.create({
+    data: { schoolId, parentId, message },
+  });
+
+  res.status(201).json({ success: true, data: inquiry });
 };
 
 // GET /api/inquiries/my
@@ -163,6 +192,8 @@ export const getSchoolInquiries = async (req: AuthRequest, res: Response) => {
     total: stats.reduce((sum, row) => sum + row._count.status, 0),
     NEW: 0,
     CONTACTED: 0,
+    INTERESTED: 0,
+    CONVERTED: 0,
     CLOSED: 0,
   };
 

@@ -1,19 +1,20 @@
 import type { InquiryStatus } from "@/lib/types/database";
 import { Badge } from "@/components/shared/ui/badge";
 
-const STATUS_VARIANT: Record<
-  InquiryStatus,
-  "default" | "warning" | "secondary"
-> = {
-  NEW: "default",
-  CONTACTED: "warning",
-  CLOSED: "secondary",
+ const STATUS_VARIANT: Record<InquiryStatus, "default" | "warning" | "secondary" | "success"> = {
+   NEW: "default",
+   CONTACTED: "warning",
+   INTERESTED: "warning",
+   CONVERTED: "success",
+   CLOSED: "secondary",
 };
 
 const STATUS_LABEL: Record<InquiryStatus, string> = {
-  NEW: "New",
-  CONTACTED: "Contacted",
-  CLOSED: "Closed",
+   NEW: "New",
+   CONTACTED: "Contacted",
+   INTERESTED: "Interested",
+   CONVERTED: "Converted",
+   CLOSED: "Closed",
 };
 
 export default function InquiryStatusBadge({ status }: { status: InquiryStatus }) {

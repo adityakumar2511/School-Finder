@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock, CheckCircle2, XCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +20,17 @@ type Props = {
 };
 
 type ApiErrorBody = {
+  success?: boolean;
+  code?: string;
   message?: string;
   error?: string;
+  existingStatus?: "NEW" | "CONTACTED" | "CLOSED";
+  existingInquiryId?: string;
+};
+
+type BlockedState = {
+  status: "CONTACTED" | "CLOSED";
+  message: string;
 };
 
 const PHONE_PATTERN = /^\d{10}$/;
@@ -45,6 +54,7 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [blocked, setBlocked] = useState<BlockedState | null>(null);
 
   useEffect(() => {
     if (open && session?.user?.role === "PARENT" && session.user.name) {
@@ -58,6 +68,7 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
     setMessage("");
     setError(null);
     setSuccess(false);
+    setBlocked(null);
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -71,6 +82,7 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
     event.preventDefault();
     setError(null);
     setSuccess(false);
+    setBlocked(null);
 
     const trimmedName = parentName.trim();
     const trimmedPhone = phone.trim();
@@ -114,10 +126,7 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          schoolId,
-          message: inquiryMessage,
-        }),
+        body: JSON.stringify({ schoolId, message: inquiryMessage }),
       });
 
       if (response.status === 401) {
@@ -127,6 +136,15 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
       }
 
       const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+
+      // 409 = existing inquiry with CONTACTED or CLOSED status
+      if (response.status === 409 && body.code === "INQUIRY_EXISTS") {
+        setBlocked({
+          status: body.existingStatus as "CONTACTED" | "CLOSED",
+          message: body.message ?? "You have already sent an inquiry to this school.",
+        });
+        return;
+      }
 
       if (!response.ok) {
         setError(
@@ -149,6 +167,45 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function renderBlockedState() {
+    if (!blocked) return null;
+
+    const isContacted = blocked.status === "CONTACTED";
+
+    return (
+      <div className="py-2 space-y-4">
+        <div className={`flex items-start gap-3 p-4 rounded-xl border ${
+          isContacted
+            ? "bg-blue-50 border-blue-200"
+            : "bg-gray-50 border-gray-200"
+        }`}>
+          {isContacted ? (
+            <CheckCircle2 className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+          ) : (
+            <XCircle className="h-5 w-5 text-gray-500 mt-0.5 shrink-0" />
+          )}
+          <div className="space-y-1">
+            <p className="font-body text-body font-medium text-gray-900">
+              {isContacted ? "School has contacted you" : "Inquiry closed"}
+            </p>
+            <p className="font-body text-label text-gray-600">
+              {blocked.message}
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => handleOpenChange(false)}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
   }
 
   function renderBody() {
@@ -197,6 +254,11 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
       );
     }
 
+    // Blocked state — school has acted on existing inquiry
+    if (blocked) {
+      return renderBlockedState();
+    }
+
     return (
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
@@ -223,7 +285,9 @@ export default function InquiryModal({ schoolId, schoolName, fullWidth }: Props)
             type="tel"
             inputMode="numeric"
             value={phone}
-            onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+            onChange={(event) =>
+              setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))
+            }
             className="form-input"
             placeholder="10-digit mobile number"
             required

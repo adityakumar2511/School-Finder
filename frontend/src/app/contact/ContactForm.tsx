@@ -160,11 +160,11 @@ export default function ContactForm() {
           <textarea
             id="message"
             name="message"
-            rows={5}
+            rows={3}
             value={form.message}
             onChange={handleChange}
             placeholder="Tell us what's on your mind..."
-            className="form-input resize-none"
+            className="form-textarea resize-none"
             disabled={state === "loading"}
           />
         </div>

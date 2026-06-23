@@ -1,8 +1,34 @@
 import express from "express";
 import compression from "compression";
 import dotenv from "dotenv";
+import * as Sentry from "@sentry/node";
 
 dotenv.config();
+
+const SENTRY_DSN = process.env.SENTRY_DSN?.trim();
+
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "development",
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+
+    beforeSend(event) {
+      if (event.request?.headers) {
+        const headers = { ...event.request.headers };
+
+        delete headers.authorization;
+        delete headers.Authorization;
+        delete headers.cookie;
+        delete headers.Cookie;
+
+        event.request.headers = headers;
+      }
+
+      return event;
+    },
+  });
+}
 
 import authRoutes from "./routes/auth.routes";
 import schoolRoutes from "./routes/schools.routes";
@@ -10,6 +36,7 @@ import adminRoutes from "./routes/admin.routes";
 import inquiryRoutes from "./routes/inquiry.routes";
 import favouriteRoutes from "./routes/favourite.routes";
 import parentRoutes from "./routes/parent.routes";
+import contactRoutes from "./routes/contact.routes";
 import prisma from "./lib/prisma";
 import { tokenBlacklist } from "./lib/tokenBlacklist";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -18,9 +45,6 @@ import {
   generalRateLimiter,
 } from "./middleware/security";
 import { validateStartupEnv } from "./config/production";
-import contactRoutes from "./routes/contact.routes";
-
-
 
 const app = express();
 
@@ -43,6 +67,7 @@ app.use(
     limit: "2mb",
   })
 );
+
 app.use(
   express.urlencoded({
     extended: true,
@@ -54,6 +79,7 @@ app.use(generalRateLimiter);
 
 app.get("/health", async (_req, res) => {
   const timestamp = new Date().toISOString();
+
   const base = {
     status: "ok" as const,
     service: "schoolfinder-api",
@@ -65,11 +91,14 @@ app.get("/health", async (_req, res) => {
 
   try {
     await prisma.$queryRaw`SELECT 1`;
+
     res.json({
       ...base,
       database: "connected",
     });
-  } catch {
+  } catch (error) {
+    Sentry.captureException(error);
+
     res.status(503).json({
       ...base,
       status: "degraded",
@@ -98,22 +127,27 @@ const PORT = Number(process.env.PORT) || 4000;
 
 validateStartupEnv();
 
-const server = app.listen(Number(PORT), "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
 
 server.on("error", (error) => {
+  Sentry.captureException(error);
   console.error("[Server] Failed to start:", error);
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
+  Sentry.captureException(reason);
   console.error("[UnhandledRejection]", reason);
 });
 
-process.on("uncaughtException", (err: Error) => {
+process.on("uncaughtException", async (err: Error) => {
+  Sentry.captureException(err);
   console.error("[UncaughtException]", err.message, err.stack);
+
   if (process.env.NODE_ENV === "production") {
+    await Sentry.flush(2000);
     process.exit(1);
   }
 });

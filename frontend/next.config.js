@@ -1,3 +1,5 @@
+const { withSentryConfig } = require("@sentry/nextjs");
+
 const isProduction = process.env.NODE_ENV === "production";
 
 function getOriginFromEnv(value) {
@@ -22,6 +24,7 @@ const connectSrc = [
   "https://res.cloudinary.com",
   "https://script.google.com",
   "https://api.emailjs.com",
+  "https://*.ingest.sentry.io",
 ];
 if (apiOrigin) connectSrc.push(apiOrigin);
 if (siteOrigin && siteOrigin !== apiOrigin) connectSrc.push(siteOrigin);
@@ -129,4 +132,13 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  hideSourceMaps: true,
+  disableLogger: true,
+});

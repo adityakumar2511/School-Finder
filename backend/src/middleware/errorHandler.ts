@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { ZodError } from "zod";
+import * as Sentry from "@sentry/node";
 import { Prisma } from "../../generated/prisma";
 import { AppError, Errors } from "../utils/AppError";
 
@@ -16,6 +17,23 @@ type ErrorPayload = {
 
 function sendError(res: Response, statusCode: number, payload: ErrorPayload): void {
   res.status(statusCode).json(payload);
+}
+
+function captureUnhandledError(err: unknown, req: Request): void {
+  if (!process.env.SENTRY_DSN?.trim()) return;
+
+  Sentry.withScope((scope) => {
+    scope.setTag("http.method", req.method);
+    scope.setTag("http.path", req.path);
+
+    scope.setContext("request", {
+      method: req.method,
+      path: req.path,
+      route: req.route?.path,
+    });
+
+    Sentry.captureException(err);
+  });
 }
 
 /**
@@ -34,7 +52,7 @@ export const notFoundHandler = (
  */
 export const errorHandler = (
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): void => {
@@ -74,12 +92,14 @@ export const errorHandler = (
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
       const target = err.meta?.target;
+
       const field =
         Array.isArray(target) && target.length > 0
           ? String(target[0])
           : typeof target === "string"
             ? target
             : undefined;
+
       const message = field
         ? `A record with this ${field} already exists`
         : "A record with this value already exists";
@@ -111,6 +131,7 @@ export const errorHandler = (
     }
 
     console.warn("[Prisma]", err.code, err.message);
+
     sendError(res, 400, {
       success: false,
       code: "BAD_REQUEST",
@@ -162,7 +183,10 @@ export const errorHandler = (
       });
       return;
     }
+
     if (err.message === "SLUG_GENERATION_FAILED") {
+      captureUnhandledError(err, req);
+
       sendError(res, 500, {
         success: false,
         code: "INTERNAL_ERROR",
@@ -174,6 +198,8 @@ export const errorHandler = (
 
   // h) Unknown errors
   console.error("[UnhandledError]", err);
+  captureUnhandledError(err, req);
+
   if (err instanceof Error && err.stack) {
     console.error(err.stack);
   }

@@ -60,21 +60,52 @@ const generateSlug = async (name: string): Promise<string> => {
 
   let slug = base;
   let count = 1;
+
   while (await prisma.school.findUnique({ where: { slug } })) {
     slug = `${base}-${count}`;
     count++;
   }
+
   return slug;
 };
 
+// ── Map helpers ───────────────────────────────────────────────────────────────
+
+function toFiniteNumber(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const earthRadiusKm = 6371;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
 // ── Related-model sync helpers ────────────────────────────────────────────────
-// Each helper deletes rows not in the incoming list, then upserts the rest.
-// They run inside the same transaction as the school update.
 
 async function syncBoardResults(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
-  items: BoardResultInput[]
+  items: BoardResultInput[],
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
 
@@ -112,9 +143,10 @@ async function syncBoardResults(
 async function syncScholarships(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
-  items: ScholarshipInput[]
+  items: ScholarshipInput[],
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
+
   await tx.scholarship.deleteMany({
     where: { schoolId, id: { notIn: incomingIds } },
   });
@@ -145,9 +177,10 @@ async function syncScholarships(
 async function syncFAQs(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
-  items: FAQInput[]
+  items: FAQInput[],
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
+
   await tx.schoolFAQ.deleteMany({
     where: { schoolId, id: { notIn: incomingIds } },
   });
@@ -169,9 +202,10 @@ async function syncFAQs(
 async function syncDownloads(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
-  items: DownloadInput[]
+  items: DownloadInput[],
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
+
   await tx.schoolDownload.deleteMany({
     where: { schoolId, id: { notIn: incomingIds } },
   });
@@ -193,9 +227,10 @@ async function syncDownloads(
 async function syncGalleryImages(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
-  items: GalleryImageInput[]
+  items: GalleryImageInput[],
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
+
   await tx.schoolImage.deleteMany({
     where: { schoolId, id: { notIn: incomingIds } },
   });
@@ -227,7 +262,7 @@ async function syncCustomFields(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   schoolId: string,
   items: CustomFieldInput[],
-  section?: string // if provided, only touch that section's fields
+  section?: string,
 ) {
   const incomingIds = items.map((i) => i.id).filter(Boolean) as string[];
 
@@ -265,10 +300,8 @@ async function syncCustomFields(
 }
 
 // ── Extract scalar fields from validated input ────────────────────────────────
-// Strips the relation arrays so we can pass only scalar fields to school.update()
 
 function extractScalarFields(data: UpdateSchoolInput) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const {
     boardResults,
     scholarships,
@@ -278,15 +311,17 @@ function extractScalarFields(data: UpdateSchoolInput) {
     customFields,
     ...scalars
   } = data;
+
   return scalars;
 }
 
-// ── GET /api/schools — public listing (offset or cursor pagination) ────────────
+// ── GET /api/schools — public listing ─────────────────────────────────────────
 
 export const getSchools = async (req: Request, res: Response) => {
   const {
     search,
     city,
+    state,
     board,
     schoolType,
     medium,
@@ -295,6 +330,7 @@ export const getSchools = async (req: Request, res: Response) => {
     status,
     cursor,
     pagination,
+    featured,
   } = req.query;
 
   const limit = parseLimit(limitQuery, DEFAULT_SCHOOL_PAGE_LIMIT);
@@ -304,9 +340,11 @@ export const getSchools = async (req: Request, res: Response) => {
     status: status as string | undefined,
     search: search as string | undefined,
     city: city as string | undefined,
+    state: state as string | undefined,
     board: typeof board === "string" ? [board] : (board as string[] | undefined),
     schoolType: schoolType as string | undefined,
     medium: medium as string | undefined,
+    featured: featured as string | undefined,
   });
 
   if (useCursorPagination) {
@@ -323,11 +361,13 @@ export const getSchools = async (req: Request, res: Response) => {
       status: String(where.status),
       search: search as string,
       city: city as string,
+      state: state as string,
       board: Array.isArray(board)
         ? (board as string[]).join(",")
         : (board as string),
       schoolType: schoolType as string,
       medium: medium as string,
+      featured: featured as string,
     });
 
     const result = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, async () => {
@@ -336,7 +376,7 @@ export const getSchools = async (req: Request, res: Response) => {
           ? { AND: [where, buildSchoolCursorWhere(decodedCursor)] }
           : where,
         take: limit + 1,
-        orderBy: schoolListOrderBy,
+        orderBy: [{ isFeatured: "desc" }, ...schoolListOrderBy],
         select: schoolListSelectWithCreatedAt,
       });
 
@@ -349,15 +389,12 @@ export const getSchools = async (req: Request, res: Response) => {
         pagination: {
           limit,
           hasMore,
-          nextCursor:
-            hasMore && lastRow ? encodeSchoolCursor(lastRow) : null,
+          nextCursor: hasMore && lastRow ? encodeSchoolCursor(lastRow) : null,
         },
       };
     });
 
-    res.json(
-      cursorPaginatedResponse(result.data, result.pagination, "schools")
-    );
+    res.json(cursorPaginatedResponse(result.data, result.pagination, "schools"));
     return;
   }
 
@@ -370,11 +407,13 @@ export const getSchools = async (req: Request, res: Response) => {
     status: String(where.status),
     search: search as string,
     city: city as string,
+    state: state as string,
     board: Array.isArray(board)
       ? (board as string[]).join(",")
       : (board as string),
     schoolType: schoolType as string,
     medium: medium as string,
+    featured: featured as string,
   });
 
   const result = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, async () => {
@@ -383,7 +422,7 @@ export const getSchools = async (req: Request, res: Response) => {
         where,
         skip,
         take: limit,
-        orderBy: schoolListOrderBy,
+        orderBy: [{ isFeatured: "desc" }, ...schoolListOrderBy],
         select: schoolListSelect,
       }),
       prisma.school.count({ where }),
@@ -410,19 +449,121 @@ export const searchSchools = async (req: Request, res: Response) => {
   }
 
   const searchWhere = buildSchoolSearchWhere(query);
-  const where = { status: "APPROVED" as const, isVisible: true, ...(searchWhere ?? {}) };
+  const where = {
+    status: "APPROVED" as const,
+    isVisible: true,
+    ...(searchWhere ?? {}),
+  };
 
   const cacheKey = buildCacheKey("schools:search", { query, limit });
+
   const schools = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
     prisma.school.findMany({
       where,
       take: limit,
       orderBy: [{ name: "asc" }, { city: "asc" }],
       select: schoolSearchSelect,
-    })
+    }),
   );
 
   res.json({ data: schools });
+};
+
+// ── GET /api/schools/nearby?lat=&lng=&radius=&limit= ──────────────────────────
+
+export const getNearbySchools = async (req: Request, res: Response) => {
+  const lat = toFiniteNumber(req.query.lat);
+  const lng = toFiniteNumber(req.query.lng ?? req.query.lon);
+  const radiusKmRaw = toFiniteNumber(req.query.radius);
+  const limit = parseLimit(req.query.limit, 10, 50);
+  const excludeId =
+    typeof req.query.excludeId === "string" ? req.query.excludeId.trim() : "";
+
+  if (lat === null || lat < -90 || lat > 90) {
+    throw Errors.BadRequest("Valid lat query parameter is required");
+  }
+
+  if (lng === null || lng < -180 || lng > 180) {
+    throw Errors.BadRequest("Valid lng query parameter is required");
+  }
+
+  const radiusKm =
+    radiusKmRaw === null ? 10 : Math.min(Math.max(radiusKmRaw, 1), 100);
+
+  const latDelta = radiusKm / 111.32;
+  const lngDelta = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180) || 1);
+
+  const cacheKey = buildCacheKey("schools:nearby", {
+    lat,
+    lng,
+    radiusKm,
+    limit,
+    excludeId,
+  });
+
+  const nearbySchools = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, async () => {
+    const rows = await prisma.school.findMany({
+      where: {
+        status: "APPROVED",
+        isVisible: true,
+        latitude: {
+          not: null,
+          gte: lat - latDelta,
+          lte: lat + latDelta,
+        },
+        longitude: {
+          not: null,
+          gte: lng - lngDelta,
+          lte: lng + lngDelta,
+        },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      take: Math.max(limit * 4, limit),
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+      select: schoolListSelect,
+    });
+
+    return rows
+      .map((school) => {
+        const distanceKm =
+          typeof school.latitude === "number" &&
+          typeof school.longitude === "number"
+            ? calculateDistanceKm(lat, lng, school.latitude, school.longitude)
+            : null;
+
+        return {
+          ...mapSchoolListItem(school),
+          distanceKm: distanceKm === null ? null : Number(distanceKm.toFixed(2)),
+        };
+      })
+      .filter(
+        (school) =>
+          typeof school.distanceKm === "number" &&
+          school.distanceKm <= radiusKm,
+      )
+      .sort((a, b) => {
+        const distanceA =
+          typeof a.distanceKm === "number" ? a.distanceKm : Number.MAX_VALUE;
+        const distanceB =
+          typeof b.distanceKm === "number" ? b.distanceKm : Number.MAX_VALUE;
+
+        if (distanceA !== distanceB) return distanceA - distanceB;
+        return Number(b.isFeatured) - Number(a.isFeatured);
+      })
+      .slice(0, limit);
+  });
+
+  res.json({
+    data: nearbySchools,
+    schools: nearbySchools,
+    meta: {
+      lat,
+      lng,
+      radiusKm,
+      limit,
+      count: nearbySchools.length,
+    },
+  });
 };
 
 // ── GET /api/schools/my-school — school owner dashboard ──────────────────────
@@ -433,11 +574,10 @@ export const getMySchool = async (req: AuthRequest, res: Response) => {
     select: {
       ...schoolDetailSelect,
       rejectionReason: true,
-      // New relation includes
       customFields: true,
       boardResults: { orderBy: { year: "desc" } },
       scholarships: true,
-      faqs: true,     // relation field name on School model — stays "faqs"
+      faqs: true,
       downloads: true,
     },
   });
@@ -466,14 +606,15 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
         faqs: true,
         downloads: true,
       },
-    })
+    }),
   );
 
   if (!school) throw Errors.NotFound("School");
 
-   if (school.status !== "APPROVED" || !school.isVisible) {
+  if (school.status !== "APPROVED" || !school.isVisible) {
     const userId = req.user?.id;
     const userRole = req.user?.role;
+
     if (!userId || (school.ownerId !== userId && userRole !== "ADMIN")) {
       throw Errors.NotFound("School");
     }
@@ -497,6 +638,8 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
       city: data.city,
       state: data.state,
       pincode: data.pincode ?? null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
       board: data.board,
       schoolType: data.schoolType,
       medium: data.medium,
@@ -520,11 +663,11 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
   });
 
   invalidateSchoolCache();
+
   res.status(201).json({ data: school });
 };
 
 // ── PATCH /api/schools/:id — update school ────────────────────────────────────
-// Handles both scalar fields and related-model arrays in a single transaction.
 
 export const updateSchool = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
@@ -539,18 +682,12 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
 
   if (!existing) throw Errors.NotFound("School");
 
-  if (
-    existing.ownerId !== req.user!.id &&
-    req.user!.role !== "ADMIN"
-  ) {
+  if (existing.ownerId !== req.user!.id && req.user!.role !== "ADMIN") {
     throw Errors.Forbidden("You do not have permission to update this school");
   }
 
-  // School admins trigger re-review when they update their profile
   const statusReset =
-    req.user!.role === "SCHOOL_ADMIN"
-      ? { status: "PENDING" as const }
-      : {};
+    req.user!.role === "SCHOOL_ADMIN" ? { status: "PENDING" as const } : {};
 
   const scalars = extractScalarFields(data);
 
@@ -563,18 +700,23 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     if (data.boardResults !== undefined) {
       await syncBoardResults(tx, id, data.boardResults);
     }
+
     if (data.scholarships !== undefined) {
       await syncScholarships(tx, id, data.scholarships);
     }
+
     if (data.faqs !== undefined) {
       await syncFAQs(tx, id, data.faqs);
     }
+
     if (data.downloads !== undefined) {
       await syncDownloads(tx, id, data.downloads);
     }
+
     if (data.images !== undefined) {
       await syncGalleryImages(tx, id, data.images);
     }
+
     if (data.customFields !== undefined) {
       await syncCustomFields(tx, id, data.customFields);
     }
@@ -583,6 +725,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
   });
 
   invalidateSchoolCache();
+
   res.json({ data: updated });
 };
 
@@ -620,7 +763,11 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
     url,
     caption,
     category,
-  } = req.body as { url?: string; caption?: string | null; category?: string | null };
+  } = req.body as {
+    url?: string;
+    caption?: string | null;
+    category?: string | null;
+  };
 
   if (!url?.trim()) throw Errors.BadRequest("Image URL is required");
 
@@ -628,6 +775,7 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
     where: { ownerId: req.user!.id },
     select: { id: true },
   });
+
   if (!school) throw Errors.NotFound("School");
 
   const image = await prisma.schoolImage.create({
@@ -640,6 +788,7 @@ export const addSchoolImage = async (req: AuthRequest, res: Response) => {
   });
 
   invalidateSchoolCache();
+
   res.status(201).json({ data: image });
 };
 
@@ -658,7 +807,9 @@ export const deleteSchoolImage = async (req: AuthRequest, res: Response) => {
   }
 
   await prisma.schoolImage.delete({ where: { id: imageId } });
+
   invalidateSchoolCache();
+
   res.json({ message: "Image deleted successfully" });
 };
 
@@ -673,7 +824,7 @@ export const getCities = async (_req: Request, res: Response) => {
       select: { city: true },
       distinct: ["city"],
       orderBy: { city: "asc" },
-    })
+    }),
   );
 
   res.json({ data: cities.map((s) => s.city) });

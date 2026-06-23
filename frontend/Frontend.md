@@ -1,12 +1,14 @@
 # SchoolSetu — Frontend Documentation
 
-> Last updated: June 19, 2026
+> Last updated: June 23, 2026  
+> Stack: Next.js 14 App Router · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary · Sentry  
+> Default port: `3000`  
+> Repository path: `frontend/`  
+> Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
-> **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary  
-> **Default port:** `3000` · **Repository path:** `frontend/`  
-> **Database:** None — all data via Express REST API at `NEXT_PUBLIC_API_URL`
+The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, and error monitoring.
 
-The frontend is a role-separated Next.js application. It handles UI, NextAuth sessions, BFF proxy routes, and Cloudinary uploads. PostgreSQL is accessed only by the backend.
+Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
 
 ---
 
@@ -16,20 +18,22 @@ The frontend is a role-separated Next.js application. It handles UI, NextAuth se
 2. [Tech Stack](#2-tech-stack)
 3. [Folder Structure](#3-folder-structure)
 4. [Route Structure](#4-route-structure)
-5. [Component Hierarchy](#5-component-hierarchy)
-6. [State Management](#6-state-management)
+5. [Component Structure](#5-component-structure)
+6. [Authentication Flow](#6-authentication-flow)
 7. [API Integration](#7-api-integration)
-8. [Authentication Flow](#8-authentication-flow)
-9. [Route Protection](#9-route-protection)
-10. [Data Fetching & Caching](#10-data-fetching--caching)
-11. [Form Handling](#11-form-handling)
-12. [Error Handling](#12-error-handling)
-13. [Upload System](#13-upload-system)
-14. [SEO](#14-seo)
-15. [Environment Variables](#15-environment-variables)
-16. [Build & Deployment](#16-build--deployment)
-17. [Third-Party Integrations](#17-third-party-integrations)
-18. [Current Features](#18-current-features)
+8. [Data Fetching and Caching](#8-data-fetching-and-caching)
+9. [Forms and Validation](#9-forms-and-validation)
+10. [Upload System](#10-upload-system)
+11. [SEO](#11-seo)
+12. [Featured Listings](#12-featured-listings)
+13. [Compare Schools](#13-compare-schools)
+14. [Maps and Nearby Schools](#14-maps-and-nearby-schools)
+15. [Contact Page Integrations](#15-contact-page-integrations)
+16. [Sentry Error Monitoring](#16-sentry-error-monitoring)
+17. [Environment Variables](#17-environment-variables)
+18. [Build and Deployment](#18-build-and-deployment)
+19. [Current Features](#19-current-features)
+20. [Quick Reference](#20-quick-reference)
 
 ---
 
@@ -38,65 +42,57 @@ The frontend is a role-separated Next.js application. It handles UI, NextAuth se
 ### Principles
 
 | Principle | Implementation |
-|-----------|----------------|
-| No direct database access | Zero Prisma; no `DATABASE_URL` |
-| Backend as source of truth | All CRUD via Express REST API |
-| JWT-only NextAuth | Session strategy `jwt` — no Prisma adapter |
-| BFF pattern | `/api/*` routes proxy mutations with Bearer tokens |
-| Local type enums | `src/lib/types/database.ts` mirrors backend Prisma enums |
-| Role-based folder separation | `components/` split by role: `shared/`, `public/`, `auth/`, `parent/`, `school/`, `admin/` |
+|---|---|
+| No direct database access | No Prisma or `DATABASE_URL` in frontend |
+| Backend as source of truth | All business data comes from Express API |
+| JWT sessions | NextAuth uses JWT strategy |
+| BFF pattern | Client mutations go through `/api/*` route handlers |
+| Role-separated UI | Public, Parent, School Admin, Platform Admin areas are separated |
+| Server Components first | Public pages and dashboards fetch data server-side where possible |
+| Client Components where needed | Forms, compare localStorage, filters, uploads, interactive actions |
 
-### Execution Flow
+### Execution flow
 
-```
+```txt
 Browser / Server Component
     │
-    ├─ Public data ──────────► fetch(NEXT_PUBLIC_API_URL/...)  [ISR]
-    ├─ Server dashboards ────► backendFetch() / adminFetch()   [no-store]
-    ├─ Client mutations ─────► same-origin /api/* BFF routes   [proxyToBackend]
-    └─ Auth ─────────────────► NextAuth + direct backend auth endpoints
-                                    │
-                                    ▼
-                          Express API (port 4000)
-                                    │
-                                    ▼
-                          PostgreSQL (Neon)
+    ├─ Public fetch ───────► NEXT_PUBLIC_API_URL
+    ├─ Auth dashboards ────► backendFetch() / adminFetch()
+    ├─ Client mutation ────► Next.js BFF route /api/*
+    ├─ Upload ─────────────► /api/upload → Cloudinary
+    └─ Auth ───────────────► NextAuth + backend auth endpoints
 ```
-
-### Rendering Model
-
-- **Server Components** by default — data fetching, SEO, layouts
-- **Client Components** where interactivity is required — forms, filters, uploads, session actions
-- **Route handlers** under `src/app/api/` — BFF proxies, NextAuth, Cloudinary upload
 
 ---
 
 ## 2. Tech Stack
 
-| Technology | Version | Usage |
-|------------|---------|-------|
-| Next.js | 14.2.29 | App Router, SSR, BFF routes, image optimization |
-| React | 18.3 | UI |
-| TypeScript | 5.4 | Type safety |
-| Tailwind CSS | 3.4 | Styling, design tokens |
-| shadcn/ui | — | Accessible primitives (Button, Card, Table, Dialog, Tabs, etc.) |
-| NextAuth | 5.0.0-beta.19 | JWT sessions, Google OAuth, credentials |
-| Zod | 3.23 | Validation schemas |
-| React Hook Form | 7.52 | Client form state |
-| Cloudinary | 2.3 | Server-side image upload |
-| Framer Motion | 12.40 | Page transitions, home animations |
-| jsonwebtoken | 9.0 | Server-side Bearer token minting |
-| Lucide React | — | Icons |
+| Technology | Usage |
+|---|---|
+| Next.js 14 App Router | SSR, routing, BFF API routes, SEO |
+| React 18 | UI |
+| TypeScript | Type safety |
+| Tailwind CSS | Styling |
+| shadcn/ui | UI primitives |
+| NextAuth v5 | Auth/session management |
+| React Hook Form | Forms |
+| Zod | Validation |
+| Cloudinary | Image upload/delivery |
+| Framer Motion | Home/page animations |
+| Lucide React | Icons |
+| Sentry Next.js SDK | Error monitoring |
 
-**Not used:** Prisma, `@auth/prisma-adapter`, database drivers.
+Not used:
 
-**Installed but unused in `src/`:** `jose`; several `@radix-ui/*` packages (accordion, avatar, checkbox, dropdown-menu, separator, toast).
+- Prisma
+- Database drivers
+- `@auth/prisma-adapter`
 
 ---
 
 ## 3. Folder Structure
 
-```
+```txt
 frontend/
 ├── .env
 ├── .env.example
@@ -110,11 +106,17 @@ frontend/
 ├── package-lock.json
 ├── package.json
 ├── postcss.config.mjs
+├── sentry.client.config.ts              # Sentry browser/client initialization
+├── sentry.edge.config.ts                # Sentry edge runtime initialization
+├── sentry.server.config.ts              # Sentry server runtime initialization
 ├── tailwind.config.ts
 ├── tsconfig.json
 ├── vercel.json
 └── src/
+    ├── instrumentation.ts               # Runtime-based Sentry registration
     ├── app/
+    │   ├── about/
+    │   │   └── page.tsx                 # Static About page
     │   ├── admin/
     │   │   ├── add-admin/
     │   │   │   └── page.tsx
@@ -136,6 +138,8 @@ frontend/
     │   ├── admin-login/
     │   │   ├── layout.tsx
     │   │   └── page.tsx
+    │   ├── ai-recommend/
+    │   │   └── page.tsx                 # Coming Soon placeholder, no AI integration yet
     │   ├── api/
     │   │   ├── admin/
     │   │   │   ├── add-admin/
@@ -150,11 +154,13 @@ frontend/
     │   │   │   │   ├── [id]/
     │   │   │   │   │   ├── approve/
     │   │   │   │   │   │   └── route.ts
+    │   │   │   │   │   ├── featured/
+    │   │   │   │   │   │   └── route.ts    # PATCH — mark/unmark featured
     │   │   │   │   │   ├── reject/
     │   │   │   │   │   │   └── route.ts
     │   │   │   │   │   ├── visibility/
-    │   │   │   │   │   │   └── route.ts    ← PATCH — toggle isVisible
-    │   │   │   │   │   └── route.ts        ← DELETE + PATCH handlers
+    │   │   │   │   │   │   └── route.ts    # PATCH — list/unlist public visibility
+    │   │   │   │   │   └── route.ts        # DELETE + PATCH handlers
     │   │   │   │   └── route.ts
     │   │   │   ├── session/
     │   │   │   │   └── route.ts
@@ -164,12 +170,14 @@ frontend/
     │   │   │           │   └── route.ts
     │   │   │           ├── status/
     │   │   │           │   └── route.ts
-    │   │   │           └── route.ts        ← DELETE handler
+    │   │   │           └── route.ts        # DELETE handler
     │   │   ├── auth/
     │   │   │   ├── [...nextauth]/
     │   │   │   │   └── route.ts
     │   │   │   └── logout/
     │   │   │       └── route.ts
+    │   │   ├── contact/
+    │   │   │   └── route.ts                # Contact form BFF proxy
     │   │   ├── parent/
     │   │   │   ├── favourites/
     │   │   │   │   └── route.ts
@@ -188,6 +196,12 @@ frontend/
     │   │   │       └── route.ts
     │   │   └── upload/
     │   │       └── route.ts
+    │   ├── compare/
+    │   │   ├── CompareClient.tsx          # localStorage compare logic
+    │   │   └── page.tsx                   # Compare page wrapper
+    │   ├── contact/
+    │   │   ├── ContactForm.tsx            # DB + EmailJS + Sheets submit flow
+    │   │   └── page.tsx
     │   ├── dashboard/
     │   │   └── school/
     │   │       ├── inquiries/
@@ -203,7 +217,7 @@ frontend/
     │   │   └── GeistVF.woff
     │   ├── forgot-password/
     │   │   └── page.tsx
-    │   ├── global-error.tsx
+    │   ├── global-error.tsx               # Sentry-aware global fallback UI
     │   ├── globals.css
     │   ├── layout.tsx
     │   ├── login/
@@ -238,20 +252,32 @@ frontend/
     │   ├── schools/
     │   │   ├── [slug]/
     │   │   │   ├── loading.tsx
-    │   │   │   └── page.tsx
+    │   │   │   └── page.tsx               # Detail, map embed, nearby schools
+    │   │   ├── board/
+    │   │   │   └── [board]/
+    │   │   │       ├── loading.tsx
+    │   │   │       └── page.tsx           # SEO board page
+    │   │   ├── city/
+    │   │   │   └── [city]/
+    │   │   │       ├── loading.tsx
+    │   │   │       └── page.tsx           # SEO city page
+    │   │   ├── state/
+    │   │   │   └── [state]/
+    │   │   │       ├── loading.tsx
+    │   │   │       └── page.tsx           # SEO state page
     │   │   ├── loading.tsx
     │   │   └── page.tsx
-    │   ├── sitemap.ts
+    │   ├── sitemap.ts                     # Includes school/city/state/board URLs
     │   └── template.tsx
     │
     ├── components/
-    │   ├── shared/                          # Used by 2+ roles or no role
+    │   ├── shared/                        # Used by 2+ roles or no role
     │   │   ├── layout/
     │   │   │   ├── Footer.tsx
     │   │   │   ├── HideOnAdminLogin.tsx
-    │   │   │   ├── Navbar.tsx
+    │   │   │   ├── Navbar.tsx             # Home, Schools, Compare, About, Contact
     │   │   │   └── SessionHeartbeat.tsx
-    │   │   ├── ui/                          # shadcn primitives
+    │   │   ├── ui/                        # shadcn primitives
     │   │   │   ├── PasswordInput.tsx
     │   │   │   ├── badge.tsx
     │   │   │   ├── button.tsx
@@ -264,7 +290,7 @@ frontend/
     │   │   │   ├── table.tsx
     │   │   │   ├── tabs.tsx
     │   │   │   └── textarea.tsx
-    │   │   ├── form/                        # Shared form primitives
+    │   │   ├── form/                      # Shared form primitives
     │   │   │   ├── FormField.tsx
     │   │   │   ├── FormGrid.tsx
     │   │   │   ├── FormSection.tsx
@@ -274,44 +300,44 @@ frontend/
     │   │   └── upload/
     │   │       └── ImageUploadField.tsx
     │   │
-    │   ├── public/                          # No-auth pages
+    │   ├── public/                        # No-auth pages
     │   │   ├── home/
-    │   │   │   ├── FeaturedSchools.tsx
+    │   │   │   ├── FeaturedSchools.tsx     # Real featured schools API data
     │   │   │   ├── FeaturedSchoolsSkeleton.tsx
     │   │   │   ├── HomeHero.tsx
     │   │   │   └── HomeStats.tsx
     │   │   └── schools/
     │   │       ├── FavouriteButton.tsx
     │   │       ├── InquiryModal.tsx
-    │   │       ├── SchoolCard.tsx
+    │   │       ├── SchoolCard.tsx          # Featured badge + compare button
     │   │       ├── SchoolCardSkeleton.tsx
     │   │       ├── SchoolFilters.tsx
     │   │       └── SchoolGridSkeleton.tsx
     │   │
-    │   ├── auth/                            # Login / register content
+    │   ├── auth/                          # Login / register content
     │   │   ├── AuthRoleGuard.tsx
     │   │   ├── ParentLoginContent.tsx
     │   │   └── SchoolLoginContent.tsx
     │   │
-    │   ├── parent/                          # PARENT role only
+    │   ├── parent/                        # PARENT role only
     │   │   ├── ParentNav.tsx
     │   │   ├── ProfileForm.tsx
     │   │   ├── RecentViewedSchools.tsx
     │   │   └── TrackSchoolView.tsx
     │   │
-    │   ├── school/                          # SCHOOL_ADMIN role only
+    │   ├── school/                        # SCHOOL_ADMIN role only
     │   │   ├── SchoolStatusCard.tsx
     │   │   ├── gallery/
     │   │   │   └── SchoolGalleryManager.tsx
     │   │   ├── inquiries/
     │   │   │   ├── InquiryFilters.tsx
     │   │   │   ├── InquiryPagination.tsx
-    │   │   │   ├── InquiryStatusBadge.tsx
-    │   │   │   └── InquiryStatusSelect.tsx
+    │   │   │   ├── InquiryStatusBadge.tsx  # NEW/CONTACTED/INTERESTED/CONVERTED/CLOSED
+    │   │   │   └── InquiryStatusSelect.tsx # Updated lead statuses
     │   │   ├── nav/
     │   │   │   └── SchoolDashboardNav.tsx
     │   │   ├── profile/
-    │   │   │   ├── SchoolProfileForm.tsx   ← accepts submitEndpoint prop
+    │   │   │   ├── SchoolProfileForm.tsx   # Coordinates + admin submitEndpoint support
     │   │   │   ├── SchoolProfileSidebar.tsx
     │   │   │   └── formSections/
     │   │   │       ├── 01_BasicInfoSection.tsx
@@ -333,7 +359,7 @@ frontend/
     │   │   │       ├── 17_SafetySection.tsx
     │   │   │       ├── 18_GallerySection.tsx
     │   │   │       ├── 19_DownloadsSection.tsx
-    │   │   │       ├── 20_ContactSection.tsx
+    │   │   │       ├── 20_ContactSection.tsx   # Phone, social, mapUrl, latitude, longitude
     │   │   │       ├── 21_ReviewsSection.tsx
     │   │   │       ├── 22_FAQsSection.tsx
     │   │   │       ├── index.ts
@@ -341,25 +367,25 @@ frontend/
     │   │   └── registration/
     │   │       └── SchoolRegisterWizard.tsx
     │   │
-    │   └── admin/                           # ADMIN role only
+    │   └── admin/                         # ADMIN role only
     │       ├── moderation/
     │       │   ├── SchoolDetailModal.tsx
-    │       │   ├── SchoolModerationActions.tsx  ← Edit, Delete, View Inquiries, List/Unlist buttons
-    │       │   └── SchoolStatusBadge.tsx        ← shows "Hidden" state distinctly
+    │       │   ├── SchoolModerationActions.tsx  # Edit, Delete, View Inquiries, List/Unlist, Featured
+    │       │   └── SchoolStatusBadge.tsx        # Status + hidden + featured indicators
     │       ├── nav/
-    │       │   └── AdminNav.tsx                 ← Add Parent, Add Admin (FULL_ACCESS only) links
+    │       │   └── AdminNav.tsx                 # Access-level gated links
     │       ├── search-pagination/
     │       │   ├── AdminPagination.tsx
-    │       │   └── AdminSearchBar.tsx           ← State + City dependent selects
+    │       │   └── AdminSearchBar.tsx           # State + City dependent selects
     │       └── users/
-    │           ├── AdminAccessBadge.tsx         ← READ_ONLY / READ_WRITE / FULL_ACCESS
-    │           ├── RoleBadge.tsx                ← shows "Super Admin" tag for isSuperAdmin row
-    │           └── UserManagementActions.tsx    ← Delete button added; both role-switch directions blocked; super admin row action buttons hidden
+    │           ├── AdminAccessBadge.tsx
+    │           ├── RoleBadge.tsx                # Super Admin tag
+    │           └── UserManagementActions.tsx    # Delete/status/role actions gated
     │
     └── lib/
         ├── admin/
-        │   ├── constants.ts                     ← Indian states/UTs list
-        │   ├── data.ts                          ← state/city/role/schoolId params
+        │   ├── constants.ts                     # Indian states/UTs list
+        │   ├── data.ts                          # Admin fetchers and typed responses
         │   └── session.ts
         ├── api/
         │   ├── error.ts
@@ -370,13 +396,13 @@ frontend/
         ├── auth/
         │   ├── admin-auth.ts
         │   ├── auth-config.ts
-        │   ├── auth.ts                          ← adminAccessLevel + isSuperAdmin in session
+        │   ├── auth.ts                          # Session includes accessLevel/isSuperAdmin
         │   ├── backend-jwt.ts
         │   ├── logout.ts
         │   ├── middleware-auth.ts
         │   └── parent-token.ts
         ├── data/
-        │   └── schools-public.ts
+        │   └── schools-public.ts                # Public, featured, city/state/board, nearby fetchers
         ├── parent/
         │   ├── data.ts
         │   └── recent-schools.ts
@@ -387,7 +413,7 @@ frontend/
         │   ├── revalidate-schools.ts
         │   └── seo.ts
         ├── types/
-        │   └── database.ts                      ← AdminAccessLevel type; isSuperAdmin on session user
+        │   └── database.ts                      # Enums, school list/detail, GeoCoordinates
         ├── ui/
         │   └── motion.ts
         ├── upload/
@@ -403,553 +429,585 @@ frontend/
 
 ## 4. Route Structure
 
-### Public Pages
-
-| Route | File | Notes |
-|-------|------|-------|
-| `/` | `app/page.tsx` | Home — hero, stats, featured schools |
-| `/schools` | `app/schools/page.tsx` | Filterable school listing |
-| `/schools/[slug]` | `app/schools/[slug]/page.tsx` | Detail, inquiry modal, favourites |
-| `/login` | `app/login/page.tsx` | Parent login (Google + credentials) |
-| `/register` | `app/register/page.tsx` | Parent registration |
-| `/forgot-password` | `app/forgot-password/page.tsx` | 3-step OTP password reset |
-| `/reset-password` | `app/reset-password/page.tsx` | **Redirect stub** → `/forgot-password?role=…` |
-| `/school-login` | `app/school-login/page.tsx` | School admin login |
-| `/school-register` | `app/school-register/page.tsx` | 4-step registration wizard |
-| `/school-complete-registration` | `app/school-complete-registration/page.tsx` | DRAFT school completion prompt |
-| `/admin-login` | `app/admin-login/page.tsx` | Hidden admin login |
-
-### Parent Dashboard (`/parent/*`)
+### Public routes
 
 | Route | Purpose |
-|-------|---------|
-| `/parent` | Overview, recently viewed schools |
-| `/parent/profile` | Edit profile |
-| `/parent/favourites` | Saved schools with pagination |
-| `/parent/inquiries` | Sent inquiries with status |
+|---|---|
+| `/` | Homepage with hero, stats, featured schools |
+| `/about` | About page |
+| `/contact` | Contact page with DB save + EmailJS + Google Sheets webhook |
+| `/schools` | School listing with filters |
+| `/schools/[slug]` | Public school detail page with inquiry, favourites, map, nearby schools |
+| `/schools/city/[city]` | SEO city school page |
+| `/schools/state/[state]` | SEO state school page |
+| `/schools/board/[board]` | SEO board school page |
+| `/compare` | Compare up to 3 schools |
+| `/ai-recommend` | Coming Soon placeholder page |
+| `/login` | Parent login |
+| `/register` | Parent registration |
+| `/forgot-password` | OTP password reset |
+| `/school-login` | School admin login |
+| `/school-register` | School registration wizard |
+| `/admin-login` | Hidden admin login |
 
-Layout: `app/parent/layout.tsx` — requires `PARENT` role.
-
-### School Dashboard (`/dashboard/school/*`)
+### Parent dashboard
 
 | Route | Purpose |
-|-------|---------|
-| `/dashboard/school` | Overview, status card, inquiry summary |
-| `/dashboard/school/inquiries` | Inquiry list with filters and status updates |
-| `/dashboard/school/profile` | Profile editor, logo, gallery |
+|---|---|
+| `/parent` | Parent overview and recently viewed schools |
+| `/parent/profile` | Parent profile edit |
+| `/parent/favourites` | Saved schools |
+| `/parent/inquiries` | Sent inquiries and status |
 
-Layout: `app/dashboard/school/layout.tsx` — requires `SCHOOL_ADMIN`; redirects `DRAFT` schools to `/school-complete-registration`.
-
-### Admin Panel (`/admin/*`)
+### School dashboard
 
 | Route | Purpose |
-|-------|---------|
-| `/admin` | Platform stats |
-| `/admin/schools` | School moderation (approve/reject/edit/delete/list-unlist) with State + City filters |
-| `/admin/schools/[id]/edit` | Full 22-section school profile editor in admin mode |
-| `/admin/users` | Tabbed user management — School Admins \| Parents \| Admins; Delete button on all tabs |
-| `/admin/inquiries` | Cross-school inquiry monitoring; filterable by `?schoolId=` |
-| `/admin/add-school` | 4-step wizard to create approved schools |
-| `/admin/add-parent` | Single-step wizard to create parent accounts |
-| `/admin/add-admin` | Form to create admin accounts with access level (FULL_ACCESS only) |
+|---|---|
+| `/dashboard/school` | School overview, status, lead summary |
+| `/dashboard/school/profile` | Full school profile editor with 22 sections |
+| `/dashboard/school/inquiries` | Inquiry/lead management |
 
-Layout: `app/admin/layout.tsx` — requires `ADMIN` role.
+### Admin panel
 
-### BFF API Routes (`src/app/api/`)
+| Route | Purpose |
+|---|---|
+| `/admin` | Admin stats dashboard |
+| `/admin/schools` | Moderation, filters, approve/reject/edit/delete, list/unlist, featured toggle |
+| `/admin/schools/[id]/edit` | Admin full school profile edit |
+| `/admin/users` | School admins, parents, admins management |
+| `/admin/inquiries` | Cross-school inquiry monitoring |
+| `/admin/add-school` | Admin creates approved school |
+| `/admin/add-parent` | Admin creates parent |
+| `/admin/add-admin` | Full access admin creates admin |
+
+### BFF API routes
 
 | Route | Methods | Purpose |
-|-------|---------|---------|
+|---|---|---|
 | `/api/auth/[...nextauth]` | GET, POST | NextAuth handlers |
-| `/api/auth/logout` | POST | Backend token blacklist + cookie cleanup |
-| `/api/admin/session` | POST, DELETE | Set/clear `sf_admin_token` cookie |
-| `/api/admin/schools` | GET | Proxy admin school list |
-| `/api/admin/schools/[id]` | DELETE, PATCH | Delete school; edit school (admin mode) |
+| `/api/auth/logout` | POST | Backend logout + cookie cleanup |
+| `/api/contact` | POST | Contact form proxy to backend |
+| `/api/upload` | POST | Cloudinary upload |
+| `/api/admin/session` | POST, DELETE | Admin token cookie set/clear |
+| `/api/admin/schools` | GET | Admin school list proxy |
+| `/api/admin/schools/[id]` | PATCH, DELETE | Admin edit/delete school |
 | `/api/admin/schools/[id]/approve` | PATCH | Approve school |
 | `/api/admin/schools/[id]/reject` | PATCH | Reject school |
-| `/api/admin/schools/[id]/visibility` | PATCH | Toggle `isVisible` (List/Unlist) |
-| `/api/admin/users/[id]` | DELETE | Delete user (FULL_ACCESS); proxies `DELETE /api/admin/users/:id` |
+| `/api/admin/schools/[id]/visibility` | PATCH | List/unlist school |
+| `/api/admin/schools/[id]/featured` | PATCH | Mark/unmark featured |
+| `/api/admin/users/[id]` | DELETE | Delete user |
 | `/api/admin/users/[id]/role` | PATCH | Update user role |
 | `/api/admin/users/[id]/status` | PATCH | Enable/disable user |
 | `/api/admin/add-school` | POST | Create approved school |
-| `/api/admin/add-parent` | POST | Create parent account |
-| `/api/admin/add-admin` | POST | Create admin account with access level |
-| `/api/admin/check-owner` | GET | Owner email pre-check |
+| `/api/admin/add-parent` | POST | Create parent |
+| `/api/admin/add-admin` | POST | Create admin |
+| `/api/admin/check-owner` | GET | Duplicate email/owner check |
 | `/api/parent/profile` | PATCH | Update parent profile |
-| `/api/parent/favourites` | GET, POST, DELETE | Favourites CRUD |
+| `/api/parent/favourites` | GET, POST, DELETE | Parent favourites |
 | `/api/school/profile` | PATCH | Update school profile |
-| `/api/school/gallery` | GET, POST | Gallery list / add image |
-| `/api/school/gallery/[id]` | DELETE | Remove gallery image |
+| `/api/school/gallery` | GET, POST | Gallery list/add |
+| `/api/school/gallery/[id]` | DELETE | Delete gallery image |
 | `/api/school/inquiries/[id]/status` | PATCH | Update inquiry status |
-| `/api/upload` | POST | Cloudinary upload (authenticated) |
-
-> **Note:** `/api/school/session` was removed in the Step 6 cleanup. `sf_school_token` is no longer set or read anywhere.
 
 ---
 
-## 5. Component Hierarchy
+## 5. Component Structure
 
-```
-RootLayout (layout.tsx)
-├── Providers (SessionProvider, SessionHeartbeat)
-├── shared/layout/Navbar
-├── <main> → page content
-└── HideOnAdminLogin → shared/layout/Footer
-
-Public
-├── public/home: HomeHero, HomeStats, FeaturedSchools → public/schools/SchoolCard
-├── public/schools: SchoolFilters, SchoolCard, SchoolGridSkeleton
-└── schools/[slug]: shared/seo/JsonLd, public/schools/InquiryModal,
-                    public/schools/FavouriteButton, parent/TrackSchoolView
-
-Auth
-├── auth/ParentLoginContent, auth/SchoolLoginContent → auth/AuthRoleGuard
-├── school/registration/SchoolRegisterWizard (4-step, localStorage draft)
-└── admin-login: inline form
-
-Parent dashboard
-└── parent/ParentNav → parent/ProfileForm, parent/RecentViewedSchools,
-                       app/parent/favourites/RemoveFavouriteButton
-
-School dashboard
-└── school/nav/SchoolDashboardNav → school/SchoolStatusCard,
-    school/profile/SchoolProfileForm, school/gallery/SchoolGalleryManager,
-    school/inquiries/InquiryFilters, school/inquiries/InquiryStatusSelect
-
-Admin panel
-└── admin/nav/AdminNav → admin/search-pagination/AdminSearchBar (State+City selects),
-    admin/search-pagination/AdminPagination,
-    admin/moderation/SchoolModerationActions (Edit, Delete, View Inquiries, List/Unlist),
-    admin/moderation/SchoolStatusBadge (shows Hidden state),
-    admin/users/UserManagementActions (Delete on all tabs; role-switch fully removed for parents; super admin row actions hidden),
-    admin/users/RoleBadge (Super Admin tag),
-    admin/users/AdminAccessBadge
+```txt
+components/
+├── shared/
+│   ├── layout/Navbar.tsx
+│   ├── layout/Footer.tsx
+│   ├── layout/SessionHeartbeat.tsx
+│   ├── ui/
+│   ├── form/
+│   ├── seo/JsonLd.tsx
+│   └── upload/ImageUploadField.tsx
+├── public/
+│   ├── home/FeaturedSchools.tsx
+│   └── schools/
+│       ├── SchoolCard.tsx
+│       ├── SchoolFilters.tsx
+│       ├── InquiryModal.tsx
+│       └── FavouriteButton.tsx
+├── auth/
+├── parent/
+├── school/
+│   ├── SchoolStatusCard.tsx
+│   ├── gallery/SchoolGalleryManager.tsx
+│   ├── inquiries/InquiryStatusBadge.tsx
+│   ├── inquiries/InquiryStatusSelect.tsx
+│   └── profile/
+│       ├── SchoolProfileForm.tsx
+│       └── formSections/01-22
+└── admin/
+    ├── nav/AdminNav.tsx
+    ├── moderation/SchoolModerationActions.tsx
+    ├── moderation/SchoolStatusBadge.tsx
+    ├── search-pagination/
+    └── users/
 ```
 
 ---
 
-## 6. State Management
+## 6. Authentication Flow
 
-| Mechanism | Location | Purpose |
-|-----------|----------|---------|
-| **NextAuth JWT session** | `lib/auth/auth.ts`, `providers.tsx` | Primary auth state: `id`, `role`, `backendAccessToken`, `adminAccessLevel`, `isSuperAdmin` |
-| **HTTP-only cookie `sf_admin_token`** | `lib/auth/admin-auth.ts` | Admin backend JWT for `adminFetch()` and BFF |
-| **sessionStorage `sf_parent_token`** | `lib/auth/parent-token.ts` | Client-side token for direct inquiry API calls |
-| **localStorage `sf_school_draft_{email}`** | `school/registration/SchoolRegisterWizard.tsx` | School registration draft persistence |
-| **localStorage recent schools** | `lib/parent/recent-schools.ts` | Recently viewed schools on parent dashboard |
-| **React Hook Form + Zod** | Auth forms, wizards, profiles | Client form validation |
-| **URL searchParams** | Filters, pagination, tabs, `callbackUrl` | Routing state — includes `?state=`, `?city=`, `?role=`, `?schoolId=` |
+### Parent
 
-No Redux, Zustand, or custom React context beyond NextAuth's `SessionProvider`.
+- Login at `/login` using Google OAuth or email/password.
+- Backend JWT stored in NextAuth session.
+- Parent token also stored in sessionStorage for direct inquiry calls.
+- Parent routes protected by middleware and layout guard.
 
-> `sf_school_token` cookie has been removed. Any stale browser cookie is cleared on logout via an inlined constant in `api/auth/logout/route.ts`.
+### School admin
+
+- Login at `/school-login`.
+- Register at `/school-register` using 4-step wizard.
+- Dashboard routes require `SCHOOL_ADMIN` role.
+- School profile uses backend school owner authorization.
+
+### Platform admin
+
+- Login at hidden `/admin-login`.
+- Backend token stored in HTTP-only `sf_admin_token` cookie.
+- Admin routes require `ADMIN` role.
+- UI supports admin access levels:
+  - `READ_ONLY`
+  - `READ_WRITE`
+  - `FULL_ACCESS`
+- Super admin row actions are hidden in user management.
 
 ---
 
 ## 7. API Integration
 
-### Integration Patterns
+| Pattern | Usage |
+|---|---|
+| Public fetch | Home, listings, SEO pages, sitemap |
+| Server dashboard fetch | Parent, school, admin dashboards |
+| BFF proxy | Authenticated client mutations |
+| Direct backend fetch | Login/register/reset/inquiry where needed |
+| Upload route | Cloudinary uploads |
 
-| Pattern | When Used | Implementation |
-|---------|-----------|----------------|
-| **Server fetch** | RSC dashboards, admin pages | `backendFetch()` / `adminFetch()` in `lib/api/server.ts` |
-| **Public fetch** | School listings, sitemap, home | Direct `fetch(NEXT_PUBLIC_API_URL/...)` with ISR |
-| **BFF proxy** | Client mutations from browser | `proxyToBackend()` via `/api/*` routes |
-| **Direct client fetch** | Auth flows, inquiries | Browser → backend with Bearer token |
+Main modules:
 
-### Token Resolution (`lib/api/resolve-backend-token.ts`)
-
-1. **ADMIN** — `sf_admin_token` cookie only (never minted)
-2. **SCHOOL_ADMIN / PARENT** — `session.backendAccessToken`, then `mintBackendJwt()` fallback
-
-### Domain Data Modules
-
-| Module | Backend Endpoints |
-|--------|-------------------|
-| `lib/data/schools-public.ts` | `GET /api/schools`, `/cities`, `/:slug` |
-| `lib/school/data.ts` | `GET /api/schools/my-school`, `GET /api/inquiries/school/:id` |
-| `lib/parent/data.ts` | `GET/PATCH /api/parent/profile`, `GET /api/parent/favourites` |
-| `lib/admin/data.ts` | `GET /api/admin/stats`, `/schools` (state/city params), `/users` (role param), `/inquiries` (schoolId param) |
-
-### Direct Client Calls (not via BFF)
-
-| Caller | Endpoint |
-|--------|----------|
-| `public/schools/InquiryModal.tsx` | `POST /api/inquiries` (uses sessionStorage token) |
-| `app/parent/inquiries/page.tsx` | `GET /api/inquiries/my` |
-| Auth pages | `POST /api/auth/login`, `/register-parent`, `/register-school`, etc. |
-| `app/forgot-password/page.tsx` | `POST /api/auth/forgot-password`, `/verify-reset-otp`, `/reset-password` |
-
-### Type Definitions (`lib/types/database.ts`)
-
-```typescript
-export type Role = "PARENT" | "SCHOOL_ADMIN" | "ADMIN";
-export type AdminAccessLevel = "READ_ONLY" | "READ_WRITE" | "FULL_ACCESS";
-export type SchoolStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
-export type InquiryStatus = "NEW" | "CONTACTED" | "CLOSED";
-export type BoardType = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
-export type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
-export type MediumType = "HINDI" | "ENGLISH" | "BOTH";
+```txt
+frontend/src/lib/api/server.ts
+frontend/src/lib/api/proxy.ts
+frontend/src/lib/api/error.ts
+frontend/src/lib/api/resolve-backend-token.ts
+frontend/src/lib/data/schools-public.ts
+frontend/src/lib/admin/data.ts
+frontend/src/lib/parent/data.ts
+frontend/src/lib/school/data.ts
 ```
 
-Keep in sync with `backend/prisma/schema.prisma` when enums change.
+---
+
+## 8. Data Fetching and Caching
+
+### Public data
+
+| Data | Revalidation |
+|---|---:|
+| School listing | 60 seconds |
+| City/state/board pages | 60 seconds |
+| School detail | 3600 seconds |
+| Featured schools | 3600 seconds |
+| Sitemap | 3600 seconds |
+
+### Authenticated data
+
+- Uses `cache: "no-store"`.
+- Admin and dashboard pages fetch fresh data.
+
+### Client-side storage
+
+| Storage | Purpose |
+|---|---|
+| NextAuth JWT | Auth session |
+| HTTP-only `sf_admin_token` | Admin backend JWT |
+| sessionStorage `sf_parent_token` | Parent direct inquiry calls |
+| localStorage `sf_school_draft_{email}` | School registration draft |
+| localStorage recent schools | Parent recently viewed schools |
+| localStorage `schoolfinder_compare_schools` | Compare selected schools |
 
 ---
 
-## 8. Authentication Flow
+## 9. Forms and Validation
 
-### Two-Layer Token Model
+| Form | Validation |
+|---|---|
+| Parent login/register | React Hook Form + Zod |
+| School registration wizard | Per-step validation |
+| School profile editor | 22-section schema validation |
+| Admin add-school | Multi-step validation + duplicate checks |
+| Admin add-parent | Email duplicate check |
+| Admin add-admin | Access-level validation |
+| Contact form | Client validation + backend validation |
+| Inquiry modal | Client validation + spam protection fields |
 
-| Layer | Purpose | Lifetime |
-|-------|---------|----------|
-| **NextAuth JWT** | Frontend session for middleware and UI | 30 minutes |
-| **Backend Bearer JWT** | API authorization on Express | 7 days (configurable) |
+Shared form primitives:
 
-### Parent (`PARENT`)
-
-1. Sign in at `/login` via Google OAuth or email/password (`authContext: "parent"`)
-2. Backend `POST /api/auth/login` with `expectedRole: "PARENT"` → JWT stored as `session.backendAccessToken`
-3. Also stored in `sessionStorage` via `storeParentBackendToken()` for direct API calls
-4. Google OAuth calls `POST /api/auth/google-sync` — PARENT role only
-5. Password reset: `/forgot-password?role=PARENT` — 3-step OTP flow
-6. Logout: `performLogout()` → backend blacklist + NextAuth signOut → `/login`
-
-### School Administrator (`SCHOOL_ADMIN`)
-
-1. Sign in at `/school-login` or register at `/school-register`
-2. Backend login with `expectedRole: "SCHOOL_ADMIN"`
-3. NextAuth credentials sign-in with `authContext: "school"`
-4. Server-side API: `mintBackendJwt()` fallback (`backendAccessToken` stripped from NextAuth JWT for non-parent roles)
-5. Registration wizard: `POST /api/auth/register-school` → auto sign-in → `/dashboard/school`
-6. `DRAFT` schools redirected to `/school-complete-registration` by dashboard layout
-
-### Platform Administrator (`ADMIN`)
-
-1. Sign in at `/admin-login` (hidden from public navigation)
-2. Backend login with `expectedRole: "ADMIN"`
-3. `POST /api/admin/session` stores JWT in HTTP-only `sf_admin_token` cookie
-4. NextAuth credentials sign-in syncs session for middleware — `adminAccessLevel` and `isSuperAdmin` included in session payload
-5. All admin data via `adminFetch()` or BFF routes with `useAdminCookie: true`
-6. UI elements are conditionally rendered based on `session.user.adminAccessLevel` and `session.user.isSuperAdmin`
-
-### Admin Access Levels
-
-| Level | Capabilities |
-|-------|-------------|
-| `READ_ONLY` | View stats, schools, users, inquiries — no mutations |
-| `READ_WRITE` | Above + approve/reject, add school/parent, edit school, toggle visibility |
-| `FULL_ACCESS` | Everything including delete school, delete user, user role/status changes, add admin |
-
-Frontend gating is UX-only — backend `requireAdminLevel` middleware is the actual enforcement.
-
-### Super Admin
-
-- `session.user.isSuperAdmin` is surfaced from the backend JWT into the NextAuth session.
-- UI uses this **only** to hide action buttons on the super admin's row — never for access-level enforcement.
-- Backend always re-checks DB; the session value is convenience-only.
-- No "Add Super Admin" option exists anywhere in the UI.
-
-### NextAuth Configuration (`lib/auth/auth.ts`)
-
-| Setting | Value |
-|---------|-------|
-| Strategy | `jwt` (no database adapter) |
-| Session max age | 1800 seconds (30 minutes) |
-| Providers | Google, Credentials |
-| Secret | `AUTH_SECRET` or `NEXTAUTH_SECRET` |
-| `trustHost` | `true` |
-
-**Session refresh:** JWT callback calls `GET /api/auth/me` on subsequent requests. `SessionHeartbeat` pings session every 10 minutes.
-
----
-
-## 9. Route Protection
-
-### Middleware (`middleware.ts` → `lib/auth/middleware-auth.ts`)
-
-**Matcher:**
-```
-/admin, /admin/:path*, /dashboard/:path*, /parent, /parent/:path*,
-/login, /register, /school-login, /school-register, /admin-login
+```txt
+frontend/src/components/shared/form/FormField.tsx
+frontend/src/components/shared/form/FormGrid.tsx
+frontend/src/components/shared/form/FormSection.tsx
 ```
 
-| Area | Required Role | Unauthenticated Redirect |
-|------|---------------|--------------------------|
-| `/parent/*` | `PARENT` | `/login?callbackUrl=…` |
-| `/dashboard/school/*` | `SCHOOL_ADMIN` | `/school-login?callbackUrl=…` |
-| `/admin/*` | `ADMIN` | `/admin-login?callbackUrl=…` |
+---
 
-**Cross-role:** Wrong role → redirect to `ROLE_HOME[role]`. Signed-in user on another role's login page → their home route.
+## 10. Upload System
 
-**Not in matcher:** `/forgot-password`, `/reset-password`, `/school-complete-registration`, public pages.
+All image uploads go through:
 
-### Layout Guards (defense in depth)
+```txt
+POST /api/upload
+```
 
-- `parent/layout.tsx` — requires `PARENT`
-- `dashboard/school/layout.tsx` — requires `SCHOOL_ADMIN` + DRAFT redirect
-- `admin/layout.tsx` — requires `ADMIN`
+Rules:
 
-### Noindex Routes
+- Auth required.
+- Allowed MIME:
+  - `image/jpeg`
+  - `image/png`
+  - `image/webp`
+- Max size: 5 MB.
+- Server validates magic bytes.
+- Cloudinary credentials stay server-side.
 
-Via `robots.ts` and layout metadata: `/admin/*`, `/dashboard/*`, `/parent/*`, auth routes, `/api/*`.
+Upload utilities:
+
+```txt
+frontend/src/lib/upload/cloudinary.ts
+frontend/src/lib/upload/cloudinary-url.ts
+frontend/src/lib/upload/upload-client.ts
+frontend/src/lib/upload/upload-security.ts
+```
 
 ---
 
-## 10. Data Fetching & Caching
+## 11. SEO
 
-### Public Data (ISR)
+Implemented SEO features:
 
-| Data | Module | Revalidation |
-|------|--------|--------------|
-| School listing | `lib/data/schools-public.ts` | 60 seconds |
-| School detail | `lib/data/schools-public.ts` | 3600 seconds |
-| Featured schools | `lib/data/schools-public.ts` | 3600 seconds |
-| Sitemap | `app/sitemap.ts` | 3600 seconds, tag `schools` |
+- Root metadata.
+- Dynamic school metadata.
+- City/state/board SEO pages.
+- Dynamic sitemap.
+- Robots file.
+- JSON-LD for website and school detail.
+- Optimized `next/image` usage.
+- Public routes indexed.
+- Private/auth/admin/dashboard/API routes noindexed/disallowed.
 
-Uses `fetch(..., { next: { revalidate, tags } })`.
+Main files:
 
-> Public school queries only receive schools where `isVisible: true` (enforced backend-side). Admin panel fetches bypass this — admins see all schools regardless of visibility.
-
-### Authenticated Data
-
-Server dashboards use `backendFetch()` / `adminFetch()` with `cache: "no-store"`.
-
-### Backend Cache (consumed transparently)
-
-Backend applies in-memory TTL: list 60s, detail 300s, admin stats 30s. Frontend does not manage this layer.
-
-### Client Caching
-
-- NextAuth session cached by `SessionProvider`
-- No SWR/React Query — pages refetch on navigation via server components or client fetch
+```txt
+frontend/src/lib/seo/seo.ts
+frontend/src/lib/seo/revalidate-schools.ts
+frontend/src/app/sitemap.ts
+frontend/src/app/robots.ts
+frontend/src/components/shared/seo/JsonLd.tsx
+```
 
 ---
 
-## 11. Form Handling
+## 12. Featured Listings
 
-| Form | Library | Validation |
-|------|---------|------------|
-| Parent login/register | React Hook Form + Zod | Client-side schemas |
-| School registration wizard | React Hook Form + Zod | Per-step `trigger()` validation |
-| Admin add-school wizard | React Hook Form + Zod | Per-step validation + async duplicate checks |
-| Admin add-parent | React Hook Form + Zod | Async email duplicate check on blur |
-| Admin add-admin | React Hook Form + Zod | Email check + access level radio; no `isSuperAdmin` field |
-| Profile forms | React Hook Form + Zod | Client-side |
-| Inquiry modal | Controlled state + Zod | Client-side |
+Frontend featured support:
 
-**Shared form primitives** (`components/shared/form/`):
+- Homepage uses real featured schools.
+- Public school cards show featured badge.
+- `/schools` listing keeps featured schools first through backend ordering.
+- Admin can mark/unmark featured school.
+- Admin can select featured duration.
+- Admin can see active/expired featured state.
 
-| Component | Purpose |
-|-----------|---------|
-| `FormSection` | Card-style section wrapper with title + optional description |
-| `FormField` | Label + error display wrapper; exports `inputClass`, `inputErrorClass`, `selectClass` tokens |
-| `FormGrid` | Responsive `columns={1\|2\|3}` grid — fixes mobile overlap |
+Main files:
 
-All 22 profile form sections, `SchoolRegisterWizard`, add-school, add-parent, and add-admin forms use `FormField`/`FormGrid`. Import from `@/components/shared/form`.
-
-**`SchoolProfileForm` — admin mode:** Accepts optional `submitEndpoint` prop. Defaults to `/api/school/profile` (school dashboard). Admin edit page passes `/api/admin/schools/[id]`, routing through the admin BFF with `sf_admin_token`.
-
-**Admin add-school async checks:**
-- Step 0: `GET /api/admin/check-owner?email=` — blocks if owner already has school
-- Step 1: `GET /api/admin/schools?search=<name>` — client filters for exact name match
-
-**Admin add-parent async check:** `GET /api/admin/check-owner?email=&role=PARENT` on blur — blocks if email already registered.
+```txt
+frontend/src/components/public/home/FeaturedSchools.tsx
+frontend/src/components/public/schools/SchoolCard.tsx
+frontend/src/components/admin/moderation/SchoolModerationActions.tsx
+frontend/src/components/admin/moderation/SchoolStatusBadge.tsx
+frontend/src/app/api/admin/schools/[id]/featured/route.ts
+frontend/src/lib/data/schools-public.ts
+frontend/src/lib/admin/data.ts
+```
 
 ---
 
-## 12. Error Handling
+## 13. Compare Schools
 
-### Centralized API Error Parsing (`lib/api/error.ts`)
+Implemented behaviour:
 
-`parseApiError(response, caughtError?)` returns a `ParsedApiError` with one of these categories:
+- Route: `/compare`
+- User can compare up to 3 schools.
+- Selection stored in `localStorage` key:
 
-| Category | Trigger | User-facing behavior |
-|----------|---------|----------------------|
-| `field_errors` | `code === "VALIDATION_ERROR"` + `errors` object | List shown under save button; each field name + message |
-| `conflict` | `code === "CONFLICT"` / status 409 | Toast: specific message from backend |
-| `auth` | status 401/403 | Message + redirect to role login after 2s |
-| `server_error` | status 500, Prisma codes, unrecognized | "Something went wrong on our end. Please try again." |
-| `network` | fetch throws / no response | "Couldn't reach the server. Check your connection." |
+```txt
+schoolfinder_compare_schools
+```
 
-### Other Error Layers
+- School cards include compare button.
+- Compare page supports add/remove.
+- Compare table includes:
+  - Board
+  - School type
+  - Medium
+  - Classes
+  - City/state
+  - Tuition fee
+  - Facilities count
+  - Featured status
 
-| Layer | Implementation |
-|-------|----------------|
-| Route errors | `app/error.tsx` — route-level error boundary |
-| Root errors | `app/global-error.tsx` — root error boundary |
-| 404 | `app/not-found.tsx` |
-| BFF routes | Forward backend error envelope `{ success, code, message }` |
-| Auth errors | Login pages display inline error messages from backend |
-| Upload errors | `/api/upload` returns 400/401/429 with descriptive messages |
-| Backend offline | Public pages degrade gracefully when API unreachable |
+Main files:
 
----
-
-## 13. Upload System
-
-All uploads go through `POST /api/upload` (Next.js server route).
-
-| Rule | Value |
-|------|-------|
-| Auth required | `PARENT`, `SCHOOL_ADMIN`, or `ADMIN` session |
-| Rate limit | 10 uploads/hour/user (in-memory) |
-| Allowed MIME | `image/jpeg`, `image/png`, `image/webp` |
-| Max size | 5 MB |
-| Magic-byte check | Server validates file content vs declared MIME |
-| Folders | `school-platform/logos`, `gallery`, `profiles` |
-
-**Flow:** Client → `/api/upload` → Cloudinary URL → backend PATCH/POST with URL string.
-
-Credentials (`CLOUDINARY_*`) never reach the browser. Upload utilities live in `lib/upload/`.
+```txt
+frontend/src/app/compare/page.tsx
+frontend/src/app/compare/CompareClient.tsx
+frontend/src/components/public/schools/SchoolCard.tsx
+```
 
 ---
 
-## 14. SEO
+## 14. Maps and Nearby Schools
 
-| Feature | Implementation |
-|---------|----------------|
-| Metadata | `lib/seo/seo.ts` — `rootMetadata`, `buildPageMetadata()`, `buildSchoolMetadata()` |
-| Sitemap | `app/sitemap.ts` — approved + visible schools from `GET /api/schools?status=APPROVED&limit=1000` |
-| Robots | `app/robots.ts` — allows public routes, disallows private/auth |
-| JSON-LD | `components/shared/seo/JsonLd.tsx` — WebSite (home), EducationalOrganization (detail) |
-| Images | `next/image` with AVIF/WebP, Cloudinary remote patterns |
-| Cache revalidation | `lib/seo/revalidate-schools.ts` — revalidates `schools` tag on profile updates |
+Implemented behaviour:
 
----
+- School profile contact section accepts latitude/longitude.
+- Latitude validation: `-90` to `90`.
+- Longitude validation: `-180` to `180`.
+- Public school detail page shows map iframe when coordinates or map URL exists.
+- Coordinates are preferred for map embed.
+- Existing Google Maps embed URL remains fallback.
+- “View on Map” button added.
+- Nearby Schools section appears when current school has coordinates and nearby results exist.
+- Nearby school items show distance in km.
 
-## 15. Environment Variables
+Main files:
 
-Copy `frontend/.env.example` to `.env.local`. Never commit secrets.
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXT_PUBLIC_SITE_URL` | Yes | Canonical URL for SEO and sitemap |
-| `NEXT_PUBLIC_API_URL` | Yes | Backend API base URL (HTTPS in production) |
-| `NEXTAUTH_URL` / `AUTH_URL` | Yes | NextAuth canonical URL |
-| `NEXTAUTH_SECRET` / `AUTH_SECRET` | Yes | Session encryption |
-| `AUTH_TRUST_HOST` | Yes (Vercel) | Trust deployment host |
-| `JWT_SECRET` | Yes | Must match backend — server-side Bearer minting |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | If Google enabled | Parent OAuth |
-| `CLOUDINARY_CLOUD_NAME` / `API_KEY` / `API_SECRET` | For uploads | Server-only |
-
-**Not required:** `DATABASE_URL`.
-
-Only `NEXT_PUBLIC_*` variables are exposed to the browser.
+```txt
+frontend/src/components/school/profile/formSections/20_ContactSection.tsx
+frontend/src/components/school/profile/SchoolProfileForm.tsx
+frontend/src/app/schools/[slug]/page.tsx
+frontend/src/lib/data/schools-public.ts
+```
 
 ---
 
-## 16. Build & Deployment
+## 15. Contact Page Integrations
 
-### Local Development
+Contact page fields:
+
+- Name
+- Email
+- Phone
+- Message
+
+Flow:
+
+1. User submits contact form.
+2. Frontend BFF posts data to backend `/api/contact`.
+3. Backend saves `ContactSubmission`.
+4. EmailJS sends notification from browser.
+5. Google Sheets webhook logs submission.
+
+Frontend env variables:
+
+```env
+NEXT_PUBLIC_EMAILJS_SERVICE_ID=
+NEXT_PUBLIC_EMAILJS_TEMPLATE_ID=
+NEXT_PUBLIC_EMAILJS_PUBLIC_KEY=
+NEXT_PUBLIC_CONTACT_SHEET_URL=
+```
+
+Main files:
+
+```txt
+frontend/src/app/contact/page.tsx
+frontend/src/app/contact/ContactForm.tsx
+frontend/src/app/api/contact/route.ts
+```
+
+---
+
+## 16. Sentry Error Monitoring
+
+Implemented:
+
+- Browser/client error capture.
+- Server runtime error capture.
+- Edge runtime error capture.
+- Global error boundary UI.
+- Safe DSN guard.
+- Sensitive header cleanup.
+- Source map upload config guarded by Sentry env vars.
+
+Main files:
+
+```txt
+frontend/sentry.client.config.ts
+frontend/sentry.server.config.ts
+frontend/sentry.edge.config.ts
+frontend/src/instrumentation.ts
+frontend/src/app/global-error.tsx
+frontend/next.config.js
+```
+
+---
+
+## 17. Environment Variables
+
+```env
+NEXT_PUBLIC_SITE_URL=
+NEXT_PUBLIC_API_URL=
+NEXTAUTH_URL=
+AUTH_URL=
+NEXTAUTH_SECRET=
+AUTH_SECRET=
+AUTH_TRUST_HOST=
+JWT_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+NEXT_PUBLIC_EMAILJS_SERVICE_ID=
+NEXT_PUBLIC_EMAILJS_TEMPLATE_ID=
+NEXT_PUBLIC_EMAILJS_PUBLIC_KEY=
+NEXT_PUBLIC_CONTACT_SHEET_URL=
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_AUTH_TOKEN=
+SENTRY_ORG=
+SENTRY_PROJECT=
+```
+
+Important:
+
+- `JWT_SECRET` must match backend.
+- `DATABASE_URL` is not required in frontend.
+- Only `NEXT_PUBLIC_*` variables are exposed to browser.
+
+---
+
+## 18. Build and Deployment
+
+### Local
 
 ```bash
 cd frontend
 npm install
 cp .env.example .env.local
-# Set NEXT_PUBLIC_API_URL=http://localhost:4000
-# Set JWT_SECRET to match backend
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Backend must be running on port 4000.
+Open:
+
+```txt
+http://localhost:3000
+```
 
 ### Build
 
 ```bash
-npm run build    # next build — no Prisma step
-npx tsc --noEmit # type check
+npm run build
+npx tsc --noEmit
 ```
 
-### Production (Vercel)
+### Vercel
 
-Configuration: `vercel.json`
+- Root directory: `frontend`
+- Build command: `npm run build`
+- Add env vars from Section 17.
+- Backend `FRONTEND_URL` must include production frontend URL.
+- Google OAuth redirect must point to:
 
-```json
-{
-  "framework": "nextjs",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "regions": ["bom1"]
-}
+```txt
+https://your-domain.com/api/auth/callback/google
 ```
-
-1. Set root directory to `frontend`
-2. Add all environment variables from Section 15
-3. Set `JWT_SECRET` identical to backend
-4. Update Google OAuth redirect: `https://your-domain.com/api/auth/callback/google`
-5. Update backend `FRONTEND_URL` for CORS
-
-Active config: `next.config.js` (CSP, HSTS, security headers, image remote patterns).
 
 ---
 
-## 17. Third-Party Integrations
+## 19. Current Features
 
-| Service | Usage | Config Location |
-|---------|-------|-----------------|
-| **Express API** | All data operations | `NEXT_PUBLIC_API_URL` |
-| **Google OAuth** | Parent sign-in | `GOOGLE_CLIENT_ID/SECRET` |
-| **Cloudinary** | Image storage and delivery | `CLOUDINARY_*` (server-only), `lib/upload/` |
-| **NextAuth** | Session management | `AUTH_SECRET`, `AUTH_URL`, `lib/auth/auth.ts` |
-| **Vercel** | Hosting | `vercel.json`, env vars |
+### Public users
 
----
-
-## 18. Current Features
+- Homepage.
+- About page.
+- Contact page.
+- School listing.
+- School filters.
+- School detail page.
+- Featured school badges.
+- Inquiry modal.
+- Map embed.
+- Nearby schools.
+- Compare schools.
+- SEO city/state/board pages.
+- AI recommendation Coming Soon page.
 
 ### Parents
-- Search and filter schools (city, board, type, medium, text search)
-- View school detail pages (fees, facilities, gallery, contact)
-- Save schools to favourites
-- Send inquiries to approved schools
-- Dashboard: profile, favourites, recently viewed, sent inquiries
-- Google OAuth and email/password auth
-- OTP password reset
 
-### School Administrators
-- 4-step registration wizard with draft persistence
-- School dashboard: overview, inquiry management, profile/gallery editing
-- Inquiry status workflow (NEW → CONTACTED → CLOSED)
-- Status visibility: PENDING, APPROVED, REJECTED (+ DRAFT redirect if assigned)
+- Login/register.
+- Google OAuth.
+- OTP password reset.
+- Parent dashboard.
+- Profile update.
+- Favourites.
+- Recently viewed schools.
+- Sent inquiry tracking.
+- Inquiry statuses:
+  - NEW
+  - CONTACTED
+  - INTERESTED
+  - CONVERTED
+  - CLOSED
 
-### Platform Administrators
-- School moderation (approve/reject/edit/delete)
-- School visibility toggle (List/Unlist) — independent of account disable; `READ_WRITE` minimum
-- School list with State + City filters
-- Add school wizard (creates APPROVED listings)
-- Add parent wizard (single-step, email duplicate check)
-- Add admin form with access level selection (FULL_ACCESS only); no super admin option
-- Tabbed user management: School Admins \| Parents \| Admins
-  - Delete button on all three tabs (FULL_ACCESS only); confirmation dialog with cascade warning for School Admin rows
-  - Role-switch dropdown removed from Parents tab; both PARENT↔SCHOOL_ADMIN transitions blocked (UI + backend)
-  - Super admin row: action buttons (Delete/Role/Status) hidden entirely; "Super Admin" badge on RoleBadge
-- Cross-platform inquiry monitoring with per-school filter (`?schoolId=`)
-- Admin access level enforcement: READ_ONLY / READ_WRITE / FULL_ACCESS
-- Dashboard stats
-- Super admin system: single DB-only account; immune to delete/role/status/access-level changes; `isSuperAdmin` surfaced in session for UI gating
+### School admins
 
-### Public
-- SEO-optimized home, listing, and detail pages (only `isVisible: true` schools appear publicly)
-- Dynamic sitemap and robots.txt
-- JSON-LD structured data
-- Responsive mobile-first design
+- School login/register.
+- 4-step registration wizard.
+- Dashboard overview.
+- Monthly lead stat.
+- Inquiry/lead management.
+- Status update workflow.
+- Full 22-section profile editor.
+- Gallery image management.
+- Latitude/longitude fields.
+
+### Platform admins
+
+- Admin login.
+- Stats dashboard.
+- School moderation.
+- Approve/reject schools.
+- Edit/delete schools.
+- List/unlist schools.
+- Mark/unmark featured schools.
+- Add school.
+- Add parent.
+- Add admin with access level.
+- User management.
+- Super admin protection UI.
+- Cross-school inquiry monitoring.
 
 ---
 
-## Quick Reference
+## 20. Quick Reference
 
 | Task | Command / Path |
-|------|----------------|
+|---|---|
 | Dev server | `npm run dev` |
-| Production build | `npm run build` |
+| Build | `npm run build` |
 | Type check | `npx tsc --noEmit` |
 | Auth config | `src/lib/auth/auth.ts` |
-| API client | `src/lib/api/server.ts` |
-| BFF proxy | `src/lib/api/proxy.ts` |
-| Middleware | `middleware.ts` → `src/lib/auth/middleware-auth.ts` |
+| Middleware | `middleware.ts` |
+| API proxy | `src/lib/api/proxy.ts` |
 | Public data | `src/lib/data/schools-public.ts` |
-| Type enums | `src/lib/types/database.ts` |
-| Shared form components | `src/components/shared/form/` |
-| Error parsing | `src/lib/api/error.ts` |
-| Upload utilities | `src/lib/upload/` |
-| SEO utilities | `src/lib/seo/` |
-| Indian states list | `src/lib/admin/constants.ts` |
+| Upload route | `src/app/api/upload/route.ts` |
+| Contact page | `src/app/contact/page.tsx` |
+| Compare page | `src/app/compare/page.tsx` |
+| School detail | `src/app/schools/[slug]/page.tsx` |
+| Sentry configs | `sentry.*.config.ts` |

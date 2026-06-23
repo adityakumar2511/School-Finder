@@ -35,7 +35,7 @@ import type { SectionProps } from "./formSections/types";
 import { parseApiError } from "@/lib/api/error";
 
 // ─────────────────────────────────────────────────────────────
-// Sub-schemas (one per section)
+// Sub-schemas
 // ─────────────────────────────────────────────────────────────
 
 const customFieldSchema = z.object({
@@ -77,12 +77,31 @@ const downloadFileSchema = z.object({
   url: z.string(),
 });
 
+const optionalLatitudeSchema = z
+  .string()
+  .optional()
+  .or(z.literal(""))
+  .refine((value) => {
+    if (!value) return true;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= -90 && numeric <= 90;
+  }, "Latitude must be between -90 and 90");
+
+const optionalLongitudeSchema = z
+  .string()
+  .optional()
+  .or(z.literal(""))
+  .refine((value) => {
+    if (!value) return true;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= -180 && numeric <= 180;
+  }, "Longitude must be between -180 and 180");
+
 // ─────────────────────────────────────────────────────────────
-// Master schema — all 22 sections
+// Master schema
 // ─────────────────────────────────────────────────────────────
 
 export const schoolProfileSchema = z.object({
-  // 1. Basic Info
   basicInfo: z.object({
     schoolName: z.string().min(3, "School name must be at least 3 characters"),
     tagline: z.string().optional(),
@@ -108,7 +127,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 2. About School
   about: z.object({
     about: z.string().optional(),
     vision: z.string().optional(),
@@ -117,7 +135,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 3. Academics
   academics: z.object({
     streamsOffered: z.array(z.string()).optional(),
     studentTeacherRatio: z.string().optional(),
@@ -125,7 +142,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 4. Admissions
   admissions: z.object({
     admissionOpen: z.boolean().optional(),
     startDate: z.string().optional(),
@@ -136,7 +152,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 5. Fee Structure
   fees: z.object({
     feeMode: z.enum(["simple", "detailed"]).optional(),
     averageAnnualFee: z.string().optional(),
@@ -148,19 +163,16 @@ export const schoolProfileSchema = z.object({
     customFeeHeads: z.array(customFieldSchema).optional(),
   }),
 
-  // 6. Facilities
   facilities: z.object({
     items: z.array(z.string()).optional(),
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 7. Sports
   sports: z.object({
     items: z.array(z.string()).optional(),
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 8. Infrastructure
   infrastructure: z.object({
     campusArea: z.string().optional(),
     classrooms: z.string().optional(),
@@ -170,20 +182,17 @@ export const schoolProfileSchema = z.object({
     buses: z.string().optional(),
   }),
 
-  // 9. Faculty
   faculty: z.object({
     totalTeachers: z.string().optional(),
     qualifiedTeachers: z.string().optional(),
     trainingPrograms: z.string().optional(),
   }),
 
-  // 10. Programs & Specializations
   programs: z.object({
     items: z.array(z.string()).optional(),
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 11. Student Life
   studentLife: z.object({
     clubs: z.string().optional(),
     culturalActivities: z.string().optional(),
@@ -192,7 +201,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 12. Achievements
   achievements: z.object({
     academic: z.string().optional(),
     sports: z.string().optional(),
@@ -201,18 +209,15 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 13. Board Results
   boardResults: z.object({
     results: z.array(boardResultSchema).optional(),
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 14. Scholarships
   scholarships: z.object({
     list: z.array(scholarshipSchema).optional(),
   }),
 
-  // 15. Hostel
   hostel: z.object({
     available: z.boolean().optional(),
     boys: z.boolean().optional(),
@@ -222,7 +227,6 @@ export const schoolProfileSchema = z.object({
     customFields: z.array(customFieldSchema).optional(),
   }),
 
-  // 16. Transport
   transport: z.object({
     available: z.boolean().optional(),
     coverageAreas: z.string().optional(),
@@ -230,7 +234,6 @@ export const schoolProfileSchema = z.object({
     vehicles: z.string().optional(),
   }),
 
-  // 17. Safety & Security
   safety: z.object({
     cctv: z.boolean().optional(),
     guards: z.boolean().optional(),
@@ -239,17 +242,14 @@ export const schoolProfileSchema = z.object({
     visitorManagement: z.boolean().optional(),
   }),
 
-  // 18. Gallery
   gallery: z.object({
     images: z.array(galleryImageSchema).optional(),
   }),
 
-  // 19. Downloads
   downloads: z.object({
     files: z.array(downloadFileSchema).optional(),
   }),
 
-  // 20. Contact
   contact: z.object({
     phone: z.string().optional(),
     whatsapp: z.string().optional(),
@@ -257,6 +257,8 @@ export const schoolProfileSchema = z.object({
     website: z.string().url("Invalid URL").optional().or(z.literal("")),
     address: z.string().optional(),
     mapUrl: z.string().optional(),
+    latitude: optionalLatitudeSchema,
+    longitude: optionalLongitudeSchema,
     facebook: z.string().optional(),
     instagram: z.string().optional(),
     youtube: z.string().optional(),
@@ -270,9 +272,6 @@ export const schoolProfileSchema = z.object({
       .or(z.literal("")),
   }),
 
-  // 21. Reviews — read only, no schema needed (display only)
-
-  // 22. FAQs
   faqs: z.object({
     list: z.array(faqSchema).optional(),
   }),
@@ -310,6 +309,21 @@ const SECTION_LABELS = [
 ];
 
 // ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+function toStringValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function toNumberOrUndefined(value?: string) {
+  if (!value?.trim()) return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+// ─────────────────────────────────────────────────────────────
 // API data → form default values mapper
 // ─────────────────────────────────────────────────────────────
 
@@ -320,9 +334,7 @@ function mapSchoolToFormData(
     basicInfo: {
       schoolName: (school.name as string) || "",
       tagline: (school.tagline as string) || "",
-      establishedYear: school.establishedYear
-        ? String(school.establishedYear)
-        : "",
+      establishedYear: toStringValue(school.establishedYear),
       managementType: (school.managementType as string) || "",
       category: (school.schoolCategory as string) || "",
       format: (school.schoolFormat as string) || "",
@@ -344,7 +356,7 @@ function mapSchoolToFormData(
       customFields: [],
     },
     about: {
-      about: (school.about as string) || "",
+      about: (school.description as string) || (school.about as string) || "",
       vision: (school.vision as string) || "",
       mission: (school.mission as string) || "",
       principalMessage: (school.principalMessage as string) || "",
@@ -367,14 +379,12 @@ function mapSchoolToFormData(
     },
     fees: {
       feeMode: "simple",
-      averageAnnualFee: school.averageAnnualFee
-        ? String(school.averageAnnualFee)
-        : "",
-      prePrimaryFee: (school.prePrimaryFee as string) || "",
-      class1to5Fee: (school.class1to5Fee as string) || "",
-      class6to8Fee: (school.class6to8Fee as string) || "",
-      class9to10Fee: (school.class9to10Fee as string) || "",
-      class11to12Fee: (school.class11to12Fee as string) || "",
+      averageAnnualFee: toStringValue(school.averageAnnualFee),
+      prePrimaryFee: toStringValue(school.prePrimaryFee),
+      class1to5Fee: toStringValue(school.class1to5Fee),
+      class6to8Fee: toStringValue(school.class6to8Fee),
+      class9to10Fee: toStringValue(school.class9to10Fee),
+      class11to12Fee: toStringValue(school.class11to12Fee),
       customFeeHeads: [],
     },
     facilities: {
@@ -387,19 +397,15 @@ function mapSchoolToFormData(
     },
     infrastructure: {
       campusArea: (school.campusArea as string) || "",
-      classrooms: school.classrooms ? String(school.classrooms) : "",
-      labs: school.labs ? String(school.labs) : "",
-      libraryBooks: school.libraryBooks ? String(school.libraryBooks) : "",
-      hostelCapacity: school.hostelCapacity
-        ? String(school.hostelCapacity)
-        : "",
-      buses: school.buses ? String(school.buses) : "",
+      classrooms: toStringValue(school.totalClassrooms ?? school.classrooms),
+      labs: toStringValue(school.totalLabs ?? school.labs),
+      libraryBooks: toStringValue(school.libraryBooks),
+      hostelCapacity: toStringValue(school.hostelCapacity),
+      buses: toStringValue(school.totalBuses ?? school.buses),
     },
     faculty: {
-      totalTeachers: school.totalTeachers ? String(school.totalTeachers) : "",
-      qualifiedTeachers: school.qualifiedTeachers
-        ? String(school.qualifiedTeachers)
-        : "",
+      totalTeachers: toStringValue(school.totalTeachers),
+      qualifiedTeachers: toStringValue(school.qualifiedTeachers),
       trainingPrograms: (school.trainingPrograms as string) || "",
     },
     programs: {
@@ -407,7 +413,7 @@ function mapSchoolToFormData(
       customFields: [],
     },
     studentLife: {
-      clubs: (school.clubs as string) || "",
+      clubs: (school.clubsActivities as string) || (school.clubs as string) || "",
       culturalActivities: (school.culturalActivities as string) || "",
       annualEvents: (school.annualEvents as string) || "",
       educationalTours: (school.educationalTours as string) || "",
@@ -416,15 +422,11 @@ function mapSchoolToFormData(
     achievements: {
       academic: (school.academicAchievements as string) || "",
       sports: (school.sportsAchievements as string) || "",
-      awards: (school.awards as string) || "",
+      awards:
+        (school.awardsRecognitions as string) || (school.awards as string) || "",
       recognitions: (school.recognitions as string) || "",
       customFields: [],
     },
-    // NOTE: boardResults, scholarships, gallery, downloads, faqs relation arrays
-    // are left as [] intentionally (Option B — fix tracked separately).
-    // These 5 sections are safe for viewing but saving will wipe existing data
-    // in those relations. Fix before enabling school-admin profile edit or
-    // admin edit for these sections.
     boardResults: {
       results: [],
       customFields: [],
@@ -432,24 +434,32 @@ function mapSchoolToFormData(
     scholarships: { list: [] },
     hostel: {
       available: (school.hostelAvailable as boolean) || false,
-      boys: (school.boysHostel as boolean) || false,
-      girls: (school.girlsHostel as boolean) || false,
-      capacity: school.hostelCapacity ? String(school.hostelCapacity) : "",
-      mess: (school.messAvailable as boolean) || false,
+      boys: (school.hostelBoys as boolean) || (school.boysHostel as boolean) || false,
+      girls:
+        (school.hostelGirls as boolean) || (school.girlsHostel as boolean) || false,
+      capacity: toStringValue(school.hostelCapacity),
+      mess: (school.hostelMess as boolean) || (school.messAvailable as boolean) || false,
       customFields: [],
     },
     transport: {
       available: (school.transportAvailable as boolean) || false,
-      coverageAreas: (school.coverageAreas as string) || "",
+      coverageAreas:
+        (school.transportAreas as string) || (school.coverageAreas as string) || "",
       gpsTracking: (school.gpsTracking as boolean) || false,
-      vehicles: school.vehicles ? String(school.vehicles) : "",
+      vehicles: toStringValue(school.totalVehicles ?? school.vehicles),
     },
     safety: {
-      cctv: (school.cctv as boolean) || false,
-      guards: (school.securityGuards as boolean) || false,
-      medicalRoom: (school.medicalRoom as boolean) || false,
-      fireSafety: (school.fireSafety as boolean) || false,
-      visitorManagement: (school.visitorManagement as boolean) || false,
+      cctv: (school.hasCCTV as boolean) || (school.cctv as boolean) || false,
+      guards:
+        (school.hasGuards as boolean) || (school.securityGuards as boolean) || false,
+      medicalRoom:
+        (school.hasMedicalRoom as boolean) || (school.medicalRoom as boolean) || false,
+      fireSafety:
+        (school.hasFireSafety as boolean) || (school.fireSafety as boolean) || false,
+      visitorManagement:
+        (school.hasVisitorMgmt as boolean) ||
+        (school.visitorManagement as boolean) ||
+        false,
     },
     gallery: { images: [] },
     downloads: { files: [] },
@@ -460,6 +470,8 @@ function mapSchoolToFormData(
       website: (school.website as string) || "",
       address: (school.address as string) || "",
       mapUrl: (school.mapUrl as string) || "",
+      latitude: toStringValue(school.latitude),
+      longitude: toStringValue(school.longitude),
       facebook: (school.facebook as string) || "",
       instagram: (school.instagram as string) || "",
       youtube: (school.youtube as string) || "",
@@ -480,19 +492,17 @@ function mapSchoolToFormData(
 const DRAFT_KEY = (schoolId: string) => `sf_school_profile_draft_${schoolId}`;
 
 // ─────────────────────────────────────────────────────────────
-// Props — CHANGE 1
+// Props
 // ─────────────────────────────────────────────────────────────
 
 interface SchoolProfileFormProps {
   school: Record<string, unknown>;
-  /** Override the PATCH endpoint (admin edit uses /api/admin/schools/[id]) */
   submitEndpoint?: string;
-  /** When true, skip localStorage draft save/restore (admin edit mode) */
   disableDraft?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Component — CHANGE 2: destructure new props with defaults
+// Component
 // ─────────────────────────────────────────────────────────────
 
 export default function SchoolProfileForm({
@@ -506,9 +516,8 @@ export default function SchoolProfileForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const schoolId = school.id as string;
+  const schoolId = String(school.id ?? "unknown");
 
-  // ── Form init ──────────────────────────────────────────────
   const {
     control,
     register,
@@ -522,9 +531,9 @@ export default function SchoolProfileForm({
     defaultValues: mapSchoolToFormData(school),
   });
 
-  // ── Draft restore on mount — CHANGE 3 ─────────────────────
   useEffect(() => {
     if (disableDraft) return;
+
     try {
       const draft = localStorage.getItem(DRAFT_KEY(schoolId));
       if (draft) {
@@ -536,11 +545,12 @@ export default function SchoolProfileForm({
     }
   }, [schoolId, reset, disableDraft]);
 
-  // ── Auto-save draft on change — CHANGE 4 ──────────────────
   const watchedValues = watch();
+
   useEffect(() => {
     if (disableDraft) return;
     if (!isDirty) return;
+
     try {
       localStorage.setItem(DRAFT_KEY(schoolId), JSON.stringify(watchedValues));
     } catch {
@@ -548,7 +558,6 @@ export default function SchoolProfileForm({
     }
   }, [watchedValues, isDirty, schoolId, disableDraft]);
 
-  // ── Section props (passed to every section) ────────────────
   const sectionProps: SectionProps = {
     control,
     register,
@@ -558,7 +567,6 @@ export default function SchoolProfileForm({
     isLoading: saving,
   };
 
-  // ── Section components list ────────────────────────────────
   const sections = [
     <BasicInfoSection key="basic" {...sectionProps} />,
     <AboutSchoolSection key="about" {...sectionProps} />,
@@ -588,7 +596,6 @@ export default function SchoolProfileForm({
   const isFirst = activeSection === 0;
   const isLast = activeSection === totalSections - 1;
 
-  // ── Submit — CHANGE 5: use submitEndpoint + conditional draft clear ──
   const onSubmit = useCallback(
     async (data: SchoolProfileFormData) => {
       setSaving(true);
@@ -598,7 +605,6 @@ export default function SchoolProfileForm({
 
       try {
         const payload = {
-          // Basic Info
           name: data.basicInfo.schoolName,
           tagline: data.basicInfo.tagline || undefined,
           establishedYear: data.basicInfo.establishedYear
@@ -620,17 +626,14 @@ export default function SchoolProfileForm({
           coverImageUrl: data.basicInfo.coverImageUrl || undefined,
           classesOffered: data.basicInfo.classesOffered ?? [],
 
-          // About
           description: data.about.about || undefined,
           vision: data.about.vision || undefined,
           mission: data.about.mission || undefined,
           principalMessage: data.about.principalMessage || undefined,
 
-          // Academics
           streamsOffered: data.academics.streamsOffered ?? [],
           studentTeacherRatio: data.academics.studentTeacherRatio || undefined,
 
-          // Admissions
           admissionOpen: data.admissions.admissionOpen ?? false,
           admissionStartDate: data.admissions.startDate || undefined,
           admissionEndDate: data.admissions.endDate || undefined,
@@ -638,7 +641,6 @@ export default function SchoolProfileForm({
           requiredDocuments: data.admissions.requiredDocuments || undefined,
           admissionProcess: data.admissions.admissionProcess || undefined,
 
-          // Fees
           averageAnnualFee: data.fees.averageAnnualFee
             ? Number(data.fees.averageAnnualFee)
             : undefined,
@@ -658,11 +660,9 @@ export default function SchoolProfileForm({
             ? Number(data.fees.class11to12Fee)
             : undefined,
 
-          // Facilities & Sports
           facilitiesList: data.facilities.items ?? [],
           sportsList: data.sports.items ?? [],
 
-          // Infrastructure
           campusArea: data.infrastructure.campusArea || undefined,
           totalClassrooms: data.infrastructure.classrooms
             ? Number(data.infrastructure.classrooms)
@@ -680,7 +680,6 @@ export default function SchoolProfileForm({
             ? Number(data.infrastructure.buses)
             : undefined,
 
-          // Faculty
           totalTeachers: data.faculty.totalTeachers
             ? Number(data.faculty.totalTeachers)
             : undefined,
@@ -689,46 +688,41 @@ export default function SchoolProfileForm({
             : undefined,
           trainingPrograms: data.faculty.trainingPrograms || undefined,
 
-          // Programs
           programsList: data.programs.items ?? [],
 
-          // Student Life
           clubsActivities: data.studentLife.clubs || undefined,
           culturalActivities: data.studentLife.culturalActivities || undefined,
           annualEvents: data.studentLife.annualEvents || undefined,
           educationalTours: data.studentLife.educationalTours || undefined,
 
-          // Achievements
           academicAchievements: data.achievements.academic || undefined,
           sportsAchievements: data.achievements.sports || undefined,
           awardsRecognitions: data.achievements.awards || undefined,
 
-          // Hostel
           hostelAvailable: data.hostel.available ?? false,
           hostelBoys: data.hostel.boys ?? false,
           hostelGirls: data.hostel.girls ?? false,
           hostelMess: data.hostel.mess ?? false,
 
-          // Transport
           transportAvailable: data.transport.available ?? false,
           transportAreas: data.transport.coverageAreas || undefined,
           gpsTracking: data.transport.gpsTracking ?? false,
           totalVehicles: data.transport.vehicles || undefined,
 
-          // Safety
           hasCCTV: data.safety.cctv ?? false,
           hasGuards: data.safety.guards ?? false,
           hasMedicalRoom: data.safety.medicalRoom ?? false,
           hasFireSafety: data.safety.fireSafety ?? false,
           hasVisitorMgmt: data.safety.visitorManagement ?? false,
 
-          // Contact
           phone: data.contact.phone || undefined,
           whatsapp: data.contact.whatsapp || undefined,
           email: data.contact.email || undefined,
           website: data.contact.website || undefined,
           address: data.contact.address || undefined,
           mapUrl: data.contact.mapUrl || undefined,
+          latitude: toNumberOrUndefined(data.contact.latitude),
+          longitude: toNumberOrUndefined(data.contact.longitude),
           facebook: data.contact.facebook || undefined,
           instagram: data.contact.instagram || undefined,
           youtube: data.contact.youtube || undefined,
@@ -738,7 +732,6 @@ export default function SchoolProfileForm({
           admissionPhone: data.contact.admissionPhone || undefined,
           admissionEmail: data.contact.admissionEmail || undefined,
 
-          // Related arrays
           boardResults: (data.boardResults.results ?? [])
             .filter((r) => r.year?.trim())
             .map((r) => ({
@@ -772,7 +765,6 @@ export default function SchoolProfileForm({
             })),
         };
 
-        // CHANGE 5a: use submitEndpoint prop instead of hardcoded URL
         const res = await fetch(submitEndpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -796,7 +788,6 @@ export default function SchoolProfileForm({
           return;
         }
 
-        // CHANGE 5b: conditionally clear draft
         setFieldErrors({});
         if (!disableDraft) {
           localStorage.removeItem(DRAFT_KEY(schoolId));
@@ -810,27 +801,21 @@ export default function SchoolProfileForm({
         setSaving(false);
       }
     },
-    // CHANGE 6: updated dependency array
     [schoolId, submitEndpoint, disableDraft],
   );
 
-  // ── Render ─────────────────────────────────────────────────
   return (
     <div className="flex gap-6 min-h-screen">
-      {/* Sidebar */}
       <SchoolProfileSidebar
         sections={SECTION_LABELS.map((label, index) => ({ index, label }))}
         activeIndex={activeSection}
         onSelect={setActiveSection}
       />
 
-      {/* Main content */}
       <div className="flex-1 max-w-3xl">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          {/* Active section */}
           <div className="mb-6">{sections[activeSection]}</div>
 
-          {/* Field-level errors summary */}
           {Object.keys(fieldErrors).length > 0 && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200/60 rounded-xl">
               <p className="font-heading text-sm text-red-700 font-semibold mb-2">
@@ -839,21 +824,19 @@ export default function SchoolProfileForm({
               <ul className="list-disc list-inside space-y-1">
                 {Object.entries(fieldErrors).map(([field, msg]) => (
                   <li key={field} className="font-body text-sm text-red-600">
-                    {msg}
+                    {field}: {msg}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* General save error */}
           {saveError && Object.keys(fieldErrors).length === 0 && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200/60 rounded-xl">
               <p className="font-body text-body text-red-600">{saveError}</p>
             </div>
           )}
 
-          {/* Success */}
           {saveSuccess && (
             <div className="mb-4 p-4 bg-green-50 border border-green-200/60 rounded-xl flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-600" />
@@ -863,7 +846,6 @@ export default function SchoolProfileForm({
             </div>
           )}
 
-          {/* Navigation footer */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100">
             <Button
               type="button"

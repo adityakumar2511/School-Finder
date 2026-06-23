@@ -1,329 +1,496 @@
-# SchoolFinder
+# SchoolFinder / SchoolSetu
 
-> Last updated: June 12, 2026
+> Last updated: June 23, 2026  
+> Status: All implemented phases completed. **Phase 4 Blog CMS is intentionally skipped for now.**
 
-A full-stack school discovery and inquiry platform for **Tier-2 and Tier-3 cities in India**. Parents search and compare schools; school administrators manage listings and inquiries; platform administrators verify listings and maintain quality.
+SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry, and admin-management platform for **Tier-2 and Tier-3 cities in India**. Parents can discover and compare schools, school administrators can manage listings and leads, and platform administrators can verify, moderate, feature, and manage the platform.
 
-| Layer | Technology | Port (local) |
-|-------|------------|--------------|
-| Frontend | Next.js 14, NextAuth v5 (JWT) | `3000` |
-| Backend | Express.js 5, JWT, Prisma 5 | `4000` |
-| Database | PostgreSQL (Neon) | — |
-| Media | Cloudinary (frontend upload route) | — |
+| Layer | Technology | Local Port | Responsibility |
+|---|---|---:|---|
+| Frontend | Next.js 14 · TypeScript · Tailwind CSS · NextAuth v5 | `3000` | UI, auth sessions, BFF proxy routes, Cloudinary uploads, SEO |
+| Backend | Express.js 5 · TypeScript · Prisma · JWT | `4000` | REST API, auth, validation, database operations, business rules |
+| Database | PostgreSQL on Neon | — | Users, schools, inquiries, favourites, contacts, audit logs |
+| Media | Cloudinary | — | School logos, gallery images, profile uploads |
+| Monitoring | Sentry | — | Frontend and backend error tracking |
 
-**Detailed docs:** [frontend/Frontend.md](frontend/Frontend.md) · [backend/Backend.md](backend/Backend.md)
+**Detailed documentation:**
 
----
-
-## Features
-
-### Parents
-- Search and filter schools by city, board, type, and medium
-- View school detail pages with fees, facilities, and gallery
-- Save favourites and send inquiries to approved schools
-- Dashboard: profile, favourites, recently viewed schools, inquiry history
-- Google OAuth and email/password authentication
-- OTP-based password reset
-
-### School Administrators
-- 4-step registration wizard with draft persistence
-- Dashboard: inquiry management, profile and gallery editing
-- Inquiry status workflow (NEW → CONTACTED → CLOSED)
-- Listing status visibility (PENDING, APPROVED, REJECTED)
-
-### Platform Administrators
-- School moderation (approve/reject listings)
-- Direct school creation wizard (APPROVED status)
-- User management (roles, account disable)
-- Cross-platform inquiry monitoring and dashboard stats
+- [Frontend documentation](frontend/Frontend.md)
+- [Backend documentation](backend/Backend.md)
+- [Feature plan](plan.md)
+- [Future features](Future-Features.md)
 
 ---
 
-## Tech Stack
+## Current Project Status
 
-### Frontend
-Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · NextAuth v5 · Zod · React Hook Form · Cloudinary · Framer Motion
-
-### Backend
-Express.js 5 · TypeScript · Prisma 5 · PostgreSQL · JWT · Zod · bcryptjs · Brevo (email OTP) · Fast2SMS (phone OTP) · Helmet · express-rate-limit
-
-**Frontend has no database driver.** PostgreSQL is accessed only by the backend.
+| Phase | Feature Area | Status |
+|---|---|---|
+| Phase 1 | Navbar, static pages, contact page | ✅ Complete |
+| Phase 2 | Inquiry spam protection | ✅ Complete |
+| Phase 3 | Inquiry / lead system upgrade | ✅ Complete |
+| Phase 4 | Blog CMS | ⏸️ Skipped for now |
+| Phase 5 | SEO dynamic pages | ✅ Complete |
+| Phase 6 | Featured listings | ✅ Complete |
+| Phase 7 | Sentry reliability/error monitoring | ✅ Complete |
+| Phase 8 | Compare, maps, nearby schools, AI placeholder | ✅ Complete |
 
 ---
 
-## Architecture
+## Core Features
 
+### Public / Parent-Facing Features
+
+- Home page with featured schools and public discovery flow
+- School listing page with filters by city, state, board, type, medium, and search text
+- Dynamic SEO pages for city, state, and board based discovery
+- School detail pages with profile sections, fees, facilities, gallery, contact details, map, and nearby schools
+- Compare Schools page with up to **3 schools** stored in `localStorage`
+- AI Recommendation route available as a **Coming Soon** placeholder
+- About page and Contact page
+- Contact form with database save, EmailJS notification, and Google Sheets webhook support
+- Mobile-first responsive UI
+- Sitemap, robots.txt, metadata, and JSON-LD structured data
+
+### Parent Account Features
+
+- Parent registration and login with email/password
+- Google OAuth for parent login
+- OTP-based password reset via email
+- Parent dashboard with:
+  - Profile management
+  - Favourite schools
+  - Recently viewed schools
+  - Sent inquiries and inquiry status tracking
+- Save/remove favourite schools
+- Send inquiries to approved schools
+- Inquiry spam protection through duplicate checks, rate limits, and honeypot filtering
+
+### School Administrator Features
+
+- School admin login and registration
+- 4-step school registration wizard with draft persistence
+- School dashboard with listing status and inquiry summary
+- Full school profile editor with 22 profile sections
+- Gallery/logo/cover image upload through Cloudinary
+- Latitude and longitude fields for map and nearby school discovery
+- Inquiry management with expanded lead statuses:
+  - `NEW`
+  - `CONTACTED`
+  - `INTERESTED`
+  - `CONVERTED`
+  - `CLOSED`
+- Monthly lead count/stat from existing inquiry data
+
+### Platform Administrator Features
+
+- Hidden admin login at `/admin-login`
+- Admin dashboard with platform stats
+- School moderation:
+  - Approve/reject schools
+  - Edit school profile
+  - Delete schools
+  - List/unlist public visibility
+  - Mark/unmark featured listings
+- Featured listing control with `isFeatured` and `featuredUntil`
+- User management:
+  - School admins
+  - Parents
+  - Admins
+  - Delete users
+  - Enable/disable users
+  - Access-level based controls
+- Admin access levels:
+  - `READ_ONLY`
+  - `READ_WRITE`
+  - `FULL_ACCESS`
+- Super admin support:
+  - Single DB-only super admin
+  - Protected from delete, role change, status change, and access-level changes
+- Add school wizard
+- Add parent form
+- Add admin form
+- Cross-platform inquiry monitoring with filters
+- Admin audit logs for sensitive mutations
+
+### Backend / System Features
+
+- Stateless REST API with Express.js
+- Prisma ORM with PostgreSQL / Neon
+- JWT authentication with role-based authorization
+- Separate role flows for Parent, School Admin, and Platform Admin
+- Brute-force login protection
+- Rate limiting for auth, forgot password, OTP, contact, and inquiry flows
+- Zod validation and request sanitization
+- Public school cache and cache invalidation after mutations
+- Contact submission model and endpoint
+- Featured listing API and public featured filtering
+- Nearby schools API using coordinates and distance calculation
+- Sentry error capture for frontend and backend
+- Cloudinary upload handled by frontend route only; backend stores image URLs
+
+---
+
+## Architecture Overview
+
+```txt
+Browser
+  │
+  ▼
+Frontend: Next.js 14 on Vercel
+  ├─ Public pages and dashboards
+  ├─ NextAuth JWT sessions
+  ├─ BFF routes under /api/*
+  ├─ Cloudinary upload route
+  └─ SEO / sitemap / metadata
+  │
+  │ HTTPS + Bearer JWT
+  ▼
+Backend: Express API on Render
+  ├─ Security middleware
+  ├─ JWT auth and role checks
+  ├─ Zod validation
+  ├─ Controllers and business rules
+  ├─ Cache and Sentry
+  └─ Prisma client
+  │
+  ▼
+Neon PostgreSQL
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (Parent / School Admin / Platform Admin)            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Frontend (Vercel) — port 3000                               │
-│  Next.js 14 App Router · NextAuth v5 (JWT, no DB adapter)   │
-│  backendFetch / adminFetch / BFF /api/* → Express API       │
-│  POST /api/upload → Cloudinary (server-side only)            │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTPS + Bearer JWT
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Backend API (Render) — port 4000                            │
-│  Express · JWT (HS256) · Prisma · Zod · Rate limits         │
-│  Single source of truth for all database operations          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Neon PostgreSQL                                             │
-│  Schema: backend/prisma/schema.prisma                        │
-└─────────────────────────────────────────────────────────────┘
-```
 
-### Authentication Model
-
-Three roles with separate login entry points — no shared login page.
-
-| Role | Login Route | Home | Token Storage |
-|------|-------------|------|---------------|
-| `PARENT` | `/login` | `/` | NextAuth session + sessionStorage |
-| `SCHOOL_ADMIN` | `/school-login` | `/dashboard/school` | NextAuth session + mintBackendJwt fallback |
-| `ADMIN` | `/admin-login` | `/admin` | HTTP-only `sf_admin_token` cookie |
-
-Two-layer tokens: NextAuth JWT (30 min, UI/middleware) + Backend Bearer JWT (7 days, API auth).
+**Frontend has no direct database access.** All database operations go through the backend API.
 
 ---
 
-## Folder Structure
+## Short Folder Structure
 
-```
+```txt
 .
-├── frontend/                 Next.js UI, NextAuth, BFF proxies, Cloudinary upload
-│   ├── src/app/              App Router pages and API routes
-│   ├── src/components/       UI components by domain
-│   ├── src/lib/              Auth, API clients, data modules, types
-│   └── middleware.ts         Role-based route protection
-├── backend/                  Express REST API, Prisma schema, JWT auth
-│   ├── src/                  Routes, controllers, middleware, lib
-│   ├── prisma/               Schema and migrations
-│   └── render.yaml           Render deployment blueprint
-├── docs/                     Audit reports and artifacts
-└── README.md
+├── frontend/                 # Next.js app, pages, dashboards, BFF routes, uploads, SEO
+│   ├── src/app/              # App Router pages and API routes
+│   ├── src/components/       # Shared, public, auth, parent, school, admin components
+│   ├── src/lib/              # Auth, API clients, data modules, upload, SEO, types
+│   ├── middleware.ts         # Frontend route protection
+│   ├── Frontend.md           # Full frontend documentation
+│   └── package.json
+│
+├── backend/                  # Express REST API, Prisma, auth, validation, business logic
+│   ├── src/routes/           # API route definitions
+│   ├── src/controllers/      # Request handlers and business logic
+│   ├── src/middleware/       # Auth, security, validation, error handling
+│   ├── src/validators/       # Zod schemas
+│   ├── src/lib/              # Prisma, cache, mailer, OTP, queries, helpers
+│   ├── prisma/               # Schema and migrations
+│   ├── Backend.md            # Full backend documentation
+│   └── package.json
+│
+├── plan.md                   # Completed phase summary
+├── Future-Features.md        # Blog, Razorpay, and future expansion list
+└── README.md                 # Root project overview
 ```
+
+For full detailed file trees, see `frontend/Frontend.md` and `backend/Backend.md`.
 
 ---
 
-## Installation
+## Main Frontend Routes
 
-### Prerequisites
+| Route | Purpose |
+|---|---|
+| `/` | Home page |
+| `/schools` | Public school listing |
+| `/schools/[slug]` | Public school detail page |
+| `/schools/city/[city]` | Dynamic city SEO pages |
+| `/schools/state/[state]` | Dynamic state SEO pages |
+| `/schools/board/[board]` | Dynamic board SEO pages |
+| `/compare` | Compare up to 3 schools |
+| `/ai-recommend` | AI recommendation placeholder page |
+| `/about` | About page |
+| `/contact` | Contact page |
+| `/login` | Parent login |
+| `/register` | Parent registration |
+| `/forgot-password` | OTP password reset |
+| `/school-login` | School admin login |
+| `/school-register` | School admin registration |
+| `/parent/*` | Parent dashboard |
+| `/dashboard/school/*` | School admin dashboard |
+| `/admin/*` | Platform admin panel |
+| `/admin-login` | Hidden admin login |
 
-- Node.js 18+
-- Neon PostgreSQL (or compatible Postgres)
-- Cloudinary account (for image uploads)
-- Google OAuth credentials (optional, for parent Google login)
-- Brevo API key (for password reset emails in production)
+---
 
-### 1. Backend
+## Main Backend API Areas
+
+| Prefix | Purpose | Auth |
+|---|---|---|
+| `/health`, `/ready` | Health checks | Public |
+| `/api/auth` | Register, login, logout, OTP, profile, Google sync | Mixed |
+| `/api/schools` | Public discovery, school CRUD, nearby schools | Mixed |
+| `/api/admin` | Moderation, users, featured listings, stats | `ADMIN` |
+| `/api/inquiries` | Parent inquiries and lead status updates | Parent / School / Admin |
+| `/api/parent` | Parent profile and favourites | `PARENT` |
+| `/api/favourites` | Legacy favourites API | `PARENT` |
+| `/api/contact` | Public contact form submission | Public |
+
+Full endpoint details are available in [backend/Backend.md](backend/Backend.md).
+
+---
+
+## Authentication Model
+
+The project uses separate role flows instead of one shared login screen.
+
+| Role | Login Route | Main Area | Token Usage |
+|---|---|---|---|
+| `PARENT` | `/login` | `/parent` | NextAuth session + backend JWT |
+| `SCHOOL_ADMIN` | `/school-login` | `/dashboard/school` | NextAuth session + backend JWT |
+| `ADMIN` | `/admin-login` | `/admin` | HTTP-only `sf_admin_token` + NextAuth session |
+
+Backend JWT payload includes user role. For admins, it also includes `adminAccessLevel` and `isSuperAdmin` for frontend UI gating. Backend always re-checks permissions from the database for sensitive operations.
+
+---
+
+## Environment Setup
+
+### Frontend Environment Variables
+
+Create `frontend/.env.local` from `frontend/.env.example`.
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_SITE_URL` | Canonical site URL for SEO |
+| `NEXT_PUBLIC_API_URL` | Backend API base URL |
+| `NEXTAUTH_URL` / `AUTH_URL` | NextAuth site URL |
+| `NEXTAUTH_SECRET` / `AUTH_SECRET` | NextAuth session secret |
+| `AUTH_TRUST_HOST` | Required on Vercel |
+| `JWT_SECRET` | Must match backend JWT secret |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Parent Google OAuth |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Server-side upload route |
+| `NEXT_PUBLIC_EMAILJS_SERVICE_ID` | Contact form EmailJS service |
+| `NEXT_PUBLIC_EMAILJS_TEMPLATE_ID` | Contact form EmailJS template |
+| `NEXT_PUBLIC_EMAILJS_PUBLIC_KEY` | Contact form EmailJS public key |
+| `NEXT_PUBLIC_CONTACT_SHEET_URL` | Google Sheets Apps Script webhook |
+| `NEXT_PUBLIC_SENTRY_DSN` | Frontend Sentry DSN |
+| `SENTRY_AUTH_TOKEN` | Sentry source map upload token |
+| `SENTRY_ORG` | Sentry org slug |
+| `SENTRY_PROJECT` | Sentry frontend project slug |
+
+No `DATABASE_URL` is used on the frontend.
+
+### Backend Environment Variables
+
+Create `backend/.env` from `backend/.env.example`.
+
+| Variable | Purpose |
+|---|---|
+| `NODE_ENV` | `development` / `production` |
+| `PORT` | Backend port, default `4000` |
+| `DATABASE_URL` | Neon/PostgreSQL connection string |
+| `JWT_SECRET` | API token signing secret; must match frontend |
+| `JWT_EXPIRES_IN` | Backend token lifetime |
+| `FRONTEND_URL` | CORS allowlist |
+| `BREVO_API_KEY` | Email OTP sender |
+| `EMAIL_FROM` | Verified Brevo sender email |
+| `FAST2SMS_API_KEY` | SMS OTP provider key |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin seeder |
+| `SUPER_ADMIN_EMAIL` | Super admin seeder |
+| `BCRYPT_ROUNDS` | Password hash cost |
+| `TRUST_PROXY` | Production proxy support |
+| `SENTRY_DSN` | Backend Sentry DSN |
+
+---
+
+## Local Development
+
+### 1. Start Backend
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit DATABASE_URL, JWT_SECRET, FRONTEND_URL, BREVO_API_KEY, EMAIL_FROM
-
 npm install
 npx prisma generate
 npm run migrate:dev
 npm run dev
 ```
 
-API: [http://localhost:4000](http://localhost:4000)  
-Health: `GET http://localhost:4000/health`
+Backend runs at:
 
-### 2. Frontend
+```txt
+http://localhost:4000
+```
+
+Health check:
+
+```txt
+GET http://localhost:4000/health
+```
+
+### 2. Start Frontend
 
 ```bash
 cd frontend
 cp .env.example .env.local
-# Set NEXT_PUBLIC_API_URL=http://localhost:4000
-# Set JWT_SECRET to the same value as backend
-
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Frontend runs at:
 
-### 3. First Admin User
-
-```bash
-cd backend
-# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env
-npm run seed:admin
+```txt
+http://localhost:3000
 ```
 
-Sign in at `/admin-login` with those credentials.
-
-Run both services in separate terminals (frontend `:3000`, backend `:4000`).
-
----
-
-## Environment Setup
-
-### Frontend (`frontend/.env.local`)
-
-| Variable | Purpose |
-|----------|---------|
-| `NEXT_PUBLIC_SITE_URL` | Canonical URL for SEO |
-| `NEXT_PUBLIC_API_URL` | Backend API base URL |
-| `NEXTAUTH_URL` / `AUTH_URL` | NextAuth canonical URL |
-| `NEXTAUTH_SECRET` / `AUTH_SECRET` | Session encryption |
-| `AUTH_TRUST_HOST` | Required on Vercel (`true`) |
-| `JWT_SECRET` | Must match backend |
-| `GOOGLE_CLIENT_ID/SECRET` | Parent Google OAuth |
-| `CLOUDINARY_*` | Server upload route only |
-
-No `DATABASE_URL` on the frontend.
-
-### Backend (`backend/.env`)
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | Neon PostgreSQL with `sslmode=require` |
-| `JWT_SECRET` | API token signing (must match frontend) |
-| `JWT_EXPIRES_IN` | Token lifetime (default `7d`) |
-| `FRONTEND_URL` | CORS allowlist |
-| `BREVO_API_KEY` | Password reset OTP email |
-| `EMAIL_FROM` | Verified Brevo sender |
-| `FAST2SMS_API_KEY` | Phone OTP SMS (optional) |
-| `ADMIN_EMAIL/PASSWORD` | Initial admin seeder |
-| `BCRYPT_ROUNDS` | Password hashing cost (default `12`) |
-
-See [backend/Backend.md](backend/Backend.md) for the full variable reference.
-
----
-
-## Development Workflow
-
-1. Start backend with `npm run dev` in `backend/`
-2. Start frontend with `npm run dev` in `frontend/`
-3. Schema changes: edit `backend/prisma/schema.prisma` → `npm run migrate:dev` → `npx prisma generate`
-4. Type check: `npx tsc --noEmit` in both projects
-5. Build: `npm run build` in frontend, `npm run build` in backend
-
----
-
-## Build & Deployment
-
-### Database (Neon)
+### 3. Seed Admin Users
 
 ```bash
 cd backend
+npm run seed:admin
+npm run seed:super-admin
+```
+
+Use `/admin-login` for platform admin access.
+
+---
+
+## Database and Prisma Workflow
+
+Run commands from `backend/`.
+
+```bash
+# After changing schema.prisma
+npx prisma migrate dev --name your_migration_name
+npx prisma generate
+
+# Production migration
 npx prisma migrate deploy
 ```
 
-Set `DATABASE_URL` on Render only. Frontend does not need it.
+Important Prisma owner file:
 
-### Backend (Render)
-
-Use `backend/render.yaml` or manual Web Service:
-
-- **Build:** `npm ci && npx prisma generate && npm run build`
-- **Pre-deploy:** `npx prisma migrate deploy`
-- **Start:** `npm start`
-- **Health:** `/health`
-
-Set `FRONTEND_URL` to your Vercel domain (exact match, HTTPS, no trailing slash).
-
-### Frontend (Vercel)
-
-1. Connect repository; set root directory to `frontend`
-2. Add all variables from `frontend/.env.example`
-3. Set `NEXT_PUBLIC_API_URL` to deployed API HTTPS URL
-4. Set `JWT_SECRET` to match backend
-5. Add Google OAuth redirect: `https://your-domain.com/api/auth/callback/google`
-
-### Post-Deploy Verification
-
-| Check | Expected |
-|-------|----------|
-| `GET /health` | `{ "status": "ok", "database": "connected" }` |
-| Public school listing | Loads on `/schools` |
-| CORS | Browser requests from Vercel origin succeed |
-| Auth | Parent and admin login work on production URLs |
-| Sitemap | `/sitemap.xml` includes approved schools |
+```txt
+backend/prisma/schema.prisma
+```
 
 ---
 
-## API Overview
+## Build Commands
 
-| Prefix | Purpose | Auth |
-|--------|---------|------|
-| `/health`, `/ready` | Health checks | None |
-| `/api/auth` | Registration, login, OTP reset, profile | Mixed |
-| `/api/schools` | Public discovery + school admin CRUD | Mixed |
-| `/api/admin` | Moderation, users, stats | ADMIN |
-| `/api/inquiries` | Parent inquiries + school status | PARENT / SCHOOL_ADMIN |
-| `/api/parent` | Parent profile, favourites, inquiries | PARENT |
-| `/api/favourites` | Legacy favourites (deprecated) | PARENT |
+### Frontend
 
-Full endpoint reference: [backend/Backend.md](backend/Backend.md)
+```bash
+cd frontend
+npm run build
+npx tsc --noEmit
+```
 
----
+### Backend
 
-## Security
-
-| Feature | Implementation |
-|---------|----------------|
-| JWT auth | HS256, issuer `schoolfinder-api`, jti blacklist on logout |
-| Role protection | Middleware (frontend) + `requireRole` (backend) |
-| Rate limiting | 100/15min general; 10/15min auth; 3/h forgot; 5/h reset |
-| Brute-force guard | 5 failures / 15 min per IP+email on login |
-| Upload validation | MIME, size (5MB), magic-byte checks (frontend route) |
-| CORS | Restricted to `FRONTEND_URL` in production |
-| Helmet | Security headers + HSTS on API |
-| Hidden admin login | `/admin-login` not in public navigation |
-| Secrets | JWT, DB, Cloudinary credentials server-side only |
-| No frontend DB | Database credentials never on Vercel |
+```bash
+cd backend
+npm run build
+npx tsc --noEmit
+```
 
 ---
 
-## Current Roadmap
+## Deployment
 
-| Item | Status |
-|------|--------|
-| School discovery and filtering | Complete |
-| Parent favourites and inquiries | Complete |
-| School registration and dashboard | Complete |
-| Admin moderation and user management | Complete |
-| OTP password reset (email) | Complete |
-| Phone OTP auth (SMS) | Backend only — no frontend UI |
-| DRAFT school status flow | Partial — frontend checks exist, backend never assigns DRAFT |
-| Facility management API | Not implemented (schema exists) |
-| Email provider alignment | Brevo in code, Resend in env validation — needs cleanup |
+### Frontend: Vercel
 
-See [docs/Dead-Code-Legacy-Report.md](docs/Dead-Code-Legacy-Report.md) for cleanup candidates.
+- Root directory: `frontend`
+- Build command: `npm run build`
+- Add all frontend environment variables
+- Set `NEXT_PUBLIC_API_URL` to the deployed backend URL
+- Set `JWT_SECRET` to match backend
+- Add Google OAuth redirect URL:
+
+```txt
+https://your-domain.com/api/auth/callback/google
+```
+
+### Backend: Render
+
+- Root directory: `backend`
+- Build command:
+
+```bash
+npm ci && npx prisma generate && npm run build
+```
+
+- Pre-deploy command:
+
+```bash
+npx prisma migrate deploy
+```
+
+- Start command:
+
+```bash
+npm start
+```
+
+- Health path:
+
+```txt
+/health
+```
+
+Set `FRONTEND_URL` to the exact Vercel domain.
 
 ---
 
-## Documentation
+## Security and Reliability
 
-| Document | Contents |
-|----------|----------|
-| [frontend/Frontend.md](frontend/Frontend.md) | App Router, auth, API integration, dashboards, SEO, deployment |
-| [backend/Backend.md](backend/Backend.md) | API routes, middleware, schema, caching, security |
-| [docs/Dead-Code-Legacy-Report.md](docs/Dead-Code-Legacy-Report.md) | Unused code and legacy endpoints |
-| [docs/Architecture-Consistency-Report.md](docs/Architecture-Consistency-Report.md) | Documentation vs code alignment |
-
----
-
-## Contributing
-
-1. Fork the repository and create a feature branch
-2. Follow existing patterns: TypeScript strict mode, role-separated auth
-3. Run `npm run build` in frontend and `npx tsc --noEmit` in both projects before PR
-4. Do not commit `.env`, `.env.local`, or secrets
-5. Schema changes: update `backend/prisma/schema.prisma`, run `npm run migrate:dev`, then `npx prisma generate`
+| Area | Implementation |
+|---|---|
+| Authentication | JWT + NextAuth session model |
+| Authorization | Backend `requireRole` and admin access-level guards |
+| Admin protection | Hidden admin login, super admin guard, audit logs |
+| Rate limits | General, auth, forgot password, OTP, contact, inquiry |
+| Spam control | Duplicate inquiry protection, phone/email/IP limits, honeypot |
+| Upload safety | MIME check, size limit, magic-byte validation |
+| CORS | Restricted by `FRONTEND_URL` |
+| Security headers | Helmet on backend, security headers on frontend |
+| Error monitoring | Sentry on frontend and backend |
+| Data security | Frontend has no direct DB access |
 
 ---
 
-**SchoolFinder** — practical school discovery for families and administrators across India.
+## Documentation Map
+
+| File | Purpose |
+|---|---|
+| `README.md` | Root overview for setup and project understanding |
+| `frontend/Frontend.md` | Detailed frontend architecture, routes, components, env, deployment |
+| `backend/Backend.md` | Detailed backend architecture, API, DB schema, middleware, env, deployment |
+| `plan.md` | Completed phase summary |
+| `Future-Features.md` | Future items such as Blog CMS, Razorpay, real AI recommendation, WhatsApp routing |
+
+---
+
+## Future Scope
+
+Current build keeps **Phase 4 Blog CMS skipped for now**. Future additions are tracked separately in `Future-Features.md`, including:
+
+- Blog CMS
+- Razorpay payment flow
+- Direct WhatsApp routing
+- Real AI school recommendation system
+- Reviews system
+- Parent current-location based nearby search
+- Admin bulk coordinate import
+
+---
+
+## Contributing / Development Rules
+
+- Keep frontend and backend docs updated after schema, route, or feature changes.
+- Do not commit `.env`, `.env.local`, secrets, or generated Prisma client output.
+- Keep `JWT_SECRET` identical in frontend and backend env files.
+- Keep frontend enum/types synced with backend Prisma enums.
+- Run build/type-check before deployment.
+- For database changes, always create a Prisma migration and regenerate Prisma client.
+
+---
+
+**SchoolFinder / SchoolSetu** — a practical school discovery and lead-management platform for Indian parents, schools, and platform administrators.

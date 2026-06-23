@@ -1,31 +1,40 @@
 "use client";
 
-import Link from "next/link";
-import "./globals.css";
+import * as Sentry from "@sentry/nextjs";
+import { useEffect } from "react";
 
-type GlobalErrorProps = {
+export default function GlobalError({
+  error,
+  reset,
+}: {
   error: Error & { digest?: string };
   reset: () => void;
-};
+}) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
 
-export default function GlobalError({ reset }: GlobalErrorProps) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 font-body text-gray-900 antialiased">
-        <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16 text-center">
-          <h1 className="font-heading text-h2 font-bold text-gray-900">Something went wrong</h1>
-          <p className="mt-3 max-w-md text-body-lg text-gray-600">
-            An unexpected error occurred. Please try again.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <button type="button" onClick={() => reset()} className="btn-primary">
-              Try Again
+    <html>
+      <body>
+        <main className="min-h-screen flex items-center justify-center px-6 bg-gray-50">
+          <div className="max-w-md rounded-2xl bg-white p-8 shadow-card text-center">
+            <h1 className="font-heading text-2xl font-bold text-gray-900">
+              Something went wrong
+            </h1>
+
+            <p className="mt-3 font-body text-gray-600">
+              Please try again. If the issue continues, our team will check it.
+            </p>
+
+            <button
+              onClick={reset}
+              className="mt-6 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Try again
             </button>
-            <Link href="/" className="btn-secondary">
-              Go Home
-            </Link>
           </div>
-        </div>
+        </main>
       </body>
     </html>
   );

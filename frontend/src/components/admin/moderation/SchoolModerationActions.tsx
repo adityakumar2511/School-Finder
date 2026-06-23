@@ -12,6 +12,7 @@ import {
   Pencil,
   Trash2,
   MessageSquare,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
 import {
@@ -42,7 +43,9 @@ type SchoolDetail = {
   website: string | null;
   description: string | null;
   status: SchoolStatus;
-  isVisible: boolean;          // ← naya — §4
+  isVisible: boolean; // ← naya — §4
+  isFeatured: boolean;
+  featuredUntil: string | null;
   rejectionReason: string | null;
   totalStudents: number | null;
   establishedYear: number | null;
@@ -70,10 +73,17 @@ export default function SchoolModerationActions({
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [loading, setLoading] = useState<
-  "approve" | "reject" | "delete" | "visibility" | null
->(null);
-  const [isVisible, setIsVisible] = useState(school.isVisible);
+  type LoadingAction =
+  | "approve"
+  | "reject"
+  | "delete"
+  | "visibility"
+  | "featured"
+  | null;
+
+const [loading, setLoading] = useState<LoadingAction>(null);
+const [isVisible, setIsVisible] = useState<boolean>(school.isVisible);
+const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
 
   const canWrite =
     viewerAccessLevel === "READ_WRITE" || viewerAccessLevel === "FULL_ACCESS";
@@ -132,6 +142,27 @@ export default function SchoolModerationActions({
       }
     } catch {
       setIsVisible(!next);
+    } finally {
+      setLoading(null);
+    }
+  }
+  async function handleToggleFeatured() {
+    const next = !isFeatured;
+    setLoading("featured");
+    setIsFeatured(next);
+    try {
+      const featuredUntil = next
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
+      const res = await fetch(`/api/admin/schools/${school.id}/featured`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ featured: next, featuredUntil }),
+      });
+      if (!res.ok) setIsFeatured(!next);
+      else router.refresh();
+    } catch {
+      setIsFeatured(!next);
     } finally {
       setLoading(null);
     }
@@ -203,6 +234,35 @@ export default function SchoolModerationActions({
               <>
                 <Eye className="h-3.5 w-3.5 mr-1" />
                 List
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Feature / Unfeature — §4, READ_WRITE+, only for APPROVED schools */}
+        {canWrite && currentStatus === "APPROVED" && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading !== null}
+            onClick={handleToggleFeatured}
+            className={
+              isFeatured
+                ? "h-8 px-3 font-heading text-xs rounded-lg border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                : "h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
+            }
+          >
+            {loading === "featured" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isFeatured ? (
+              <>
+                <Star className="h-3.5 w-3.5 mr-1 fill-amber-500 text-amber-500" />
+                Unfeature
+              </>
+            ) : (
+              <>
+                <Star className="h-3.5 w-3.5 mr-1" />
+                Feature
               </>
             )}
           </Button>

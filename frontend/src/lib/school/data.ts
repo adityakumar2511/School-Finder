@@ -46,10 +46,12 @@ export type SchoolInquiryRow = {
 };
 
 export type InquiryStats = {
-  total: number;
-  NEW: number;
-  CONTACTED: number;
-  CLOSED: number;
+   total: number;
+   NEW: number;
+   CONTACTED: number;
+   INTERESTED: number;
+   CONVERTED: number;
+   CLOSED: number;
 };
 
 export async function getOwnedSchool(): Promise<SchoolDashboardSchool | null> {
@@ -70,7 +72,7 @@ export async function getInquiryStats(schoolId: string): Promise<InquiryStats> {
   }>(`/api/inquiries/school/${schoolId}?page=1&limit=1`);
 
   if (!ok || !data?.stats) {
-    return { total: 0, NEW: 0, CONTACTED: 0, CLOSED: 0 };
+    return { total: 0, NEW: 0, CONTACTED: 0, INTERESTED: 0, CONVERTED: 0, CLOSED: 0 };
   }
 
   return data.stats;

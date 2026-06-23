@@ -1,54 +1,56 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
-import { auth } from "@/lib/auth/auth";
-import { getOwnedSchool } from "@/lib/school/data";
-import { getSchoolGalleryImages } from "@/lib/school/gallery";
+import { ChevronLeft } from "lucide-react";
+import { getAdminSchoolById } from "@/lib/admin/data";
 import SchoolProfileForm from "@/components/school/profile/SchoolProfileForm";
-import SchoolStatusCard from "@/components/school/SchoolStatusCard";
-import { Card, CardContent } from "@/components/shared/ui/card";
 
-export default async function SchoolProfilePage() {
-  const session = await auth();
-  const ownerId = session!.user!.id;
+interface Props {
+  params: Promise<{ id: string }>;
+}
 
-  const [school, galleryImages] = await Promise.all([
-    getOwnedSchool(),
-    getSchoolGalleryImages(ownerId),
-  ]);
+export default async function AdminSchoolEditPage({ params }: Props) {
+  const { id } = await params;
+
+  const school = await getAdminSchoolById(id);
 
   if (!school) {
-    return (
-      <main className="px-4 py-12">
-        <div className="mx-auto max-w-2xl text-center">
-          <AlertCircle className="mx-auto h-10 w-10 text-amber-500" />
-          <p className="mt-3 font-body text-gray-500">No school profile found.</p>
-          <Link href="/school-register" className="mt-4 inline-block text-sm font-heading font-semibold text-blue-600">
-            Register your school
-          </Link>
-        </div>
-      </main>
-    );
+    notFound();
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Back link */}
       <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl text-blue-800">School profile</h1>
-        <p className="mt-1 font-body text-sm text-gray-500">
-          Complete each section to make your listing more visible to parents.
+        <Link
+          href="/admin/schools"
+          className="inline-flex items-center gap-1.5 font-body text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to schools
+        </Link>
+      </div>
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="font-heading text-2xl font-bold text-blue-900">
+          Edit School
+        </h1>
+        <p className="font-body text-sm text-gray-500 mt-1">
+          {school.name as string}{" "}
+          <span className="text-gray-400">·</span>{" "}
+          <span className="text-gray-400">{school.city as string}, {school.state as string}</span>
         </p>
       </div>
 
-      <div className="mb-6">
-        <SchoolStatusCard status={school.status} rejectionReason={school.rejectionReason} />
-      </div>
-
-      <Card>
-        <CardContent className="p-6 md:p-8">
-          <SchoolProfileForm school={school} />
-          {/* <SchoolProfileForm school={school} galleryImages={galleryImages} /> */}
-        </CardContent>
-      </Card>
-    </main>
+      {/* Reuse SchoolProfileForm in admin mode:
+          - submitEndpoint → /api/admin/schools/[id]  (proxies PATCH /api/schools/:id via admin cookie)
+          - disableDraft   → true  (no localStorage collision with school-admin's own draft)
+      */}
+      <SchoolProfileForm
+        school={school as Record<string, unknown>}
+        submitEndpoint={`/api/admin/schools/${id}`}
+        disableDraft={true}
+      />
+    </div>
   );
 }

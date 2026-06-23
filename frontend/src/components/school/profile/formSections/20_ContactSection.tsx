@@ -2,23 +2,27 @@
 
 import { Input } from "@/components/shared/ui/input";
 import { Card, CardContent } from "@/components/shared/ui/card";
-import { FormField, inputClass, inputErrorClass } from "@/components/shared/form/FormField";
+import {
+  FormField,
+  inputClass,
+  inputErrorClass,
+} from "@/components/shared/form/FormField";
 import { cn } from "@/lib/utils";
 import type { SectionProps } from "./types";
 
 export default function ContactSection({ register, errors }: SectionProps) {
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div>
-        <h2 className="font-heading text-h2 font-bold text-blue-800">Contact Details</h2>
+        <h2 className="font-heading text-h2 font-bold text-blue-800">
+          Contact Details
+        </h2>
         <p className="font-body text-body text-gray-400 mt-1">
-          How parents can reach your school — phone, email, address, and social media
+          How parents can reach your school — phone, email, address, location,
+          and social media
         </p>
       </div>
 
-      {/* ── Primary Contact ───────────────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-5">
           <p className="font-heading text-label font-semibold text-gray-700 uppercase tracking-wide">
@@ -27,15 +31,30 @@ export default function ContactSection({ register, errors }: SectionProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormField label="Phone Number">
-              <Input type="tel" placeholder="e.g. +91 98765 43210" className={inputClass} {...register("contact.phone")} />
+              <Input
+                type="tel"
+                placeholder="e.g. +91 98765 43210"
+                className={inputClass}
+                {...register("contact.phone")}
+              />
             </FormField>
 
             <FormField label="WhatsApp Number">
-              <Input type="tel" placeholder="e.g. +91 98765 43210" className={inputClass} {...register("contact.whatsapp")} />
-              <p className="font-body text-meta text-gray-400 mt-1">Leave blank if same as phone</p>
+              <Input
+                type="tel"
+                placeholder="e.g. +91 98765 43210"
+                className={inputClass}
+                {...register("contact.whatsapp")}
+              />
+              <p className="font-body text-meta text-gray-400 mt-1">
+                Leave blank if same as phone
+              </p>
             </FormField>
 
-            <FormField label="Email Address" error={errors.contact?.email?.message}>
+            <FormField
+              label="Email Address"
+              error={errors.contact?.email?.message}
+            >
               <Input
                 type="email"
                 placeholder="e.g. info@yourschool.edu.in"
@@ -44,11 +63,17 @@ export default function ContactSection({ register, errors }: SectionProps) {
               />
             </FormField>
 
-            <FormField label="School Website" error={errors.contact?.website?.message}>
+            <FormField
+              label="School Website"
+              error={errors.contact?.website?.message}
+            >
               <Input
                 type="url"
                 placeholder="e.g. https://www.yourschool.edu.in"
-                className={cn(inputClass, errors.contact?.website && inputErrorClass)}
+                className={cn(
+                  inputClass,
+                  errors.contact?.website && inputErrorClass,
+                )}
                 {...register("contact.website")}
               />
             </FormField>
@@ -56,7 +81,6 @@ export default function ContactSection({ register, errors }: SectionProps) {
         </CardContent>
       </Card>
 
-      {/* ── Address & Map ─────────────────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-5">
           <p className="font-heading text-label font-semibold text-gray-700 uppercase tracking-wide">
@@ -80,13 +104,52 @@ export default function ContactSection({ register, errors }: SectionProps) {
               {...register("contact.mapUrl")}
             />
             <p className="font-body text-meta text-gray-400 mt-1">
-              Google Maps → Share → Embed a map → copy the <code className="text-xs bg-gray-100 px-1 rounded">src</code> URL
+              Google Maps → Share → Embed a map → copy the{" "}
+              <code className="text-xs bg-gray-100 px-1 rounded">src</code> URL
             </p>
           </FormField>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <FormField
+              label="Latitude"
+              error={errors.contact?.latitude?.message}
+            >
+              <Input
+                type="number"
+                step="any"
+                placeholder="e.g. 25.4358"
+                className={cn(
+                  inputClass,
+                  errors.contact?.latitude && inputErrorClass,
+                )}
+                {...register("contact.latitude")}
+              />
+            </FormField>
+
+            <FormField
+              label="Longitude"
+              error={errors.contact?.longitude?.message}
+            >
+              <Input
+                type="number"
+                step="any"
+                placeholder="e.g. 81.8463"
+                className={cn(
+                  inputClass,
+                  errors.contact?.longitude && inputErrorClass,
+                )}
+                {...register("contact.longitude")}
+              />
+            </FormField>
+          </div>
+
+          <p className="font-body text-meta text-gray-400">
+            Latitude/longitude are optional for now. They will be used for map
+            preview and nearby schools after backend update.
+          </p>
         </CardContent>
       </Card>
 
-      {/* ── Social Media ──────────────────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-5">
           <p className="font-heading text-label font-semibold text-gray-700 uppercase tracking-wide">
@@ -95,22 +158,44 @@ export default function ContactSection({ register, errors }: SectionProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormField label="Facebook Page">
-              <Input type="url" placeholder="https://facebook.com/yourschool" className={inputClass} {...register("contact.facebook")} />
+              <Input
+                type="url"
+                placeholder="https://facebook.com/yourschool"
+                className={inputClass}
+                {...register("contact.facebook")}
+              />
             </FormField>
+
             <FormField label="Instagram">
-              <Input type="url" placeholder="https://instagram.com/yourschool" className={inputClass} {...register("contact.instagram")} />
+              <Input
+                type="url"
+                placeholder="https://instagram.com/yourschool"
+                className={inputClass}
+                {...register("contact.instagram")}
+              />
             </FormField>
+
             <FormField label="YouTube Channel">
-              <Input type="url" placeholder="https://youtube.com/@yourschool" className={inputClass} {...register("contact.youtube")} />
+              <Input
+                type="url"
+                placeholder="https://youtube.com/@yourschool"
+                className={inputClass}
+                {...register("contact.youtube")}
+              />
             </FormField>
+
             <FormField label="LinkedIn">
-              <Input type="url" placeholder="https://linkedin.com/school/yourschool" className={inputClass} {...register("contact.linkedin")} />
+              <Input
+                type="url"
+                placeholder="https://linkedin.com/school/yourschool"
+                className={inputClass}
+                {...register("contact.linkedin")}
+              />
             </FormField>
           </div>
         </CardContent>
       </Card>
 
-      {/* ── Admission Coordinator ─────────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-5">
           <div>
@@ -130,21 +215,33 @@ export default function ContactSection({ register, errors }: SectionProps) {
                 {...register("contact.admissionCoordinatorName")}
               />
             </FormField>
+
             <FormField label="Coordinator Phone">
-              <Input type="tel" placeholder="e.g. +91 98765 43210" className={inputClass} {...register("contact.admissionPhone")} />
+              <Input
+                type="tel"
+                placeholder="e.g. +91 98765 43210"
+                className={inputClass}
+                {...register("contact.admissionPhone")}
+              />
             </FormField>
-            <FormField label="Coordinator Email" error={errors.contact?.admissionEmail?.message}>
+
+            <FormField
+              label="Coordinator Email"
+              error={errors.contact?.admissionEmail?.message}
+            >
               <Input
                 type="email"
                 placeholder="e.g. admissions@yourschool.edu.in"
-                className={cn(inputClass, errors.contact?.admissionEmail && inputErrorClass)}
+                className={cn(
+                  inputClass,
+                  errors.contact?.admissionEmail && inputErrorClass,
+                )}
                 {...register("contact.admissionEmail")}
               />
             </FormField>
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 }

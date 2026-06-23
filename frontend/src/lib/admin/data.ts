@@ -114,6 +114,8 @@ export type AdminSchoolRow = {
   description: string | null;
   status: SchoolStatus;
   isVisible: boolean;          // ← naya — §4
+  isFeatured: boolean;
+featuredUntil: string | null;
   createdAt: string;
   rejectionReason: string | null;
   totalStudents: number | null;

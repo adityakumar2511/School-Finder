@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/shared/ui/select";
 
-const STATUSES: InquiryStatus[] = ["NEW", "CONTACTED", "CLOSED"];
+const STATUSES: InquiryStatus[] = ["NEW", "CONTACTED", "INTERESTED", "CONVERTED", "CLOSED"];
 
 type Props = {
   inquiryId: string;

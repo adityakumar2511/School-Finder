@@ -77,6 +77,8 @@ model School {
   city                     String
   state                    String
   pincode                  String?
+  latitude                 Float?
+  longitude                Float?
   board                    BoardType
   schoolType               SchoolType
   medium                   MediumType
@@ -167,6 +169,8 @@ model School {
   workingDays              String?
   youtube                  String?
   isVisible                Boolean             @default(true)
+  isFeatured               Boolean             @default(false)
+  featuredUntil            DateTime?
   boardResults             BoardResult[]
   favourites               Favourite[]
   inquiries                Inquiry[]
@@ -180,9 +184,12 @@ model School {
 
   @@index([status, createdAt])
   @@index([city, status])
+  @@index([state, status])
   @@index([board, status])
   @@index([ownerId])
   @@index([status, isVisible])
+  @@index([isFeatured, status])
+  @@index([latitude, longitude])
 }
 
 model SchoolImage {
@@ -312,7 +319,7 @@ model ContactSubmission {
   id        String   @id @default(cuid())
   name      String
   email     String
-  phone     String
+  phone     String?
   message   String   @db.Text
   createdAt DateTime @default(now())
 
@@ -354,6 +361,8 @@ enum MediumType {
 enum InquiryStatus {
   NEW
   CONTACTED
+  INTERESTED
+  CONVERTED
   CLOSED
 }
 

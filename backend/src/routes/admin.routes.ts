@@ -19,6 +19,7 @@ import {
   updateUserStatus,
   checkOwnerEmail,
   getAdminSchoolById,
+  setSchoolFeatured,
   
 } from "../controllers/admin.controller";
 import { auth } from "../middleware/auth";
@@ -96,6 +97,12 @@ router.patch(
   "/schools/:id/reject",
   requireAdminLevel("READ_WRITE"),
   asyncHandler(rejectSchoolById),
+);
+
+router.patch(
+  "/schools/:id/featured",
+  requireAdminLevel("READ_WRITE"),
+  asyncHandler(setSchoolFeatured),
 );
 
 // Legacy approve/reject — kept for backward compat

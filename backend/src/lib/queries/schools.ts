@@ -1,6 +1,6 @@
 import type { Prisma } from "../../../generated/prisma";
 
-/** Fields shown on SchoolCard — no extras */
+/** Fields shown on SchoolCard */
 export const schoolListSelect = {
   id: true,
   name: true,
@@ -14,6 +14,10 @@ export const schoolListSelect = {
   classesTo: true,
   tuitionFeeMonthly: true,
   logoUrl: true,
+  latitude: true,
+  longitude: true,
+  isFeatured: true,
+  featuredUntil: true,
   _count: {
     select: { facilities: true },
   },
@@ -123,6 +127,10 @@ export function mapSchoolListItem(
     classesTo,
     tuitionFeeMonthly,
     logoUrl,
+    latitude,
+    longitude,
+    isFeatured,
+    featuredUntil,
   } = school;
 
   return {
@@ -138,7 +146,11 @@ export function mapSchoolListItem(
     classesTo,
     tuitionFeeMonthly,
     logoUrl,
+    latitude,
+    longitude,
     facilitiesCount: _count.facilities,
+    isFeatured,
+    featuredUntil,
   };
 }
 
@@ -161,14 +173,16 @@ export function buildSchoolListWhere(filters: {
   status?: unknown;
   search?: string;
   city?: string;
+  state?: string;
   board?: string | string[];
   schoolType?: string;
   medium?: string;
+  featured?: string;
 }): Prisma.SchoolWhereInput {
   const where: Prisma.SchoolWhereInput = {
     status:
       (filters.status as Prisma.EnumSchoolStatusFilter["equals"]) || "APPROVED",
-      isVisible: true,
+    isVisible: true,
   };
 
   const searchWhere = buildSchoolSearchWhere(filters.search);
@@ -180,10 +194,12 @@ export function buildSchoolListWhere(filters: {
     where.city = { contains: filters.city, mode: "insensitive" };
   }
 
+  if (filters.state) {
+    where.state = { contains: filters.state, mode: "insensitive" };
+  }
+
   if (filters.board) {
-    const boards = Array.isArray(filters.board)
-      ? filters.board
-      : [filters.board];
+    const boards = Array.isArray(filters.board) ? filters.board : [filters.board];
     where.board = { in: boards as Prisma.EnumBoardTypeFilter["in"] };
   }
 
@@ -196,17 +212,16 @@ export function buildSchoolListWhere(filters: {
     where.medium = filters.medium as Prisma.EnumMediumTypeFilter["equals"];
   }
 
+  if (filters.featured === "true") {
+    where.isFeatured = true;
+    where.featuredUntil = { gt: new Date() };
+  }
+
   return where;
 }
 
 /**
  * Admin school list where-builder.
- * Unlike the public `buildSchoolListWhere`, this:
- *  - does NOT default status to "APPROVED" (admin needs to see all statuses)
- *  - supports exact-match state/city filters (admin dropdowns send exact values
- *    sourced from getStates/getCities, not free-text)
- *  - supports a free-text `search` across name, city, and owner email (handled
- *    by the caller for the owner-email OR clause; this builder covers state/city)
  */
 export function buildAdminSchoolWhere(filters: {
   status?: string;
@@ -258,6 +273,8 @@ export const schoolDetailSelect = {
   city: true,
   state: true,
   pincode: true,
+  latitude: true,
+  longitude: true,
   board: true,
   schoolType: true,
   medium: true,
@@ -305,7 +322,8 @@ export const schoolDetailSelect = {
   totalAnnualFee: true,
   transportFee: true,
   hostelFee: true,
-  // Fees — new grade-wise
+
+  // Fees — grade-wise
   averageAnnualFee: true,
   prePrimaryFee: true,
   class1to5Fee: true,
@@ -423,6 +441,8 @@ export const adminSchoolListSelect = {
   city: true,
   state: true,
   address: true,
+  latitude: true,
+  longitude: true,
   board: true,
   schoolType: true,
   medium: true,
@@ -434,6 +454,8 @@ export const adminSchoolListSelect = {
   description: true,
   status: true,
   isVisible: true,
+  isFeatured: true,
+  featuredUntil: true,
   createdAt: true,
   rejectionReason: true,
   totalStudents: true,

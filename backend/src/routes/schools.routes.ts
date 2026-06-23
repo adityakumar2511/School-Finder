@@ -1,50 +1,31 @@
 import { Router } from "express";
 
 import {
-
   getSchools,
-
   searchSchools,
-
   getCities,
-
+  getNearbySchools,
   getSchool,
-
   createSchool,
-
   updateSchool,
-
   deleteSchool,
-
   getMySchool,
-
   addSchoolImage,
-
   deleteSchoolImage,
-
 } from "../controllers/schools.controller";
 
 import { auth } from "../middleware/auth";
-
 import { requireRole } from "../middleware/roleCheck";
-
 import { validate } from "../middleware/validate";
 
 import {
-
   createSchoolBodySchema,
-
   updateSchoolBodySchema,
-
 } from "../validators/school.validator";
 
 import { asyncHandler } from "../utils/asyncHandler";
 
-
-
 const router = Router();
-
-
 
 router.get("/", asyncHandler(getSchools));
 
@@ -53,82 +34,52 @@ router.get("/search", asyncHandler(searchSchools));
 
 router.get("/cities", asyncHandler(getCities));
 
+// Important: keep /nearby before /:slug
+router.get("/nearby", asyncHandler(getNearbySchools));
+
 router.post(
   "/my-school/images",
   auth,
   requireRole("SCHOOL_ADMIN"),
-  asyncHandler(addSchoolImage)
+  asyncHandler(addSchoolImage),
 );
 
 router.delete(
   "/images/:id",
   auth,
   requireRole("SCHOOL_ADMIN"),
-  asyncHandler(deleteSchoolImage)
+  asyncHandler(deleteSchoolImage),
 );
-
-
 
 router.get(
-
   "/my-school",
-
   auth,
-
   requireRole("SCHOOL_ADMIN"),
-
-  asyncHandler(getMySchool)
-
+  asyncHandler(getMySchool),
 );
-
-
 
 router.get("/:slug", asyncHandler(getSchool));
 
-
-
 router.post(
-
   "/",
-
   auth,
-
   requireRole("SCHOOL_ADMIN"),
-
   validate(createSchoolBodySchema),
-
-  asyncHandler(createSchool)
-
+  asyncHandler(createSchool),
 );
-
-
 
 router.patch(
-
   "/:id",
-
   auth,
-
   validate(updateSchoolBodySchema),
-
-  asyncHandler(updateSchool)
-
+  asyncHandler(updateSchool),
 );
-
-
 
 router.delete(
-
   "/:id",
-
   auth,
-
   requireRole("ADMIN"),
-
-  asyncHandler(deleteSchool)
-
+  asyncHandler(deleteSchool),
 );
-
-
 
 export default router;

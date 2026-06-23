@@ -159,11 +159,13 @@
             <h2 className="mb-4 font-heading font-bold text-lg text-blue-800">
               Inquiry overview
             </h2>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
               {[
                 { label: "Total inquiries", value: stats.total },
                 { label: "New", value: stats.NEW },
                 { label: "Contacted", value: stats.CONTACTED },
+                { label: "Interested", value: stats.INTERESTED },
+                { label: "Converted", value: stats.CONVERTED },
                 { label: "Closed", value: stats.CLOSED },
               ].map(({ label, value }) => (
                 <Card key={label}>
