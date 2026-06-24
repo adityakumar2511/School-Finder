@@ -7,7 +7,6 @@ import { GraduationCap } from "lucide-react";
 import { buildPageMetadata } from "@/lib/seo/seo";
 import { fetchSchoolsByState } from "@/lib/data/schools-public";
 
-// Indian states + UTs list for generateStaticParams
 const INDIAN_STATES = [
   "Andhra Pradesh",
   "Arunachal Pradesh",
@@ -53,17 +52,34 @@ interface PageProps {
 }
 
 export function generateStaticParams() {
-  return INDIAN_STATES.map((state) => ({
-    state: encodeURIComponent(state),
+  const states = Array.from(
+    new Set(
+      INDIAN_STATES
+        .map((state) => String(state ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  return states.map((state) => ({
+    state,
   }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const state = decodeURIComponent(params.state);
+  const state = decodeURIComponent(params.state).trim();
+
+  if (!state) {
+    return buildPageMetadata({
+      title: "Schools by State",
+      description: "Browse verified schools by state.",
+      path: "/schools",
+    });
+  }
+
   return buildPageMetadata({
     title: `Schools in ${state} — CBSE, ICSE & State Board`,
     description: `Find verified CBSE, ICSE, and state board schools across ${state}. Compare fees, facilities, and admissions.`,
-    path: `/schools/state/${params.state}`,
+    path: `/schools/state/${encodeURIComponent(state)}`,
     keywords: [
       `schools in ${state}`,
       `${state} schools`,
@@ -100,6 +116,7 @@ function Pagination({
           Previous
         </a>
       )}
+
       {pages.map((p) => (
         <a
           key={p}
@@ -114,6 +131,7 @@ function Pagination({
           {p}
         </a>
       ))}
+
       {currentPage < totalPages && (
         <a
           href={`/schools/state/${state}?page=${currentPage + 1}`}
@@ -135,10 +153,15 @@ async function SchoolGrid({ state, page }: { state: string; page: number }) {
         <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
           <GraduationCap className="w-7 h-7 text-blue-400" />
         </div>
-        <h2 className="font-heading text-h3 text-blue-800 mb-2">No schools found</h2>
+
+        <h2 className="font-heading text-h3 text-blue-800 mb-2">
+          No schools found
+        </h2>
+
         <p className="font-body text-body text-gray-400 max-w-sm">
           No approved schools found in {state} yet.
         </p>
+
         <a
           href="/schools"
           className="mt-4 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-heading text-btn hover:bg-blue-700 transition-colors shadow-btn"
@@ -157,11 +180,13 @@ async function SchoolGrid({ state, page }: { state: string; page: number }) {
         </span>{" "}
         schools in {state}
       </p>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {schools.map((school) => (
           <SchoolCard key={school.id} {...school} />
         ))}
       </div>
+
       <Pagination
         currentPage={page}
         totalPages={pagination.totalPages}
@@ -172,7 +197,7 @@ async function SchoolGrid({ state, page }: { state: string; page: number }) {
 }
 
 export default async function StatePage({ params, searchParams }: PageProps) {
-  const state = decodeURIComponent(params.state);
+  const state = decodeURIComponent(params.state).trim();
   const page = Number(searchParams.page ?? "1");
 
   if (!state) notFound();
@@ -187,9 +212,11 @@ export default async function StatePage({ params, searchParams }: PageProps) {
             </a>{" "}
             / State
           </p>
+
           <h1 className="font-heading text-h1 text-white mb-2">
             Schools in {state}
           </h1>
+
           <p className="font-body text-body text-blue-200">
             Verified schools across {state} — CBSE, ICSE, and state boards
           </p>

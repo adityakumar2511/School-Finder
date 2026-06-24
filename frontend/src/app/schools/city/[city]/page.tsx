@@ -5,32 +5,70 @@ import SchoolCard from "@/components/public/schools/SchoolCard";
 import SchoolGridSkeleton from "@/components/public/schools/SchoolGridSkeleton";
 import { GraduationCap } from "lucide-react";
 import { buildPageMetadata } from "@/lib/seo/seo";
-import {
-  fetchSchoolsByCity,
-  fetchAllCities,
-} from "@/lib/data/schools-public";
+import { fetchSchoolsByState } from "@/lib/data/schools-public";
+
+// Indian states + UTs list for generateStaticParams
+const INDIAN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
+];
 
 interface PageProps {
-  params: { city: string };
+  params: { state: string };
   searchParams: { page?: string };
 }
 
-export async function generateStaticParams() {
-  const cities = await fetchAllCities();
-  return cities.map((city) => ({ city: encodeURIComponent(city) }));
+export function generateStaticParams() {
+  return INDIAN_STATES.map((state) => ({
+    state: encodeURIComponent(state),
+  }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const city = decodeURIComponent(params.city);
+  const state = decodeURIComponent(params.state);
   return buildPageMetadata({
-    title: `Schools in ${city} — CBSE, ICSE & State Board`,
-    description: `Browse verified CBSE, ICSE, and state board schools in ${city}. Compare fees, facilities, and admission details.`,
-    path: `/schools/city/${params.city}`,
+    title: `Schools in ${state} — CBSE, ICSE & State Board`,
+    description: `Find verified CBSE, ICSE, and state board schools across ${state}. Compare fees, facilities, and admissions.`,
+    path: `/schools/state/${params.state}`,
     keywords: [
-      `schools in ${city}`,
-      `${city} CBSE schools`,
-      `${city} ICSE schools`,
-      `best schools ${city}`,
+      `schools in ${state}`,
+      `${state} schools`,
+      `best schools in ${state}`,
+      `CBSE schools ${state}`,
     ],
   });
 }
@@ -38,11 +76,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 function Pagination({
   currentPage,
   totalPages,
-  city,
+  state,
 }: {
   currentPage: number;
   totalPages: number;
-  city: string;
+  state: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -56,7 +94,7 @@ function Pagination({
     <nav className="flex items-center justify-center gap-2 mt-10" aria-label="Pagination">
       {currentPage > 1 && (
         <a
-          href={`/schools/city/${city}?page=${currentPage - 1}`}
+          href={`/schools/state/${state}?page=${currentPage - 1}`}
           className="px-4 py-2 rounded-xl border border-gray-100 bg-white font-heading text-btn text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all duration-200"
         >
           Previous
@@ -65,7 +103,7 @@ function Pagination({
       {pages.map((p) => (
         <a
           key={p}
-          href={`/schools/city/${city}?page=${p}`}
+          href={`/schools/state/${state}?page=${p}`}
           aria-current={p === currentPage ? "page" : undefined}
           className={`w-10 h-10 flex items-center justify-center rounded-xl font-heading text-btn transition-all duration-200 ${
             p === currentPage
@@ -78,7 +116,7 @@ function Pagination({
       ))}
       {currentPage < totalPages && (
         <a
-          href={`/schools/city/${city}?page=${currentPage + 1}`}
+          href={`/schools/state/${state}?page=${currentPage + 1}`}
           className="px-4 py-2 rounded-xl border border-gray-100 bg-white font-heading text-btn text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all duration-200"
         >
           Next
@@ -88,8 +126,8 @@ function Pagination({
   );
 }
 
-async function SchoolGrid({ city, page }: { city: string; page: number }) {
-  const { schools, pagination } = await fetchSchoolsByCity(city, page);
+async function SchoolGrid({ state, page }: { state: string; page: number }) {
+  const { schools, pagination } = await fetchSchoolsByState(state, page);
 
   if (schools.length === 0) {
     return (
@@ -99,7 +137,7 @@ async function SchoolGrid({ city, page }: { city: string; page: number }) {
         </div>
         <h2 className="font-heading text-h3 text-blue-800 mb-2">No schools found</h2>
         <p className="font-body text-body text-gray-400 max-w-sm">
-          No approved schools found in {city} yet.
+          No approved schools found in {state} yet.
         </p>
         <a
           href="/schools"
@@ -117,7 +155,7 @@ async function SchoolGrid({ city, page }: { city: string; page: number }) {
         <span className="text-blue-800 font-heading font-semibold">
           {pagination.total}
         </span>{" "}
-        schools in {city}
+        schools in {state}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {schools.map((school) => (
@@ -127,17 +165,17 @@ async function SchoolGrid({ city, page }: { city: string; page: number }) {
       <Pagination
         currentPage={page}
         totalPages={pagination.totalPages}
-        city={encodeURIComponent(city)}
+        state={encodeURIComponent(state)}
       />
     </>
   );
 }
 
-export default async function CityPage({ params, searchParams }: PageProps) {
-  const city = decodeURIComponent(params.city);
+export default async function StatePage({ params, searchParams }: PageProps) {
+  const state = decodeURIComponent(params.state);
   const page = Number(searchParams.page ?? "1");
 
-  if (!city) notFound();
+  if (!state) notFound();
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -147,20 +185,20 @@ export default async function CityPage({ params, searchParams }: PageProps) {
             <a href="/schools" className="hover:text-white transition-colors">
               All schools
             </a>{" "}
-            / City
+            / State
           </p>
           <h1 className="font-heading text-h1 text-white mb-2">
-            Schools in {city}
+            Schools in {state}
           </h1>
           <p className="font-body text-body text-blue-200">
-            Verified CBSE, ICSE, and state board schools in {city}
+            Verified schools across {state} — CBSE, ICSE, and state boards
           </p>
         </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <Suspense fallback={<SchoolGridSkeleton count={12} />}>
-          <SchoolGrid city={city} page={page} />
+          <SchoolGrid state={state} page={page} />
         </Suspense>
       </div>
     </main>
