@@ -1,15 +1,16 @@
 # SchoolFinder / SchoolSetu
 
-> Last updated: June 23, 2026  
-> Status: All implemented phases completed. **Phase 4 Blog CMS is intentionally skipped for now.**
+> Last updated: June 25, 2026  
+> Status: All implemented phases completed. **Phase 4 Blog CMS and granular fee-structure expansion are intentionally skipped for now.**  
+> Latest sync: 22-section school profile frontend + backend update completed, including custom facilities/sports groups, admission coordinators, and additional phone numbers.
 
 SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry, and admin-management platform for **Tier-2 and Tier-3 cities in India**. Parents can discover and compare schools, school administrators can manage listings and leads, and platform administrators can verify, moderate, feature, and manage the platform.
 
 | Layer | Technology | Local Port | Responsibility |
 |---|---|---:|---|
-| Frontend | Next.js 14 · TypeScript · Tailwind CSS · NextAuth v5 | `3000` | UI, auth sessions, BFF proxy routes, Cloudinary uploads, SEO |
-| Backend | Express.js 5 · TypeScript · Prisma · JWT | `4000` | REST API, auth, validation, database operations, business rules |
-| Database | PostgreSQL on Neon | — | Users, schools, inquiries, favourites, contacts, audit logs |
+| Frontend | Next.js 14 · TypeScript · Tailwind CSS · NextAuth v5 | `3000` | UI, auth sessions, BFF proxy routes, Cloudinary uploads, SEO, 22-section school profile editor |
+| Backend | Express.js 5 · TypeScript · Prisma · JWT | `4000` | REST API, auth, validation, database operations, school profile persistence, business rules |
+| Database | PostgreSQL on Neon | — | Users, schools, inquiries, favourites, contacts, audit logs, extended school profile JSON fields |
 | Media | Cloudinary | — | School logos, gallery images, profile uploads |
 | Monitoring | Sentry | — | Frontend and backend error tracking |
 
@@ -34,6 +35,8 @@ SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry,
 | Phase 6 | Featured listings | ✅ Complete |
 | Phase 7 | Sentry reliability/error monitoring | ✅ Complete |
 | Phase 8 | Compare, maps, nearby schools, AI placeholder | ✅ Complete |
+| Profile Sync Update | 22-section school profile frontend/backend sync | ✅ Complete |
+| Future Fee Update | Granular fee-structure expansion | ⏸️ Skipped for now |
 
 ---
 
@@ -45,6 +48,14 @@ SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry,
 - School listing page with filters by city, state, board, type, medium, and search text
 - Dynamic SEO pages for city, state, and board based discovery
 - School detail pages with profile sections, fees, facilities, gallery, contact details, map, and nearby schools
+- Extended school profile data support for:
+  - School categories and classes offered
+  - Languages offered
+  - School timings and working days
+  - Uniform policy and canteen/tiffin availability
+  - Facilities and sports lists with custom group persistence
+  - Board results with Class 10 / Class 12 support
+  - Admission coordinators and labelled phone numbers
 - Compare Schools page with up to **3 schools** stored in `localStorage`
 - AI Recommendation route available as a **Coming Soon** placeholder
 - About page and Contact page
@@ -72,6 +83,18 @@ SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry,
 - 4-step school registration wizard with draft persistence
 - School dashboard with listing status and inquiry summary
 - Full school profile editor with 22 profile sections
+- Expanded school profile form fields:
+  - Indian school categories
+  - Classes offered from daycare/creche to Class 12
+  - Languages offered with custom add support
+  - School timing, working days, uniform policy, canteen/tiffin support
+  - Student-teacher ratio and total students
+  - Recognition number and affiliated-since fields
+  - Facilities and sports custom add with correct group save/reload
+  - Programs and academic streams custom add
+  - Board results using `classLevel` and `passPercent`
+  - Repeatable admission coordinators
+  - Additional labelled contact numbers
 - Gallery/logo/cover image upload through Cloudinary
 - Latitude and longitude fields for map and nearby school discovery
 - Inquiry management with expanded lead statuses:
@@ -88,7 +111,7 @@ SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry,
 - Admin dashboard with platform stats
 - School moderation:
   - Approve/reject schools
-  - Edit school profile
+  - Edit full school profile
   - Delete schools
   - List/unlist public visibility
   - Mark/unmark featured listings
@@ -126,6 +149,9 @@ SchoolFinder / SchoolSetu is a full-stack school discovery, comparison, inquiry,
 - Contact submission model and endpoint
 - Featured listing API and public featured filtering
 - Nearby schools API using coordinates and distance calculation
+- 22-section school profile validation and persistence
+- Board results normalized with `classLevel` and `passPercent`
+- JSON persistence for custom facilities/sports groups, admission coordinators, and additional phones
 - Sentry error capture for frontend and backend
 - Cloudinary upload handled by frontend route only; backend stores image URLs
 
@@ -142,6 +168,7 @@ Frontend: Next.js 14 on Vercel
   ├─ NextAuth JWT sessions
   ├─ BFF routes under /api/*
   ├─ Cloudinary upload route
+  ├─ 22-section school profile editor
   └─ SEO / sitemap / metadata
   │
   │ HTTPS + Bearer JWT
@@ -151,6 +178,7 @@ Backend: Express API on Render
   ├─ JWT auth and role checks
   ├─ Zod validation
   ├─ Controllers and business rules
+  ├─ School profile query/controller sync
   ├─ Cache and Sentry
   └─ Prisma client
   │
@@ -225,7 +253,7 @@ For full detailed file trees, see `frontend/Frontend.md` and `backend/Backend.md
 |---|---|---|
 | `/health`, `/ready` | Health checks | Public |
 | `/api/auth` | Register, login, logout, OTP, profile, Google sync | Mixed |
-| `/api/schools` | Public discovery, school CRUD, nearby schools | Mixed |
+| `/api/schools` | Public discovery, school CRUD, nearby schools, profile update persistence | Mixed |
 | `/api/admin` | Moderation, users, featured listings, stats | `ADMIN` |
 | `/api/inquiries` | Parent inquiries and lead status updates | Parent / School / Admin |
 | `/api/parent` | Parent profile and favourites | `PARENT` |
@@ -371,6 +399,28 @@ Important Prisma owner file:
 backend/prisma/schema.prisma
 ```
 
+Latest profile-sync schema additions include:
+
+```txt
+languagesOffered
+recognitionNumber
+affiliatedSince
+uniformPolicy
+canteenAvailable
+facilityCustomGroups
+sportsCustomGroups
+admissionCoordinators
+additionalPhones
+BoardResult.classLevel
+BoardResult.passPercent
+```
+
+Important migration safety rule:
+
+```txt
+If Prisma asks to reset the public schema and says all data will be lost, do not continue unless you intentionally want to wipe data.
+```
+
 ---
 
 ## Build Commands
@@ -389,6 +439,13 @@ npx tsc --noEmit
 cd backend
 npm run build
 npx tsc --noEmit
+```
+
+After Prisma schema changes, also run:
+
+```bash
+cd backend
+npx prisma generate
 ```
 
 ---
@@ -453,6 +510,7 @@ Set `FRONTEND_URL` to the exact Vercel domain.
 | Security headers | Helmet on backend, security headers on frontend |
 | Error monitoring | Sentry on frontend and backend |
 | Data security | Frontend has no direct DB access |
+| Profile data safety | Extended school profile payloads are validated with Zod and sanitized before Prisma writes |
 
 ---
 
@@ -464,15 +522,16 @@ Set `FRONTEND_URL` to the exact Vercel domain.
 | `frontend/Frontend.md` | Detailed frontend architecture, routes, components, env, deployment |
 | `backend/Backend.md` | Detailed backend architecture, API, DB schema, middleware, env, deployment |
 | `plan.md` | Completed phase summary |
-| `Future-Features.md` | Future items such as Blog CMS, Razorpay, real AI recommendation, WhatsApp routing |
+| `Future-Features.md` | Future items such as Blog CMS, Razorpay, granular fee structure, real AI recommendation, WhatsApp routing |
 
 ---
 
 ## Future Scope
 
-Current build keeps **Phase 4 Blog CMS skipped for now**. Future additions are tracked separately in `Future-Features.md`, including:
+Current build keeps **Phase 4 Blog CMS skipped for now**. Granular fee-structure expansion is also skipped because the current frontend fee UI has not been expanded yet. Future additions are tracked separately in `Future-Features.md`, including:
 
 - Blog CMS
+- Granular fee structure expansion
 - Razorpay payment flow
 - Direct WhatsApp routing
 - Real AI school recommendation system
@@ -488,6 +547,7 @@ Current build keeps **Phase 4 Blog CMS skipped for now**. Future additions are t
 - Do not commit `.env`, `.env.local`, secrets, or generated Prisma client output.
 - Keep `JWT_SECRET` identical in frontend and backend env files.
 - Keep frontend enum/types synced with backend Prisma enums.
+- Keep school profile form fields synced across frontend schema, backend validator, Prisma schema, controller, and query layer.
 - Run build/type-check before deployment.
 - For database changes, always create a Prisma migration and regenerate Prisma client.
 

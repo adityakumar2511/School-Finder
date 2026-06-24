@@ -11,13 +11,17 @@ const PAGE_SIZE = 10;
 const STATUS_LABEL: Record<InquiryStatus, string> = {
   NEW: "New",
   CONTACTED: "Contacted",
+  INTERESTED: "Interested",
+  CONVERTED: "Converted",
   CLOSED: "Closed",
 };
 
 const STATUS_BADGE_CLASS: Record<InquiryStatus, string> = {
-  NEW: "badge-premium bg-info-bg text-info-text border-info-text/20",
-  CONTACTED: "badge-premium bg-warning-bg text-warning-text border-warning-text/20",
-  CLOSED: "badge-premium bg-success-bg text-success-text border-success-text/20",
+  NEW: "bg-blue-50 text-blue-700 border-blue-200",
+  CONTACTED: "bg-purple-50 text-purple-700 border-purple-200",
+  INTERESTED: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  CONVERTED: "bg-green-50 text-green-700 border-green-200",
+  CLOSED: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
 type MyInquiry = {
