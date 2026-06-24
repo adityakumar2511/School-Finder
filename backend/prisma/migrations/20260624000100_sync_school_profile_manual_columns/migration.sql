@@ -1,0 +1,8 @@
+﻿ALTER TABLE "School"
+ADD COLUMN IF NOT EXISTS "languagesOffered" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN IF NOT EXISTS "recognitionNumber" TEXT,
+ADD COLUMN IF NOT EXISTS "affiliatedSince" TEXT,
+ADD COLUMN IF NOT EXISTS "uniformPolicy" TEXT,
+ADD COLUMN IF NOT EXISTS "canteenAvailable" TEXT,
+ADD COLUMN IF NOT EXISTS "facilityCustomGroups" JSONB,
+ADD COLUMN IF NOT EXISTS "sportsCustomGroups" JSONB;

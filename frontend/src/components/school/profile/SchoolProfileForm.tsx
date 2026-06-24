@@ -44,13 +44,14 @@ const customFieldSchema = z.object({
   fieldType: z.enum(["text", "number", "date", "url", "richtext"]),
 });
 
+const customGroupMapSchema = z.record(z.string(), z.array(z.string())).optional();
 const boardResultSchema = z.object({
+  id: z.string().optional(),
   year: z.string(),
-  class10Percent: z.string(),
-  class12Percent: z.string(),
+  classLevel: z.enum(["CLASS_10", "CLASS_12"]),
+  passPercent: z.string(),
   topperName: z.string(),
   topScore: z.string(),
-  customFields: z.array(customFieldSchema).optional(),
 });
 
 const scholarshipSchema = z.object({
@@ -120,6 +121,8 @@ export const schoolProfileSchema = z.object({
     startTime: z.string().optional(),
     endTime: z.string().optional(),
     workingDays: z.string().optional(),
+    uniformPolicy: z.string().optional(), // ← ADD
+    canteenAvailable: z.string().optional(), // ← ADD
     logoUrl: z.string().optional(),
     coverImageUrl: z.string().optional(),
     classesOffered: z.array(z.string()).optional(),
@@ -165,11 +168,13 @@ export const schoolProfileSchema = z.object({
 
   facilities: z.object({
     items: z.array(z.string()).optional(),
+    customGroups: customGroupMapSchema,
     customFields: z.array(customFieldSchema).optional(),
   }),
 
   sports: z.object({
     items: z.array(z.string()).optional(),
+    customGroups: customGroupMapSchema,
     customFields: z.array(customFieldSchema).optional(),
   }),
 
@@ -180,6 +185,7 @@ export const schoolProfileSchema = z.object({
     libraryBooks: z.string().optional(),
     hostelCapacity: z.string().optional(),
     buses: z.string().optional(),
+    totalStudents: z.string().optional(),
   }),
 
   faculty: z.object({
@@ -263,13 +269,32 @@ export const schoolProfileSchema = z.object({
     instagram: z.string().optional(),
     youtube: z.string().optional(),
     linkedin: z.string().optional(),
-    admissionCoordinatorName: z.string().optional(),
-    admissionPhone: z.string().optional(),
-    admissionEmail: z
-      .string()
-      .email("Invalid email")
-      .optional()
-      .or(z.literal("")),
+    // admissionCoordinatorName: z.string().optional(),
+    // admissionPhone: z.string().optional(),
+    // admissionEmail: z
+    //   .string()
+    //   .email("Invalid email")
+    //   .optional()
+    //   .or(z.literal("")),
+    additionalPhones: z
+      .array(
+        z.object({
+          number: z.string(),
+          label: z.string(),
+        }),
+      )
+      .optional(),
+
+    admissionCoordinators: z
+      .array(
+        z.object({
+          name: z.string(),
+          phone: z.string(),
+          email: z.string(),
+          designation: z.string(),
+        }),
+      )
+      .optional(),
   }),
 
   faqs: z.object({
@@ -323,6 +348,82 @@ function toNumberOrUndefined(value?: string) {
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
+type AdditionalPhoneFormValue = {
+  number: string;
+  label: string;
+};
+
+type AdmissionCoordinatorFormValue = {
+  name: string;
+  phone: string;
+  email: string;
+  designation: string;
+};
+
+function readAdditionalPhones(value: unknown): AdditionalPhoneFormValue[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+
+      return {
+        number: typeof record.number === "string" ? record.number : "",
+        label: typeof record.label === "string" ? record.label : "Other",
+      };
+    })
+    .filter((item): item is AdditionalPhoneFormValue => item !== null);
+}
+
+function readAdmissionCoordinators(
+  school: Record<string, unknown>,
+): AdmissionCoordinatorFormValue[] {
+  const raw = school.admissionCoordinators;
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return null;
+        }
+
+        const record = item as Record<string, unknown>;
+
+        return {
+          name: typeof record.name === "string" ? record.name : "",
+          phone: typeof record.phone === "string" ? record.phone : "",
+          email: typeof record.email === "string" ? record.email : "",
+          designation:
+            typeof record.designation === "string" ? record.designation : "",
+        };
+      })
+      .filter((item): item is AdmissionCoordinatorFormValue => item !== null);
+  }
+
+  const legacyName =
+    typeof school.admissionCoordinatorName === "string"
+      ? school.admissionCoordinatorName
+      : "";
+  const legacyPhone =
+    typeof school.admissionPhone === "string" ? school.admissionPhone : "";
+  const legacyEmail =
+    typeof school.admissionEmail === "string" ? school.admissionEmail : "";
+
+  if (!legacyName && !legacyPhone && !legacyEmail) return [];
+
+  return [
+    {
+      name: legacyName,
+      phone: legacyPhone,
+      email: legacyEmail,
+      designation: "",
+    },
+  ];
+}
+
 // ─────────────────────────────────────────────────────────────
 // API data → form default values mapper
 // ─────────────────────────────────────────────────────────────
@@ -349,6 +450,8 @@ function mapSchoolToFormData(
       startTime: (school.startTime as string) || "",
       endTime: (school.endTime as string) || "",
       workingDays: (school.workingDays as string) || "",
+      uniformPolicy: (school.uniformPolicy as string) || "",
+      canteenAvailable: (school.canteenAvailable as string) || "",
       logoUrl: (school.logoUrl as string) || "",
       coverImageUrl: (school.coverImageUrl as string) || "",
       classesOffered: (school.classesOffered as string[]) || [],
@@ -389,10 +492,14 @@ function mapSchoolToFormData(
     },
     facilities: {
       items: (school.facilitiesList as string[]) || [],
+      customGroups:
+        (school.facilityCustomGroups as Record<string, string[]>) || {},
       customFields: [],
     },
     sports: {
       items: (school.sportsList as string[]) || [],
+      customGroups:
+        (school.sportsCustomGroups as Record<string, string[]>) || {},
       customFields: [],
     },
     infrastructure: {
@@ -402,6 +509,7 @@ function mapSchoolToFormData(
       libraryBooks: toStringValue(school.libraryBooks),
       hostelCapacity: toStringValue(school.hostelCapacity),
       buses: toStringValue(school.totalBuses ?? school.buses),
+      totalStudents: toStringValue(school.totalStudents), // ← ADD
     },
     faculty: {
       totalTeachers: toStringValue(school.totalTeachers),
@@ -413,7 +521,8 @@ function mapSchoolToFormData(
       customFields: [],
     },
     studentLife: {
-      clubs: (school.clubsActivities as string) || (school.clubs as string) || "",
+      clubs:
+        (school.clubsActivities as string) || (school.clubs as string) || "",
       culturalActivities: (school.culturalActivities as string) || "",
       annualEvents: (school.annualEvents as string) || "",
       educationalTours: (school.educationalTours as string) || "",
@@ -423,39 +532,119 @@ function mapSchoolToFormData(
       academic: (school.academicAchievements as string) || "",
       sports: (school.sportsAchievements as string) || "",
       awards:
-        (school.awardsRecognitions as string) || (school.awards as string) || "",
+        (school.awardsRecognitions as string) ||
+        (school.awards as string) ||
+        "",
       recognitions: (school.recognitions as string) || "",
       customFields: [],
     },
     boardResults: {
-      results: [],
+      results: (
+        (school.boardResults as Array<{
+          id?: string;
+          year?: string | number;
+          classLevel?: "CLASS_10" | "CLASS_12" | null;
+          passPercent?: string | number | null;
+          class10Pass?: string | number | null;
+          class12Pass?: string | number | null;
+          topperName?: string | null;
+          topperScore?: string | null;
+        }>) ?? []
+      ).flatMap((r) => {
+        if (r.classLevel) {
+          return [
+            {
+              id: r.id,
+              year: String(r.year ?? ""),
+              classLevel: r.classLevel,
+              passPercent: String(r.passPercent ?? ""),
+              topperName: r.topperName ?? "",
+              topScore: r.topperScore ?? "",
+            },
+          ];
+        }
+
+        const entries = [];
+
+        if (r.class10Pass !== null && r.class10Pass !== undefined) {
+          entries.push({
+            id: r.id,
+            year: String(r.year ?? ""),
+            classLevel: "CLASS_10" as const,
+            passPercent: String(r.class10Pass),
+            topperName: r.topperName ?? "",
+            topScore: r.topperScore ?? "",
+          });
+        }
+
+        if (r.class12Pass !== null && r.class12Pass !== undefined) {
+          entries.push({
+            id: r.id,
+            year: String(r.year ?? ""),
+            classLevel: "CLASS_12" as const,
+            passPercent: String(r.class12Pass),
+            topperName: r.topperName ?? "",
+            topScore: r.topperScore ?? "",
+          });
+        }
+
+        if (entries.length === 0) {
+          entries.push({
+            id: r.id,
+            year: String(r.year ?? ""),
+            classLevel: "CLASS_10" as const,
+            passPercent: "",
+            topperName: r.topperName ?? "",
+            topScore: r.topperScore ?? "",
+          });
+        }
+
+        return entries;
+      }),
       customFields: [],
     },
+
     scholarships: { list: [] },
     hostel: {
       available: (school.hostelAvailable as boolean) || false,
-      boys: (school.hostelBoys as boolean) || (school.boysHostel as boolean) || false,
+      boys:
+        (school.hostelBoys as boolean) ||
+        (school.boysHostel as boolean) ||
+        false,
       girls:
-        (school.hostelGirls as boolean) || (school.girlsHostel as boolean) || false,
+        (school.hostelGirls as boolean) ||
+        (school.girlsHostel as boolean) ||
+        false,
       capacity: toStringValue(school.hostelCapacity),
-      mess: (school.hostelMess as boolean) || (school.messAvailable as boolean) || false,
+      mess:
+        (school.hostelMess as boolean) ||
+        (school.messAvailable as boolean) ||
+        false,
       customFields: [],
     },
     transport: {
       available: (school.transportAvailable as boolean) || false,
       coverageAreas:
-        (school.transportAreas as string) || (school.coverageAreas as string) || "",
+        (school.transportAreas as string) ||
+        (school.coverageAreas as string) ||
+        "",
       gpsTracking: (school.gpsTracking as boolean) || false,
       vehicles: toStringValue(school.totalVehicles ?? school.vehicles),
     },
     safety: {
       cctv: (school.hasCCTV as boolean) || (school.cctv as boolean) || false,
       guards:
-        (school.hasGuards as boolean) || (school.securityGuards as boolean) || false,
+        (school.hasGuards as boolean) ||
+        (school.securityGuards as boolean) ||
+        false,
       medicalRoom:
-        (school.hasMedicalRoom as boolean) || (school.medicalRoom as boolean) || false,
+        (school.hasMedicalRoom as boolean) ||
+        (school.medicalRoom as boolean) ||
+        false,
       fireSafety:
-        (school.hasFireSafety as boolean) || (school.fireSafety as boolean) || false,
+        (school.hasFireSafety as boolean) ||
+        (school.fireSafety as boolean) ||
+        false,
       visitorManagement:
         (school.hasVisitorMgmt as boolean) ||
         (school.visitorManagement as boolean) ||
@@ -476,10 +665,8 @@ function mapSchoolToFormData(
       instagram: (school.instagram as string) || "",
       youtube: (school.youtube as string) || "",
       linkedin: (school.linkedin as string) || "",
-      admissionCoordinatorName:
-        (school.admissionCoordinatorName as string) || "",
-      admissionPhone: (school.admissionPhone as string) || "",
-      admissionEmail: (school.admissionEmail as string) || "",
+      additionalPhones: readAdditionalPhones(school.additionalPhones),
+      admissionCoordinators: readAdmissionCoordinators(school),
     },
     faqs: { list: [] },
   };
@@ -619,12 +806,17 @@ export default function SchoolProfileForm({
           city: data.basicInfo.city || undefined,
           state: data.basicInfo.state || undefined,
           affiliationNumber: data.basicInfo.affiliationNumber || undefined,
+          recognitionNumber: data.basicInfo.recognitionNumber || undefined, // ← ADD THIS
+          affiliatedSince: data.basicInfo.affiliatedSince || undefined, // ← ADD THIS
           startTime: data.basicInfo.startTime || undefined,
           endTime: data.basicInfo.endTime || undefined,
           workingDays: data.basicInfo.workingDays || undefined,
+          uniformPolicy: data.basicInfo.uniformPolicy || undefined,   
+canteenAvailable: data.basicInfo.canteenAvailable || undefined,
           logoUrl: data.basicInfo.logoUrl || undefined,
           coverImageUrl: data.basicInfo.coverImageUrl || undefined,
           classesOffered: data.basicInfo.classesOffered ?? [],
+          languagesOffered: data.basicInfo.languagesOffered ?? [],
 
           description: data.about.about || undefined,
           vision: data.about.vision || undefined,
@@ -661,7 +853,9 @@ export default function SchoolProfileForm({
             : undefined,
 
           facilitiesList: data.facilities.items ?? [],
+          facilityCustomGroups: data.facilities.customGroups ?? {},
           sportsList: data.sports.items ?? [],
+          sportsCustomGroups: data.sports.customGroups ?? {},
 
           campusArea: data.infrastructure.campusArea || undefined,
           totalClassrooms: data.infrastructure.classrooms
@@ -679,7 +873,9 @@ export default function SchoolProfileForm({
           totalBuses: data.infrastructure.buses
             ? Number(data.infrastructure.buses)
             : undefined,
-
+          totalStudents: data.infrastructure.totalStudents
+            ? Number(data.infrastructure.totalStudents)
+            : undefined,
           totalTeachers: data.faculty.totalTeachers
             ? Number(data.faculty.totalTeachers)
             : undefined,
@@ -727,17 +923,43 @@ export default function SchoolProfileForm({
           instagram: data.contact.instagram || undefined,
           youtube: data.contact.youtube || undefined,
           linkedin: data.contact.linkedin || undefined,
+          additionalPhones: (data.contact.additionalPhones ?? [])
+            .filter((phone) => phone.number?.trim() || phone.label?.trim())
+            .map((phone) => ({
+              number: phone.number?.trim() || "",
+              label: phone.label?.trim() || "Other",
+            })),
+          admissionCoordinators: (data.contact.admissionCoordinators ?? [])
+            .filter(
+              (coordinator) =>
+                coordinator.name?.trim() ||
+                coordinator.phone?.trim() ||
+                coordinator.email?.trim() ||
+                coordinator.designation?.trim(),
+            )
+            .map((coordinator) => ({
+              name: coordinator.name?.trim() || "",
+              phone: coordinator.phone?.trim() || "",
+              email: coordinator.email?.trim() || "",
+              designation: coordinator.designation?.trim() || "",
+            })),
+
+          // Backward compatibility for current public/admin views that still read
+          // the old single coordinator fields.
           admissionCoordinatorName:
-            data.contact.admissionCoordinatorName || undefined,
-          admissionPhone: data.contact.admissionPhone || undefined,
-          admissionEmail: data.contact.admissionEmail || undefined,
+            data.contact.admissionCoordinators?.[0]?.name || undefined,
+          admissionPhone:
+            data.contact.admissionCoordinators?.[0]?.phone || undefined,
+          admissionEmail:
+            data.contact.admissionCoordinators?.[0]?.email || undefined,
 
           boardResults: (data.boardResults.results ?? [])
             .filter((r) => r.year?.trim())
             .map((r) => ({
-              year: r.year,
-              class10Pass: r.class10Percent || undefined,
-              class12Pass: r.class12Percent || undefined,
+              id: r.id,
+              year: String(r.year),
+              classLevel: r.classLevel,
+              passPercent: r.passPercent || undefined,
               topperName: r.topperName || undefined,
               topperScore: r.topScore || undefined,
             })),

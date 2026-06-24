@@ -36,7 +36,10 @@ const optionalCoordinate = (min: number, max: number, label: string) =>
       .optional(),
   );
 
-const optionalStr = z.preprocess(preprocessOptionalString, z.string().optional());
+const optionalStr = z.preprocess(
+  preprocessOptionalString,
+  z.string().optional(),
+);
 
 const optionalTextStr = z.preprocess(
   preprocessOptionalString,
@@ -55,13 +58,21 @@ const optionalEmail = z.preprocess(
 
 const stringArray = z.array(z.string()).optional().default([]);
 
+const customGroupMapSchema = z
+  .record(z.string(), z.array(z.string().trim().min(1)))
+  .optional()
+  .default({});
+
 // ── Nested schemas for related models ────────────────────────────────────────
 
 const boardResultSchema = z.object({
   id: z.string().optional(),
-  year: z.string().min(4, "Year is required"),
-  class10Pass: optionalStr,
-  class12Pass: optionalStr,
+  year: z.preprocess(
+    (v) => (v === null || v === undefined ? "" : String(v)),
+    z.string().min(4, "Year is required"),
+  ),
+  classLevel: z.enum(["CLASS_10", "CLASS_12"]).default("CLASS_10"),
+  passPercent: optionalStr,
   topperName: optionalStr,
   topperScore: optionalStr,
 });
@@ -90,7 +101,9 @@ const customFieldSchema = z.object({
   section: z.string().min(1),
   label: z.string().min(1, "Field label is required"),
   value: z.string(),
-  fieldType: z.enum(["text", "number", "date", "url", "richtext"]).default("text"),
+  fieldType: z
+    .enum(["text", "number", "date", "url", "richtext"])
+    .default("text"),
 });
 
 const galleryImageSchema = z.object({
@@ -100,16 +113,37 @@ const galleryImageSchema = z.object({
   category: optionalStr,
 });
 
+const additionalPhoneSchema = z.object({
+  number: optionalStr,
+  label: optionalStr,
+});
+
+const admissionCoordinatorSchema = z.object({
+  name: optionalStr,
+  phone: optionalStr,
+  email: optionalStr,
+  designation: optionalStr,
+});
+
 // ── Core school body fields (create) ─────────────────────────────────────────
 const schoolBodyFields = {
   // Identity (required on create)
-  name: z.preprocess(preprocessTrim, z.string().min(3, "School name is required")),
+  name: z.preprocess(
+    preprocessTrim,
+    z.string().min(3, "School name is required"),
+  ),
   city: z.preprocess(preprocessTrim, z.string().min(2, "City is required")),
   state: z.preprocess(preprocessTrim, z.string().min(2, "State is required")),
-  address: z.preprocess(preprocessTrim, z.string().min(5, "Address is required")),
+  address: z.preprocess(
+    preprocessTrim,
+    z.string().min(5, "Address is required"),
+  ),
   pincode: z.preprocess(
     preprocessOptionalString,
-    z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional(),
+    z
+      .string()
+      .regex(/^\d{6}$/, "Enter a valid 6-digit pincode")
+      .optional(),
   ),
 
   // Phase 8 — Google Maps coordinates
@@ -128,7 +162,10 @@ const schoolBodyFields = {
   email: optionalEmail,
   website: optionalUrl,
   logoUrl: z.preprocess(preprocessOptionalString, z.string().url().optional()),
-  coverImageUrl: z.preprocess(preprocessOptionalString, z.string().url().optional()),
+  coverImageUrl: z.preprocess(
+    preprocessOptionalString,
+    z.string().url().optional(),
+  ),
   description: optionalTextStr,
 
   // Legacy fee fields
@@ -152,6 +189,11 @@ const schoolBodyFields = {
   startTime: optionalStr,
   endTime: optionalStr,
   workingDays: optionalStr,
+  languagesOffered: stringArray,
+  recognitionNumber: optionalStr,
+  affiliatedSince: optionalStr,
+  uniformPolicy: optionalStr,
+  canteenAvailable: optionalStr,
 
   // ── Section 2: About ────────────────────────────────────────────────────
   vision: optionalTextStr,
@@ -187,7 +229,9 @@ const schoolBodyFields = {
 
   // ── Section 6 & 7: Facilities & Sports ─────────────────────────────────
   facilitiesList: stringArray,
+  facilityCustomGroups: customGroupMapSchema,
   sportsList: stringArray,
+  sportsCustomGroups: customGroupMapSchema,
 
   // ── Section 8: Infrastructure ───────────────────────────────────────────
   campusArea: optionalStr,
@@ -238,7 +282,10 @@ const schoolBodyFields = {
   // ── Section 20: Contact extras ──────────────────────────────────────────
   whatsapp: z.preprocess(
     preprocessOptionalString,
-    z.string().regex(/^\d{10}$/, "Enter a valid 10-digit WhatsApp number").optional(),
+    z
+      .string()
+      .regex(/^\d{10}$/, "Enter a valid 10-digit WhatsApp number")
+      .optional(),
   ),
   mapUrl: optionalStr,
   facebook: optionalStr,
@@ -248,9 +295,14 @@ const schoolBodyFields = {
   admissionCoordinatorName: optionalStr,
   admissionPhone: z.preprocess(
     preprocessOptionalString,
-    z.string().regex(/^\d{10}$/, "Enter a valid 10-digit phone number").optional(),
+    z
+      .string()
+      .regex(/^\d{10}$/, "Enter a valid 10-digit phone number")
+      .optional(),
   ),
   admissionEmail: optionalEmail,
+  additionalPhones: z.array(additionalPhoneSchema).optional().default([]),
+  admissionCoordinators: z.array(admissionCoordinatorSchema).optional().default([]),
 
   // ── Related models (arrays) ─────────────────────────────────────────────
   boardResults: z.array(boardResultSchema).optional().default([]),

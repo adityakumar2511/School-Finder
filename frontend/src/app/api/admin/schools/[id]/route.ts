@@ -4,7 +4,7 @@ import { revalidateSchoolsCache } from "@/lib/seo/revalidate-schools";
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
   const body = await request.text();
@@ -16,7 +16,7 @@ export async function PATCH(
       headers: { "Content-Type": "application/json" },
       body,
     },
-    { useAdminCookie: true }
+    { useAdminCookie: true },
   );
 
   // Invalidate: edited school's public detail/listing/sitemap must reflect changes
@@ -29,12 +29,15 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const response = await proxyToBackend(`/api/schools/${id}`, {
-    method: "DELETE",
-  }, { useAdminCookie: true });
+
+  const response = await proxyToBackend(
+    `/api/schools/${id}`,
+    { method: "DELETE" },
+    { useAdminCookie: true },
+  );
 
   // Invalidate: deleted school must disappear from listings, detail, cities, sitemap
   if (response.status >= 200 && response.status < 300) {

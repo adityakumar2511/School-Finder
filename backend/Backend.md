@@ -1,12 +1,12 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 23, 2026  
+> Last updated: June 25, 2026  
 > Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry  
 > Default port: `4000`  
 > Repository path: `backend/`  
 > Schema owner: `backend/prisma/schema.prisma`
 
-The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
+The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay payment verification, direct WhatsApp routing, reviews, and real AI recommendations are documented separately in `Future-Features.md`.
 
@@ -65,8 +65,8 @@ Express API
 |---|---|
 | Auth | Parent, school admin, platform admin login/register/reset/OTP |
 | Authorization | Role checks, admin access levels, super admin protection |
-| Schools | Public listing, detail, filters, coordinates, nearby, featured ordering |
-| School admin | Own school profile CRUD, gallery URLs, inquiry status updates |
+| Schools | Public listing, detail, filters, coordinates, nearby, featured ordering, and full 22-section profile persistence |
+| School admin | Own school profile CRUD, custom profile sections, gallery URLs, inquiry status updates |
 | Parents | Profile, favourites, sent inquiries |
 | Admin | Stats, moderation, users, add school/parent/admin, visibility, featured |
 | Contact | Contact page submissions saved to DB |
@@ -115,7 +115,9 @@ backend/
 │       ├── add_contact_submission/
 │       ├── add_featured_fields/
 │       ├── add_inquiry_lead_statuses/
-│       └── add_school_coordinates/
+│       ├── add_school_coordinates/
+│       ├── sync_school_profile_manual_columns/       # Languages, recognition, uniform, canteen, custom groups
+│       └── add_contact_json_fields/                  # admissionCoordinators + additionalPhones
 ├── generated/
 │   └── prisma/                       # Generated Prisma client, gitignored
 └── src/
@@ -147,7 +149,7 @@ backend/
     │   └── errorHandler.ts           # Standard errors + Sentry capture
     ├── validators/
     │   ├── auth.validator.ts         # Auth/admin/user validation and role transition guard
-    │   ├── school.validator.ts       # 22-section school profile + featured/coordinates validation
+    │   ├── school.validator.ts       # 22-section school profile + custom groups/contact JSON + featured/coordinates validation
     │   ├── inquiry.validator.ts      # Inquiry create/status validation + spam fields
     │   └── contact.validator.ts      # Contact form validation: name/email/phone/message
     ├── lib/
@@ -161,7 +163,7 @@ backend/
     │   ├── sanitize.ts               # HTML stripping from request bodies
     │   ├── account-status.ts         # Disabled account sentinel helpers
     │   └── queries/
-    │       └── schools.ts            # Public/admin selects, filters, mappers, featured/coordinate fields
+    │       └── schools.ts            # Public/admin selects, filters, mappers, profile JSON fields, featured/coordinate fields
     ├── utils/
     │   ├── AppError.ts               # Typed error factory
     │   └── asyncHandler.ts           # Async route wrapper
@@ -179,7 +181,7 @@ backend/
 | `src/controllers/` | Business logic, Prisma writes, audit logs, cache invalidation |
 | `src/middleware/` | Security, auth, role/admin-level gates, validation wrapper, error pipeline |
 | `src/validators/` | Zod schemas for body/query validation |
-| `src/lib/queries/schools.ts` | Central school select/filter/mapper layer for public/admin/featured/nearby data |
+| `src/lib/queries/schools.ts` | Central school select/filter/mapper layer for public/admin/profile/featured/nearby data |
 | `src/lib/cache.ts` | In-memory cache for public school data, city/state/board lists, admin stats |
 | `src/lib/prisma.ts` | Prisma client and Neon/Postgres connection configuration |
 | `prisma/schema.prisma` | Database models/enums: User, School, Inquiry, Favourite, ContactSubmission, AdminAuditLog, etc. |
@@ -418,6 +420,10 @@ Important validation:
 - Admin access level.
 - Role transition rules.
 - School profile 22-section fields.
+- Indian school categories, classes offered, languages offered, timings, recognition, affiliation, uniform, canteen, and profile metadata.
+- Facilities/sports custom group maps for reload-safe custom checkbox placement.
+- Admission coordinator JSON array and additional phone JSON array.
+- Board result model using `classLevel` + `passPercent`.
 - Latitude range: `-90` to `90`.
 - Longitude range: `-180` to `180`.
 - Inquiry honeypot/spam fields.
@@ -484,6 +490,9 @@ schoolType
 medium
 classesFrom
 classesTo
+classesOffered
+schoolCategory
+schoolFormat
 phone
 email
 website
@@ -499,6 +508,83 @@ longitude
 ownerId
 createdAt
 updatedAt
+```
+
+### School profile fields added / synced
+
+```txt
+languagesOffered
+recognitionNumber
+affiliatedSince
+uniformPolicy
+canteenAvailable
+startTime
+endTime
+workingDays
+studentTeacherRatio
+totalStudents
+establishedYear
+affiliationNumber
+```
+
+### Reload-safe custom group fields
+
+```txt
+facilityCustomGroups Json?
+sportsCustomGroups Json?
+```
+
+These fields preserve the exact subsection/group where custom Facilities and Sports items were added.
+
+Example:
+
+```json
+{
+  "facilityCustomGroups": {
+    "Classrooms & Labs": ["AI Lab"],
+    "Health & Safety": ["Emergency Exit Training"]
+  },
+  "sportsCustomGroups": {
+    "Outdoor Sports": ["Pickleball"],
+    "Indoor Sports": ["E-Sports"]
+  }
+}
+```
+
+### Admission and contact JSON fields
+
+```txt
+admissionCoordinators Json?
+additionalPhones Json?
+```
+
+`admissionCoordinators` stores repeatable coordinator rows from the frontend. The first coordinator is also copied into the legacy single fields for backward compatibility:
+
+```txt
+admissionCoordinatorName
+admissionPhone
+admissionEmail
+```
+
+`additionalPhones` stores repeatable labelled phone numbers from the contact section.
+
+### BoardResult fields
+
+```txt
+id
+schoolId
+year
+classLevel
+passPercent
+topperName
+topperScore
+```
+
+`classLevel` replaces old fixed Class 10 / Class 12 fields and supports values such as:
+
+```txt
+CLASS_10
+CLASS_12
 ```
 
 ### ContactSubmission fields
@@ -552,6 +638,10 @@ Supports:
 - Public school select.
 - Public detail select.
 - Admin school list select.
+- Full school profile fields for school/admin edit flows.
+- Facilities and sports custom group JSON fields.
+- Admission coordinator and additional phone JSON fields.
+- Board result `classLevel/passPercent` fields.
 - Featured fields.
 - Coordinates.
 - `isVisible` public filter.
@@ -885,6 +975,10 @@ healthCheckPath: /health
 - City/state/board filters.
 - SEO-friendly data support.
 - Full school profile update.
+- School profile backend sync for languages, categories, classes, timings, recognition, affiliation, uniform policy, canteen, student-teacher ratio, total students, facilities, sports, programs, streams, board results, admissions, and contact data.
+- Reload-safe Facilities/Sports custom group persistence with JSON maps.
+- Multiple admission coordinators stored in `admissionCoordinators` JSON with legacy first-coordinator fallback.
+- Additional labelled phone numbers stored in `additionalPhones` JSON.
 - Gallery URL management.
 - Visibility toggle.
 - Featured listing support.

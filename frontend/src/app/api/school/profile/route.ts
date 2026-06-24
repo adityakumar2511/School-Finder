@@ -9,7 +9,7 @@ export async function PATCH(request: NextRequest) {
   if (!token) {
     return NextResponse.json(
       { success: false, message: "Authentication required" },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -23,13 +23,14 @@ export async function PATCH(request: NextRequest) {
   if (!schoolResponse.ok || !schoolJson?.data?.id) {
     return NextResponse.json(
       { success: false, message: "School not found" },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
   const body = await request.text();
   const response = await proxyToBackend(`/api/schools/${schoolJson.data.id}`, {
     method: "PATCH",
+    headers: { "Content-Type": "application/json" },
     body,
   });
 

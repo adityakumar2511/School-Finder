@@ -1,12 +1,12 @@
 # SchoolSetu — Frontend Documentation
 
-> Last updated: June 23, 2026  
+> Last updated: June 25, 2026  
 > Stack: Next.js 14 App Router · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary · Sentry  
 > Default port: `3000`  
 > Repository path: `frontend/`  
 > Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
-The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, and error monitoring.
+The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, and error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
 
@@ -337,29 +337,29 @@ frontend/
     │   │   ├── nav/
     │   │   │   └── SchoolDashboardNav.tsx
     │   │   ├── profile/
-    │   │   │   ├── SchoolProfileForm.tsx   # Coordinates + admin submitEndpoint support
+    │   │   │   ├── SchoolProfileForm.tsx   # 22-section schema, custom groups, contact JSON, coordinates + admin submitEndpoint support
     │   │   │   ├── SchoolProfileSidebar.tsx
     │   │   │   └── formSections/
-    │   │   │       ├── 01_BasicInfoSection.tsx
+    │   │   │       ├── 01_BasicInfoSection.tsx # Categories, classes, languages, timings, recognition, uniform, canteen
     │   │   │       ├── 02_AboutSchoolSection.tsx
-    │   │   │       ├── 03_AcademicsSection.tsx
-    │   │   │       ├── 04_AdmissionsSection.tsx
+    │   │   │       ├── 03_AcademicsSection.tsx # Streams custom add + student-teacher ratio
+    │   │   │       ├── 04_AdmissionsSection.tsx # Admissions + repeatable admission coordinators
     │   │   │       ├── 05_FeeStructureSection.tsx
-    │   │   │       ├── 06_FacilitiesSection.tsx
-    │   │   │       ├── 07_SportsSection.tsx
-    │   │   │       ├── 08_InfrastructureSection.tsx
+    │   │   │       ├── 06_FacilitiesSection.tsx # Facilities + reload-safe custom group add
+    │   │   │       ├── 07_SportsSection.tsx # Sports + reload-safe custom group add
+    │   │   │       ├── 08_InfrastructureSection.tsx # Campus/classrooms/labs/library/hostel/buses/total students
     │   │   │       ├── 09_FacultySection.tsx
-    │   │   │       ├── 10_ProgramsSection.tsx
+    │   │   │       ├── 10_ProgramsSection.tsx # Programs custom add
     │   │   │       ├── 11_StudentLifeSection.tsx
     │   │   │       ├── 12_AchievementsSection.tsx
-    │   │   │       ├── 13_BoardResultsSection.tsx
+    │   │   │       ├── 13_BoardResultsSection.tsx # Board result classLevel + passPercent rows
     │   │   │       ├── 14_ScholarshipsSection.tsx
     │   │   │       ├── 15_HostelSection.tsx
     │   │   │       ├── 16_TransportSection.tsx
     │   │   │       ├── 17_SafetySection.tsx
     │   │   │       ├── 18_GallerySection.tsx
     │   │   │       ├── 19_DownloadsSection.tsx
-    │   │   │       ├── 20_ContactSection.tsx   # Phone, social, mapUrl, latitude, longitude
+    │   │   │       ├── 20_ContactSection.tsx   # Phone, additional phones, social, mapUrl, latitude, longitude
     │   │   │       ├── 21_ReviewsSection.tsx
     │   │   │       ├── 22_FAQsSection.tsx
     │   │   │       ├── index.ts
@@ -640,12 +640,51 @@ frontend/src/lib/school/data.ts
 |---|---|
 | Parent login/register | React Hook Form + Zod |
 | School registration wizard | Per-step validation |
-| School profile editor | 22-section schema validation |
+| School profile editor | 22-section schema validation, profile payload mapping, custom group persistence, JSON contact/admission fields |
 | Admin add-school | Multi-step validation + duplicate checks |
 | Admin add-parent | Email duplicate check |
 | Admin add-admin | Access-level validation |
 | Contact form | Client validation + backend validation |
 | Inquiry modal | Client validation + spam protection fields |
+
+
+### School profile editor updates
+
+The 22-section school profile editor now supports:
+
+```txt
+School categories
+Classes offered
+Languages offered
+School timings
+Recognition number
+Affiliated since
+Uniform policy
+Canteen / tiffin availability
+Student-teacher ratio
+Total students
+Board results with classLevel + passPercent
+Facilities custom add with group persistence
+Sports custom add with group persistence
+Programs custom add
+Academics streams custom add
+Repeatable admission coordinators
+Additional labelled phone numbers
+```
+
+Frontend payload now sends these backend fields where applicable:
+
+```txt
+languagesOffered
+recognitionNumber
+affiliatedSince
+uniformPolicy
+canteenAvailable
+facilityCustomGroups
+sportsCustomGroups
+admissionCoordinators
+additionalPhones
+```
 
 Shared form primitives:
 
@@ -974,6 +1013,13 @@ https://your-domain.com/api/auth/callback/google
 - Inquiry/lead management.
 - Status update workflow.
 - Full 22-section profile editor.
+- Updated Indian school categories and full classes offered list.
+- Custom add support for languages, classes, facilities, sports, programs, and academics streams.
+- Reload-safe custom grouping for Facilities and Sports.
+- Board results use repeatable rows with `classLevel` and `passPercent`.
+- Admission section supports repeatable coordinators.
+- Contact section supports additional labelled phone numbers.
+- School timing, recognition number, affiliated since, uniform policy, canteen/tiffin, student-teacher ratio, and total students fields.
 - Gallery image management.
 - Latitude/longitude fields.
 
@@ -1010,4 +1056,6 @@ https://your-domain.com/api/auth/callback/google
 | Contact page | `src/app/contact/page.tsx` |
 | Compare page | `src/app/compare/page.tsx` |
 | School detail | `src/app/schools/[slug]/page.tsx` |
+| School profile form | `src/components/school/profile/SchoolProfileForm.tsx` |
+| School profile sections | `src/components/school/profile/formSections/` |
 | Sentry configs | `sentry.*.config.ts` |

@@ -389,3 +389,87 @@ Admin and school dashboards ko more useful business metrics dena.
 
 - Current production docs should not include future items as implemented features.
 - When any future feature is implemented, move it from this file into `plan.md`, `Frontend.md`, and/or `Backend.md`.
+
+
+
+
+
+## Future Feature — Admin Same Google Email Verification
+
+### Goal
+
+Admin login ko aur secure banana hai. Current system me admin email + password correct hone par login ho jata hai, chahe browser/Chrome me koi bhi Google account logged in ho.
+
+Future me admin login me extra verification add karna hai:
+
+```txt
+Admin email + password correct
+→ Google verification required
+→ Google verified email must match admin email
+→ Only then admin dashboard access
+```
+
+### Important Note
+
+Website directly Chrome profile email read nahi kar sakti. Browser privacy ke reason se ye possible nahi hai ki app check kare ki Chrome me kaunsa Gmail account login hai.
+
+Iska practical solution Google OAuth verification hai. Admin ko Google account select/verify karna hoga, aur us Google account ka email admin login email ke same hona chahiye.
+
+### Recommended Flow
+
+1. Admin `/admin-login` par email + password enter karega.
+2. Backend email/password verify karega.
+3. Agar password correct hai, frontend “Verify with Google” step show karega.
+4. Google OAuth se verified email milega.
+5. System check karega:
+
+```txt
+googleEmail === adminEmail
+```
+
+6. Agar match hua, admin session create hoga.
+7. Agar match nahi hua, login block hoga.
+
+### Security Benefit
+
+* Stolen password ke case me extra protection milegi.
+* Admin ko same verified Google email se confirm karna hoga.
+* Admin panel unauthorized access ka risk reduce hoga.
+
+### Suggested Implementation
+
+#### Frontend
+
+Possible files:
+
+```txt
+frontend/src/app/admin-login/page.tsx
+frontend/src/lib/auth/auth.ts
+frontend/src/app/api/admin/session/route.ts
+```
+
+#### Backend
+
+Possible files:
+
+```txt
+backend/src/controllers/auth.controller.ts
+backend/src/routes/auth.routes.ts
+```
+
+Possible new endpoint:
+
+```txt
+POST /api/auth/admin-google-verify
+```
+
+### Recommended Rule
+
+Frontend se plain `googleEmail` trust nahi karna chahiye. Google OAuth / NextAuth verified session se email lena chahiye, because frontend payload manually fake kiya ja sakta hai.
+
+### Status
+
+```txt
+Status: Future / Not Implemented
+Priority: Medium to High
+```

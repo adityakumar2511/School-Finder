@@ -87,6 +87,7 @@ model School {
   totalStudents            Int?
   establishedYear          Int?
   phone                    String
+  additionalPhones         Json?
   email                    String?
   website                  String?
   logoUrl                  String?
@@ -103,6 +104,7 @@ model School {
   academicAchievements     String?
   admissionCoordinatorName String?
   admissionEmail           String?
+  admissionCoordinators    Json?
   admissionEndDate         DateTime?
   admissionOpen            Boolean             @default(false)
   admissionPhone           String?
@@ -126,6 +128,7 @@ model School {
   endTime                  String?
   facebook                 String?
   facilitiesList           String[]
+  facilityCustomGroups     Json?
   gpsTracking              Boolean             @default(false)
   hasCCTV                  Boolean             @default(false)
   hasFireSafety            Boolean             @default(false)
@@ -152,6 +155,7 @@ model School {
   schoolFormat             String?
   sportsAchievements       String?
   sportsList               String[]
+  sportsCustomGroups       Json?
   startTime                String?
   streamsOffered           String[]
   studentTeacherRatio      String?
@@ -167,6 +171,11 @@ model School {
   vision                   String?
   whatsapp                 String?
   workingDays              String?
+  languagesOffered         String[]            @default([])
+  recognitionNumber        String?
+  affiliatedSince          String?
+  uniformPolicy            String?
+  canteenAvailable         String?
   youtube                  String?
   isVisible                Boolean             @default(true)
   isFeatured               Boolean             @default(false)
@@ -234,13 +243,14 @@ model BoardResult {
   id          String  @id @default(cuid())
   schoolId    String
   year        String
-  class10Pass String?
-  class12Pass String?
+  classLevel  String  @default("CLASS_10")   // "CLASS_10" | "CLASS_12"
+  passPercent String?
   topperName  String?
   topperScore String?
   school      School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+  @@index([schoolId, classLevel])
 }
 
 model Scholarship {

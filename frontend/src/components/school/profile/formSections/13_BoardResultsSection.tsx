@@ -5,7 +5,7 @@ import { Plus, Trash2, Trophy } from "lucide-react";
 import { Input } from "@/components/shared/ui/input";
 import { Button } from "@/components/shared/ui/button";
 import { Card, CardContent } from "@/components/shared/ui/card";
-import { FormField, inputClass } from "@/components/shared/form/FormField";
+import { FormField, inputClass, selectClass } from "@/components/shared/form/FormField";
 import { cn } from "@/lib/utils";
 import type { SectionProps } from "./types";
 
@@ -28,99 +28,108 @@ export default function BoardResultsSection({
 
   function addResult() {
     append({
-      year:           String(CURRENT_YEAR),
-      class10Percent: "",
-      class12Percent: "",
-      topperName:     "",
-      topScore:       "",
+      year:        String(CURRENT_YEAR),
+      classLevel:  "CLASS_10",
+      passPercent: "",
+      topperName:  "",
+      topScore:    "",
     });
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h2 className="font-heading text-h2 font-bold text-blue-800">Board Results</h2>
         <p className="font-body text-body text-gray-400 mt-1">
-          Year-wise board exam performance — Class 10 &amp; Class 12
+          Year-wise board exam performance — add separate entries for Class 10 and Class 12
         </p>
       </div>
 
-      {/* ── Results Repeater ────────────────────────────────── */}
       <div className="space-y-4">
         {results.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-10 text-center">
             <Trophy className="w-8 h-8 text-gray-300 mx-auto mb-2" />
             <p className="font-body text-sm text-gray-400">No board results added yet.</p>
+            <p className="font-body text-meta text-gray-400 mt-1">
+              Add separate entries for Class 10 and Class 12 results.
+            </p>
           </div>
         ) : (
-          results.map((field, index) => (
-            <Card key={field.id} className="border border-gray-100 shadow-card rounded-2xl bg-white">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-heading text-label font-semibold text-gray-700">
-                    Result #{index + 1} — {watch(`boardResults.results.${index}.year`) || "Year"}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(index)}
-                    className="rounded-xl text-red-400 hover:text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+          results.map((field, index) => {
+            const classLevel = watch(`boardResults.results.${index}.classLevel`);
+            return (
+              <Card key={field.id} className="border border-gray-100 shadow-card rounded-2xl bg-white">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-heading text-label font-semibold text-gray-700">
+                      Result #{index + 1} —{" "}
+                      {classLevel === "CLASS_10" ? "Class 10" : "Class 12"},{" "}
+                      {watch(`boardResults.results.${index}.year`) || "Year"}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => remove(index)}
+                      className="rounded-xl text-red-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <FormField label="Year">
-                    <Input
-                      type="number"
-                      min={2000}
-                      max={CURRENT_YEAR}
-                      placeholder={String(CURRENT_YEAR)}
-                      className={inputClass}
-                      {...register(`boardResults.results.${index}.year`)}
-                    />
-                  </FormField>
-                  <FormField label="Class 10 Pass %">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      placeholder="e.g. 98"
-                      className={inputClass}
-                      {...register(`boardResults.results.${index}.class10Percent`)}
-                    />
-                  </FormField>
-                  <FormField label="Class 12 Pass %">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      placeholder="e.g. 96"
-                      className={inputClass}
-                      {...register(`boardResults.results.${index}.class12Percent`)}
-                    />
-                  </FormField>
-                  <FormField label="Topper Name">
-                    <Input
-                      placeholder="e.g. Priya Sharma"
-                      className={inputClass}
-                      {...register(`boardResults.results.${index}.topperName`)}
-                    />
-                  </FormField>
-                  <FormField label="Top Score">
-                    <Input
-                      placeholder="e.g. 498/500"
-                      className={inputClass}
-                      {...register(`boardResults.results.${index}.topScore`)}
-                    />
-                  </FormField>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <FormField label="Class">
+                      <select
+                        className={selectClass}
+                        {...register(`boardResults.results.${index}.classLevel`)}
+                      >
+                        <option value="CLASS_10">Class 10</option>
+                        <option value="CLASS_12">Class 12</option>
+                      </select>
+                    </FormField>
+
+                    <FormField label="Year">
+                      <Input
+                        type="number"
+                        min={2000}
+                        max={CURRENT_YEAR}
+                        placeholder={String(CURRENT_YEAR)}
+                        className={inputClass}
+                        {...register(`boardResults.results.${index}.year`)}
+                      />
+                    </FormField>
+
+                    <FormField label="Pass %">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="e.g. 98"
+                        className={inputClass}
+                        {...register(`boardResults.results.${index}.passPercent`)}
+                      />
+                    </FormField>
+
+                    <FormField label="Topper Name">
+                      <Input
+                        placeholder="e.g. Priya Sharma"
+                        className={inputClass}
+                        {...register(`boardResults.results.${index}.topperName`)}
+                      />
+                    </FormField>
+
+                    <FormField label="Top Score">
+                      <Input
+                        placeholder="e.g. 498/500"
+                        className={inputClass}
+                        {...register(`boardResults.results.${index}.topScore`)}
+                      />
+                    </FormField>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
 
         <Button
@@ -129,11 +138,11 @@ export default function BoardResultsSection({
           onClick={addResult}
           className="w-full rounded-xl border-dashed border-blue-200 text-blue-600 hover:bg-blue-50 font-heading text-sm h-11"
         >
-          <Plus className="w-4 h-4 mr-2" /> Add Year Result
+          <Plus className="w-4 h-4 mr-2" /> Add Result
         </Button>
       </div>
 
-      {/* ── Custom Fields ───────────────────────────────────── */}
+      {/* Custom Fields */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center justify-between">
@@ -150,13 +159,11 @@ export default function BoardResultsSection({
               <Plus className="w-3.5 h-3.5 mr-1" /> Add field
             </Button>
           </div>
-
           {customFields.length === 0 && (
             <p className="font-body text-meta text-gray-400 text-center py-3">
-              Add any extra result details — district rank, distinctions, etc.
+              Add extra result details — district rank, distinctions, etc.
             </p>
           )}
-
           <div className="space-y-3">
             {customFields.map((field, index) => (
               <div key={field.id} className="flex gap-2 items-start">

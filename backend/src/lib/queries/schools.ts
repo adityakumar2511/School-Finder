@@ -297,6 +297,11 @@ export const schoolDetailSelect = {
   startTime: true,
   endTime: true,
   workingDays: true,
+  languagesOffered: true,
+  recognitionNumber: true,
+  affiliatedSince: true,
+  uniformPolicy: true,
+  canteenAvailable: true,
 
   // About
   vision: true,
@@ -333,7 +338,9 @@ export const schoolDetailSelect = {
 
   // Facilities & Sports
   facilitiesList: true,
+  facilityCustomGroups: true,
   sportsList: true,
+  sportsCustomGroups: true,
 
   // Infrastructure
   campusArea: true,
@@ -391,6 +398,8 @@ export const schoolDetailSelect = {
   admissionCoordinatorName: true,
   admissionPhone: true,
   admissionEmail: true,
+  additionalPhones: true,
+  admissionCoordinators: true,
 
   // Relations
   owner: { select: { name: true } },
@@ -407,12 +416,15 @@ export const schoolDetailSelect = {
     select: {
       id: true,
       year: true,
-      class10Pass: true,
-      class12Pass: true,
+      classLevel: true,
+      passPercent: true,
       topperName: true,
       topperScore: true,
     },
-    orderBy: { year: "desc" as const },
+    orderBy: [
+      { year: "desc" as const },
+      { classLevel: "asc" as const },
+    ],
   },
   scholarships: {
     select: { id: true, name: true, eligibility: true, benefits: true },

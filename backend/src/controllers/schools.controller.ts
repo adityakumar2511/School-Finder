@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
+import type { Prisma } from "../../generated/prisma";
 import { writeAuditLog } from "../lib/auditLog";
 import { AuthRequest } from "../middleware/auth";
 import { Errors } from "../utils/AppError";
@@ -114,26 +115,24 @@ async function syncBoardResults(
   });
 
   for (const item of items) {
+    const data = {
+      year: item.year,
+      classLevel: item.classLevel,
+      passPercent: item.passPercent ?? null,
+      topperName: item.topperName ?? null,
+      topperScore: item.topperScore ?? null,
+    };
+
     if (item.id) {
       await tx.boardResult.update({
         where: { id: item.id },
-        data: {
-          year: item.year,
-          class10Pass: item.class10Pass ?? null,
-          class12Pass: item.class12Pass ?? null,
-          topperName: item.topperName ?? null,
-          topperScore: item.topperScore ?? null,
-        },
+        data,
       });
     } else {
       await tx.boardResult.create({
         data: {
           schoolId,
-          year: item.year,
-          class10Pass: item.class10Pass ?? null,
-          class12Pass: item.class12Pass ?? null,
-          topperName: item.topperName ?? null,
-          topperScore: item.topperScore ?? null,
+          ...data,
         },
       });
     }
@@ -299,6 +298,109 @@ async function syncCustomFields(
   }
 }
 
+function normalizeCustomGroups(
+  value: unknown,
+): Prisma.InputJsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const cleaned: Record<string, Prisma.InputJsonValue> = {};
+
+  for (const [groupName, items] of Object.entries(value)) {
+    if (!Array.isArray(items)) continue;
+
+    const validItems = items
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (validItems.length > 0) {
+      cleaned[groupName] = validItems;
+    }
+  }
+
+  return Object.keys(cleaned).length > 0
+    ? (cleaned as Prisma.InputJsonObject)
+    : undefined;
+}
+
+
+function normalizeAdditionalPhones(
+  value: unknown,
+): Prisma.InputJsonValue | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const cleaned = value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const number =
+        typeof record.number === "string" ? record.number.trim() : "";
+      const label = typeof record.label === "string" ? record.label.trim() : "";
+
+      if (!number && !label) return null;
+
+      return {
+        number,
+        label: label || "Other",
+      };
+    })
+    .filter((item): item is { number: string; label: string } => item !== null);
+
+  return cleaned.length > 0
+    ? (cleaned as unknown as Prisma.InputJsonValue)
+    : undefined;
+}
+
+function normalizeAdmissionCoordinators(
+  value: unknown,
+): Prisma.InputJsonValue | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const cleaned = value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const phone = typeof record.phone === "string" ? record.phone.trim() : "";
+      const email = typeof record.email === "string" ? record.email.trim() : "";
+      const designation =
+        typeof record.designation === "string"
+          ? record.designation.trim()
+          : "";
+
+      if (!name && !phone && !email && !designation) return null;
+
+      return {
+        name,
+        phone,
+        email,
+        designation,
+      };
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        name: string;
+        phone: string;
+        email: string;
+        designation: string;
+      } => item !== null,
+    );
+
+  return cleaned.length > 0
+    ? (cleaned as unknown as Prisma.InputJsonValue)
+    : undefined;
+}
+
 // ── Extract scalar fields from validated input ────────────────────────────────
 
 function extractScalarFields(data: UpdateSchoolInput) {
@@ -309,6 +411,10 @@ function extractScalarFields(data: UpdateSchoolInput) {
     downloads,
     images,
     customFields,
+    facilityCustomGroups,
+    sportsCustomGroups,
+    additionalPhones,
+    admissionCoordinators,
     ...scalars
   } = data;
 
@@ -575,7 +681,20 @@ export const getMySchool = async (req: AuthRequest, res: Response) => {
       ...schoolDetailSelect,
       rejectionReason: true,
       customFields: true,
-      boardResults: { orderBy: { year: "desc" } },
+      boardResults: {
+        select: {
+          id: true,
+          year: true,
+          classLevel: true,
+          passPercent: true,
+          topperName: true,
+          topperScore: true,
+        },
+        orderBy: [
+          { year: "desc" as const },
+          { classLevel: "asc" as const },
+        ],
+      },
       scholarships: true,
       faqs: true,
       downloads: true,
@@ -601,7 +720,20 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
       select: {
         ...schoolDetailSelect,
         customFields: true,
-        boardResults: { orderBy: { year: "desc" } },
+        boardResults: {
+          select: {
+            id: true,
+            year: true,
+            classLevel: true,
+            passPercent: true,
+            topperName: true,
+            topperScore: true,
+          },
+          orderBy: [
+            { year: "desc" as const },
+            { classLevel: "asc" as const },
+          ],
+        },
         scholarships: true,
         faqs: true,
         downloads: true,
@@ -691,10 +823,38 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
 
   const scalars = extractScalarFields(data);
 
+  const jsonFields: Prisma.SchoolUpdateInput = {};
+
+  const facilityCustomGroups = normalizeCustomGroups(data.facilityCustomGroups);
+  if (facilityCustomGroups !== undefined) {
+    jsonFields.facilityCustomGroups = facilityCustomGroups;
+  }
+
+  const sportsCustomGroups = normalizeCustomGroups(data.sportsCustomGroups);
+  if (sportsCustomGroups !== undefined) {
+    jsonFields.sportsCustomGroups = sportsCustomGroups;
+  }
+
+  const additionalPhones = normalizeAdditionalPhones(data.additionalPhones);
+  if (additionalPhones !== undefined) {
+    jsonFields.additionalPhones = additionalPhones;
+  }
+
+  const admissionCoordinators = normalizeAdmissionCoordinators(
+    data.admissionCoordinators,
+  );
+  if (admissionCoordinators !== undefined) {
+    jsonFields.admissionCoordinators = admissionCoordinators;
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     const school = await tx.school.update({
       where: { id },
-      data: { ...scalars, ...statusReset },
+      data: {
+        ...scalars,
+        ...jsonFields,
+        ...statusReset,
+      } as Prisma.SchoolUpdateInput,
     });
 
     if (data.boardResults !== undefined) {

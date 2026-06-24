@@ -8,19 +8,58 @@ import type { SectionProps } from "./types";
 
 const FIELDS: {
   key: keyof {
-    campusArea: string; classrooms: string; labs: string;
-    libraryBooks: string; hostelCapacity: string; buses: string;
+    campusArea: string;
+    classrooms: string;
+    labs: string;
+    libraryBooks: string;
+    hostelCapacity: string;
+    buses: string;
+    totalStudents: string;
   };
   label: string;
   placeholder: string;
   suffix?: string;
 }[] = [
-  { key: "campusArea",     label: "Campus Area",          placeholder: "e.g. 5",     suffix: "acres"    },
-  { key: "classrooms",     label: "Number of Classrooms", placeholder: "e.g. 40"                        },
-  { key: "labs",           label: "Number of Labs",       placeholder: "e.g. 8"                         },
-  { key: "libraryBooks",   label: "Library Books",        placeholder: "e.g. 10000", suffix: "books"    },
-  { key: "hostelCapacity", label: "Hostel Capacity",      placeholder: "e.g. 200",   suffix: "students" },
-  { key: "buses",          label: "Number of Buses",      placeholder: "e.g. 15",    suffix: "buses"    },
+  {
+    key: "campusArea",
+    label: "Campus Area",
+    placeholder: "e.g. 5",
+    suffix: "acres",
+  },
+  {
+    key: "classrooms",
+    label: "Number of Classrooms",
+    placeholder: "e.g. 40",
+  },
+  {
+    key: "labs",
+    label: "Number of Labs",
+    placeholder: "e.g. 8",
+  },
+  {
+    key: "libraryBooks",
+    label: "Library Books",
+    placeholder: "e.g. 10000",
+    suffix: "books",
+  },
+  {
+    key: "hostelCapacity",
+    label: "Hostel Capacity",
+    placeholder: "e.g. 200",
+    suffix: "students",
+  },
+  {
+    key: "buses",
+    label: "Number of Buses",
+    placeholder: "e.g. 15",
+    suffix: "buses",
+  },
+  {
+    key: "totalStudents",
+    label: "Total Students Enrolled",
+    placeholder: "e.g. 1200",
+    suffix: "students",
+  },
 ];
 
 export default function InfrastructureSection({ register }: SectionProps) {
@@ -28,7 +67,9 @@ export default function InfrastructureSection({ register }: SectionProps) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="font-heading text-h2 font-bold text-blue-800">Infrastructure</h2>
+        <h2 className="font-heading text-h2 font-bold text-blue-800">
+          Infrastructure
+        </h2>
         <p className="font-body text-body text-gray-400 mt-1">
           Physical infrastructure details — campus, classrooms, labs, and more
         </p>
@@ -73,7 +114,8 @@ export default function InfrastructureSection({ register }: SectionProps) {
 
       <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
         <p className="font-body text-sm text-blue-600">
-          💡 Accurate infrastructure data helps parents make informed decisions. Enter approximate figures if exact numbers aren't available.
+          💡 Accurate infrastructure data helps parents make informed decisions.
+          Enter approximate figures if exact numbers aren't available.
         </p>
       </div>
     </div>

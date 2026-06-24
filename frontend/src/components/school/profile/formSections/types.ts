@@ -8,17 +8,17 @@ import type {
 import type { SchoolProfileFormData } from "../SchoolProfileForm";
 
 export interface SectionProps {
-  control:    Control<SchoolProfileFormData>;
-  register:   UseFormRegister<SchoolProfileFormData>;
-  errors:     FieldErrors<SchoolProfileFormData>;
-  watch:      UseFormWatch<SchoolProfileFormData>;
-  setValue:   UseFormSetValue<SchoolProfileFormData>;
+  control: Control<SchoolProfileFormData>;
+  register: UseFormRegister<SchoolProfileFormData>;
+  errors: FieldErrors<SchoolProfileFormData>;
+  watch: UseFormWatch<SchoolProfileFormData>;
+  setValue: UseFormSetValue<SchoolProfileFormData>;
   isLoading?: boolean;
 }
 
 export interface CustomField {
-  label:     string;
-  value:     string;
+  label: string;
+  value: string;
   fieldType: "text" | "number" | "date" | "url" | "richtext";
 }
 
