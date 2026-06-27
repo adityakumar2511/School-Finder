@@ -857,6 +857,7 @@ export default function SchoolProfileForm({
 
           streamsOffered: data.academics.streamsOffered ?? [],
           studentTeacherRatio: data.academics.studentTeacherRatio || undefined,
+          academicCalendar: data.academics.academicCalendar || undefined, // ← ADD THIS
 
           admissionOpen: data.admissions.admissionOpen ?? false,
           admissionStartDate: data.admissions.startDate || undefined,
@@ -928,7 +929,11 @@ export default function SchoolProfileForm({
 
           academicAchievements: data.achievements.academic || undefined,
           sportsAchievements: data.achievements.sports || undefined,
-          awardsRecognitions: data.achievements.awards || undefined,
+          // awardsRecognitions: data.achievements.awards || undefined,
+          awardsRecognitions:
+            [data.achievements.awards, data.achievements.recognitions]
+              .filter(Boolean)
+              .join("\n\n") || undefined,
 
           hostelAvailable: data.hostel.available ?? false,
           hostelBoys: data.hostel.boys ?? false,

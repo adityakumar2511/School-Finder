@@ -338,9 +338,7 @@ const MEDIUM_LABEL: Record<string, string> = {
   OTHER: "Other Medium",
 };
 
-function getBoardLabel(
-  school: Pick<SchoolDetail, "board" | "stateBoardName">,
-) {
+function getBoardLabel(school: Pick<SchoolDetail, "board" | "stateBoardName">) {
   if (school.board === "STATE_BOARD") {
     return school.stateBoardName
       ? `${school.stateBoardName} Board`
@@ -385,7 +383,6 @@ function getMediumLabel(
 
   return MEDIUM_LABEL[schoolOrMedium.medium] ?? schoolOrMedium.medium;
 }
-
 
 // function getMediumLabel(medium: string) {
 //   return MEDIUM_LABEL[medium] ?? medium;
@@ -671,7 +668,9 @@ export default async function SchoolDetailPage({
     ]),
   ];
 
-  const optimizedLogoUrl = optimizeCloudinaryUrl(school.logoUrl, { width: 160 });
+  const optimizedLogoUrl = optimizeCloudinaryUrl(school.logoUrl, {
+    width: 160,
+  });
   const mapEmbedUrl = getMapEmbedUrl(school);
   const directionsUrl = getDirectionsUrl(school);
 
@@ -851,10 +850,7 @@ export default async function SchoolDetailPage({
                   value={TYPE_LABEL[school.schoolType]}
                 />
 
-                <InfoTile
-                  label="Medium"
-                  value={getMediumLabel(school)}
-                />
+                <InfoTile label="Medium" value={getMediumLabel(school)} />
 
                 <InfoTile
                   label="Classes"
@@ -887,10 +883,7 @@ export default async function SchoolDetailPage({
                 )}
 
                 {school.managementType && (
-                  <InfoTile
-                    label="Management"
-                    value={school.managementType}
-                  />
+                  <InfoTile label="Management" value={school.managementType} />
                 )}
 
                 {school.schoolFormat && (
@@ -933,10 +926,7 @@ export default async function SchoolDetailPage({
                 )}
 
                 {school.workingDays && (
-                  <InfoTile
-                    label="Working Days"
-                    value={school.workingDays}
-                  />
+                  <InfoTile label="Working Days" value={school.workingDays} />
                 )}
 
                 {(school.startTime || school.endTime) && (
@@ -1136,7 +1126,8 @@ export default async function SchoolDetailPage({
               </div>
 
               <p className="text-meta text-gray-400 mt-4 font-body italic">
-                * Fees are approximate. Contact the school for confirmed amounts.
+                * Fees are approximate. Contact the school for confirmed
+                amounts.
               </p>
             </section>
           )}
@@ -1334,10 +1325,7 @@ export default async function SchoolDetailPage({
                 )}
 
                 {school.sportsAchievements && (
-                  <TextBlock
-                    label="Sports"
-                    value={school.sportsAchievements}
-                  />
+                  <TextBlock label="Sports" value={school.sportsAchievements} />
                 )}
 
                 {school.awardsRecognitions && (
@@ -1595,6 +1583,29 @@ export default async function SchoolDetailPage({
                     </p>
                     <p className="font-body text-body text-gray-600 leading-relaxed">
                       {faq.answer}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {school.customFields?.length > 0 && (
+            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
+              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
+                Additional Information
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {school.customFields.map((field) => (
+                  <div
+                    key={field.id}
+                    className="bg-blue-50 rounded-xl p-3.5 border border-blue-200"
+                  >
+                    <p className="font-body text-meta text-gray-400 mb-1">
+                      {field.label}
+                    </p>
+                    <p className="font-heading font-semibold text-label text-gray-800">
+                      {field.value}
                     </p>
                   </div>
                 ))}
@@ -2018,9 +2029,7 @@ function FeatureCard({
   const dotCls = color === "green" ? "bg-green-400" : "bg-blue-400";
 
   return (
-    <div
-      className={`flex items-center gap-2.5 p-3 rounded-xl border ${cls}`}
-    >
+    <div className={`flex items-center gap-2.5 p-3 rounded-xl border ${cls}`}>
       {icon ? (
         <span className="text-xl">{icon}</span>
       ) : (

@@ -40,7 +40,8 @@ export default function SchoolGalleryManager({
       return;
     }
 
-    setImages((prev) => [body.image, ...prev]);
+    // setImages((prev) => [body.image, ...prev]);
+    setImages((prev) => [body.data ?? body.image, ...prev]);
     setShowUploader(false);
     router.refresh();
   }

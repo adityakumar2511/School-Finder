@@ -1,9 +1,9 @@
 # SchoolFinder — Backend Documentation
 
-> Last updated: June 25, 2026  
-> Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry  
-> Default port: `4000`  
-> Repository path: `backend/`  
+> Last updated: June 27, 2026
+> Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry
+> Default port: `4000`
+> Repository path: `backend/`
 > Schema owner: `backend/prisma/schema.prisma`
 
 The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
@@ -117,7 +117,8 @@ backend/
 │       ├── add_inquiry_lead_statuses/
 │       ├── add_school_coordinates/
 │       ├── sync_school_profile_manual_columns/       # Languages, recognition, uniform, canteen, custom groups
-│       └── add_contact_json_fields/                  # admissionCoordinators + additionalPhones
+│       ├── add_contact_json_fields/                  # admissionCoordinators + additionalPhones
+│       └── add_medium_board_fee_social_fields/       # mediumOther, stateBoardName, earlyChildhoodFee, socialLinks
 ├── generated/
 │   └── prisma/                       # Generated Prisma client, gitignored
 └── src/
@@ -149,7 +150,7 @@ backend/
     │   └── errorHandler.ts           # Standard errors + Sentry capture
     ├── validators/
     │   ├── auth.validator.ts         # Auth/admin/user validation and role transition guard
-    │   ├── school.validator.ts       # 22-section school profile + custom groups/contact JSON + featured/coordinates validation
+    │   ├── school.validator.ts       # 22-section school profile + custom groups/contact JSON + featured/coordinates validation + mediumOther
     │   ├── inquiry.validator.ts      # Inquiry create/status validation + spam fields
     │   └── contact.validator.ts      # Contact form validation: name/email/phone/message
     ├── lib/
@@ -322,6 +323,8 @@ isSuperAdmin      // ADMIN only
 |---|---|---|---|
 | GET | `/stats` | READ_ONLY | Dashboard stats |
 | GET | `/schools` | READ_ONLY | Paginated school list |
+| GET | `/schools/states` | READ_ONLY | Distinct states for admin filter |
+| GET | `/schools/cities` | READ_ONLY | Distinct cities for admin filter |
 | GET | `/users` | READ_ONLY | Paginated users by role |
 | GET | `/inquiries` | READ_ONLY | Cross-school inquiries |
 | GET | `/check-owner` | READ_ONLY | Email/owner duplicate check |
@@ -424,10 +427,20 @@ Important validation:
 - Facilities/sports custom group maps for reload-safe custom checkbox placement.
 - Admission coordinator JSON array and additional phone JSON array.
 - Board result model using `classLevel` + `passPercent`.
+- `mediumOther` string field — saved when `medium === "OTHER"`, cleared otherwise (handled in `buildManualSchoolFields` in controller).
+- `stateBoardName` string field — saved when `board === "STATE_BOARD"`, cleared otherwise.
+- `socialLinks` JSON array — array of `{ platform, url }` objects.
+- `earlyChildhoodFee` integer field — fee for Daycare/Toddler/Play Group/Pre-Nursery group.
 - Latitude range: `-90` to `90`.
 - Longitude range: `-180` to `180`.
 - Inquiry honeypot/spam fields.
 - Contact form fields.
+
+### Key validator notes
+
+`mediumOther` is NOT in the Zod `schoolBodyFields` object — it is intentionally bypassed via `buildManualSchoolFields` in `schools.controller.ts` which reads it directly from `rawBody`. This avoids Zod stripping the field since `MediumType` enum only accepts known values.
+
+`auth.validator.ts` — `registerSchoolSchema` medium enum includes `"OTHER"` to match the full `MediumType` enum in schema.
 
 Validation error response:
 
@@ -453,9 +466,9 @@ Validation error response:
 | `Role` | PARENT, SCHOOL_ADMIN, ADMIN |
 | `AdminAccessLevel` | READ_ONLY, READ_WRITE, FULL_ACCESS |
 | `SchoolStatus` | DRAFT, PENDING, APPROVED, REJECTED |
-| `BoardType` | CBSE, ICSE, UP_BOARD, OTHER |
+| `BoardType` | CBSE, ICSE, IB, IGCSE, NIOS, STATE_BOARD, OTHER |
 | `SchoolType` | BOYS, GIRLS, CO_ED |
-| `MediumType` | HINDI, ENGLISH, BOTH |
+| `MediumType` | HINDI, ENGLISH, BOTH, OTHER |
 | `InquiryStatus` | NEW, CONTACTED, INTERESTED, CONVERTED, CLOSED |
 
 ### Main models
@@ -486,8 +499,10 @@ city
 state
 pincode
 board
+stateBoardName        ← stores selected state board name when board = STATE_BOARD
 schoolType
 medium
+mediumOther           ← stores custom medium text when medium = OTHER
 classesFrom
 classesTo
 classesOffered
@@ -525,6 +540,10 @@ studentTeacherRatio
 totalStudents
 establishedYear
 affiliationNumber
+mediumOther
+stateBoardName
+earlyChildhoodFee
+socialLinks
 ```
 
 ### Reload-safe custom group fields
@@ -556,6 +575,7 @@ Example:
 ```txt
 admissionCoordinators Json?
 additionalPhones Json?
+socialLinks Json?
 ```
 
 `admissionCoordinators` stores repeatable coordinator rows from the frontend. The first coordinator is also copied into the legacy single fields for backward compatibility:
@@ -568,23 +588,30 @@ admissionEmail
 
 `additionalPhones` stores repeatable labelled phone numbers from the contact section.
 
+`socialLinks` stores dynamic social media links as `{ platform: string, url: string }[]`.
+
+### Fee structure fields
+
+```txt
+averageAnnualFee Int?       ← simple mode: one average fee
+earlyChildhoodFee Int?      ← Daycare / Toddler / Play Group / Pre-Nursery
+prePrimaryFee Int?          ← Nursery – UKG
+class1to5Fee Int?
+class6to8Fee Int?
+class9to10Fee Int?
+class11to12Fee Int?
+```
+
 ### BoardResult fields
 
 ```txt
 id
 schoolId
 year
-classLevel
+classLevel        ← "CLASS_10" | "CLASS_12"
 passPercent
 topperName
 topperScore
-```
-
-`classLevel` replaces old fixed Class 10 / Class 12 fields and supports values such as:
-
-```txt
-CLASS_10
-CLASS_12
 ```
 
 ### ContactSubmission fields
@@ -635,21 +662,22 @@ backend/src/lib/queries/schools.ts
 
 Supports:
 
-- Public school select.
-- Public detail select.
-- Admin school list select.
+- Public school select — includes `stateBoardName`, `mediumOther`.
+- Public detail select — all 22-section fields including `mediumOther`, `stateBoardName`, `earlyChildhoodFee`, `socialLinks`.
+- Admin school list select (`adminSchoolListSelect`) — includes `stateBoardName`, `mediumOther`.
 - Full school profile fields for school/admin edit flows.
 - Facilities and sports custom group JSON fields.
 - Admission coordinator and additional phone JSON fields.
+- Social links JSON field.
 - Board result `classLevel/passPercent` fields.
 - Featured fields.
 - Coordinates.
 - `isVisible` public filter.
 - `APPROVED` public status filtering.
-- City/state/board filters.
+- City/state/board filters — `UP_BOARD` normalised to `STATE_BOARD` in filter layer.
 - Search filter.
 - Featured-only filter.
-- Mapper functions for list item output.
+- Mapper functions for list item output — `mapSchoolListItem` exposes `stateBoardName` and `mediumOther`.
 
 Public listing ordering:
 
@@ -972,13 +1000,17 @@ healthCheckPath: /health
 ### Schools
 
 - Public listing/detail/search/cities.
-- City/state/board filters.
+- City/state/board filters — UP_BOARD normalised to STATE_BOARD.
 - SEO-friendly data support.
 - Full school profile update.
 - School profile backend sync for languages, categories, classes, timings, recognition, affiliation, uniform policy, canteen, student-teacher ratio, total students, facilities, sports, programs, streams, board results, admissions, and contact data.
 - Reload-safe Facilities/Sports custom group persistence with JSON maps.
 - Multiple admission coordinators stored in `admissionCoordinators` JSON with legacy first-coordinator fallback.
 - Additional labelled phone numbers stored in `additionalPhones` JSON.
+- Dynamic social media links stored in `socialLinks` JSON as `{ platform, url }[]`.
+- Medium "Other" custom text stored in `mediumOther` — set when `medium = OTHER`, cleared otherwise.
+- State board name stored in `stateBoardName` — set when `board = STATE_BOARD`, cleared otherwise.
+- Grade-wise fee fields: `earlyChildhoodFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee`.
 - Gallery URL management.
 - Visibility toggle.
 - Featured listing support.
@@ -989,12 +1021,7 @@ healthCheckPath: /health
 
 - Inquiry creation.
 - Duplicate/rate-limit/honeypot spam protection.
-- Status workflow:
-  - NEW
-  - CONTACTED
-  - INTERESTED
-  - CONVERTED
-  - CLOSED
+- Status workflow: NEW → CONTACTED → INTERESTED → CONVERTED → CLOSED.
 - Parent inquiry history.
 - School inquiry management.
 - Admin inquiry monitoring.
@@ -1012,6 +1039,7 @@ healthCheckPath: /health
 - Role/status update protections.
 - Super admin protection.
 - Admin audit logs.
+- Admin school list exposes `stateBoardName` for display in board column.
 
 ### Contact
 

@@ -183,12 +183,12 @@ export default function ContactSection({ register, errors, control, watch }: Sec
               {...register("contact.mapUrl")}
             />
             <p className="font-body text-meta text-gray-400 mt-1">
-              Google Maps → Share → Embed a map → copy the{" "}
+              Google Maps → Share → copy the{" "}
               <code className="text-xs bg-gray-100 px-1 rounded">src</code> URL
             </p>
           </FormField>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormField label="Latitude" error={errors.contact?.latitude?.message}>
               <Input
                 type="number"
@@ -207,7 +207,7 @@ export default function ContactSection({ register, errors, control, watch }: Sec
                 {...register("contact.longitude")}
               />
             </FormField>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
 

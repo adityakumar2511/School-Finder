@@ -119,13 +119,16 @@ async function SchoolsTable({
                     </TableCell>
                     <TableCell>{school.city}</TableCell>
                     <TableCell>
-  {school.board === "STATE_BOARD"
-    ? (school.stateBoardName || "State Board")
-    : school.board.replace("_", " ")}
-</TableCell>
+                      {school.board === "STATE_BOARD"
+                        ? school.stateBoardName || "State Board"
+                        : school.board.replace("_", " ")}
+                    </TableCell>
                     <TableCell>{school.owner.email}</TableCell>
                     <TableCell>
-                     <SchoolStatusBadge status={school.status} isVisible={school.isVisible} />
+                      <SchoolStatusBadge
+                        status={school.status}
+                        isVisible={school.isVisible}
+                      />
                     </TableCell>
                     <TableCell>{formatDate(school.createdAt)}</TableCell>
                     <TableCell>

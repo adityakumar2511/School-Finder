@@ -1,12 +1,12 @@
 # SchoolSetu — Frontend Documentation
 
-> Last updated: June 25, 2026  
+> Last updated: June 27, 2026  
 > Stack: Next.js 14 App Router · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary · Sentry  
 > Default port: `3000`  
 > Repository path: `frontend/`  
 > Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
-The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, and error monitoring.
+The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
 
@@ -337,18 +337,18 @@ frontend/
     │   │   ├── nav/
     │   │   │   └── SchoolDashboardNav.tsx
     │   │   ├── profile/
-    │   │   │   ├── SchoolProfileForm.tsx   # 22-section schema, custom groups, contact JSON, coordinates + admin submitEndpoint support
+    │   │   │   ├── SchoolProfileForm.tsx   # 22-section schema, custom groups, mediumOther, stateBoardName, earlyChildhoodFee, socialLinks, coordinates + admin submitEndpoint support
     │   │   │   ├── SchoolProfileSidebar.tsx
     │   │   │   └── formSections/
-    │   │   │       ├── 01_BasicInfoSection.tsx # Categories, classes, languages, timings, recognition, uniform, canteen
+    │   │   │       ├── 01_BasicInfoSection.tsx # Categories, board/state board, medium Other, classes, languages, timing validation, recognition, uniform, canteen
     │   │   │       ├── 02_AboutSchoolSection.tsx
     │   │   │       ├── 03_AcademicsSection.tsx # Streams custom add + student-teacher ratio
-    │   │   │       ├── 04_AdmissionsSection.tsx # Admissions + repeatable admission coordinators
-    │   │   │       ├── 05_FeeStructureSection.tsx
+    │   │   │       ├── 04_AdmissionsSection.tsx # Admissions + repeatable admission coordinators + date range validation
+    │   │   │       ├── 05_FeeStructureSection.tsx # Fee rows including early childhood + grade-wise classes
     │   │   │       ├── 06_FacilitiesSection.tsx # Facilities + reload-safe custom group add
     │   │   │       ├── 07_SportsSection.tsx # Sports + reload-safe custom group add
     │   │   │       ├── 08_InfrastructureSection.tsx # Campus/classrooms/labs/library/hostel/buses/total students
-    │   │   │       ├── 09_FacultySection.tsx
+    │   │   │       ├── 09_FacultySection.tsx # Teacher count validation + qualified percentage calculation
     │   │   │       ├── 10_ProgramsSection.tsx # Programs custom add
     │   │   │       ├── 11_StudentLifeSection.tsx
     │   │   │       ├── 12_AchievementsSection.tsx
@@ -359,7 +359,7 @@ frontend/
     │   │   │       ├── 17_SafetySection.tsx
     │   │   │       ├── 18_GallerySection.tsx
     │   │   │       ├── 19_DownloadsSection.tsx
-    │   │   │       ├── 20_ContactSection.tsx   # Phone, additional phones, social, mapUrl, latitude, longitude
+    │   │   │       ├── 20_ContactSection.tsx   # Phone, additional phones, dynamic socialLinks, mapUrl, latitude, longitude
     │   │   │       ├── 21_ReviewsSection.tsx
     │   │   │       ├── 22_FAQsSection.tsx
     │   │   │       ├── index.ts
@@ -654,9 +654,12 @@ The 22-section school profile editor now supports:
 
 ```txt
 School categories
+Board selection with backend enum values
+State Board selection using board = STATE_BOARD + stateBoardName
+Medium of instruction with OTHER + mediumOther custom input
 Classes offered
 Languages offered
-School timings
+School timings with start/end validation
 Recognition number
 Affiliated since
 Uniform policy
@@ -670,6 +673,43 @@ Programs custom add
 Academics streams custom add
 Repeatable admission coordinators
 Additional labelled phone numbers
+Dynamic social media links
+Latitude/longitude map fields
+```
+
+### School profile form fix sync — June 27, 2026
+
+This section documents the frontend changes from the School Profile Form Fix Plan, corrected against the current backend schema.
+
+| Section | Frontend behaviour | Backend field / payload decision |
+|---|---|---|
+| Section 1 — Basic Info | Board dropdown includes CBSE, ICSE, IB, IGCSE, NIOS, State Board, Other | Use `basicInfo.board = "STATE_BOARD"` for state boards |
+| Section 1 — Basic Info | Show secondary state-board dropdown only when board is `STATE_BOARD` | Send selected board name/state as `stateBoardName`; do not use `stateBoardState` |
+| Section 1 — Basic Info | Medium dropdown includes Other and shows a custom input | Send `medium = "OTHER"` and custom text in `mediumOther` |
+| Section 1 — Basic Info | End time cannot be before or equal to start time | Frontend validation only; sends `startTime` and `endTime` |
+| Section 4 — Admissions | Last date cannot be before application start date | Frontend validation only; sends `startDate` and `endDate` |
+| Section 5 — Fee Structure | Add early-childhood fee row before pre-primary | Use backend `earlyChildhoodFee` for Daycare / Toddler / Play Group / Pre-Nursery |
+| Section 9 — Faculty | Qualified teachers cannot exceed total teachers | Frontend validation only |
+| Section 9 — Faculty | Qualified-teacher percentage shows one decimal place | UI calculation uses one decimal, e.g. `86.7%` |
+| Section 20 — Contact | Social media links are dynamic add/remove rows | Send `socialLinks` JSON array of `{ platform, url }` |
+
+Do **not** add these frontend-only field names from the old draft plan:
+
+```txt
+daycareFee
+toddlerFee
+playGroupFee
+preNurseryFee
+stateBoardState
+```
+
+Use these backend-aligned names instead:
+
+```txt
+earlyChildhoodFee
+stateBoardName
+mediumOther
+socialLinks
 ```
 
 Frontend payload now sends these backend fields where applicable:
@@ -684,7 +724,65 @@ facilityCustomGroups
 sportsCustomGroups
 admissionCoordinators
 additionalPhones
+mediumOther
+stateBoardName
+earlyChildhoodFee
+socialLinks
 ```
+
+### Section-specific validation notes
+
+#### Section 1 — Basic Info
+
+- `basicInfo.board` must use backend enum-compatible values:
+  - `CBSE`
+  - `ICSE`
+  - `IB`
+  - `IGCSE`
+  - `NIOS`
+  - `STATE_BOARD`
+  - `OTHER`
+- When `basicInfo.board === "STATE_BOARD"`, show state board dropdown and send the selected value as `stateBoardName`.
+- When `basicInfo.board !== "STATE_BOARD"`, clear or omit `stateBoardName`.
+- `basicInfo.medium` must support:
+  - `ENGLISH`
+  - `HINDI`
+  - `BOTH`
+  - `OTHER`
+- When `basicInfo.medium === "OTHER"`, show a custom medium input and send it as `mediumOther`.
+- When `basicInfo.medium !== "OTHER"`, clear or omit `mediumOther`.
+- End time should use `startTime` as the minimum allowed value and show: `End time must be after start time`.
+
+#### Section 4 — Admissions
+
+- Last Date to Apply should use Application Start Date as the minimum allowed value.
+- If the last date is before the start date, show: `Last date cannot be before application start date`.
+
+#### Section 5 — Fee Structure
+
+- Fee rows should be ordered as:
+
+```txt
+Early Childhood (Daycare / Toddler / Play Group / Pre-Nursery) → fees.earlyChildhoodFee
+Pre-Primary (Nursery – UKG) → fees.prePrimaryFee
+Class 1 – 5 → fees.class1to5Fee
+Class 6 – 8 → fees.class6to8Fee
+Class 9 – 10 → fees.class9to10Fee
+Class 11 – 12 → fees.class11to12Fee
+```
+
+#### Section 9 — Faculty
+
+- Professionally qualified teachers should not exceed total teachers.
+- Show inline error: `Cannot exceed total teachers`.
+- Percentage should render with one decimal place, e.g. `100.0%`.
+
+#### Section 20 — Contact
+
+- Replace fixed social fields with repeatable `contact.socialLinks` rows.
+- Each row stores `{ platform: string, url: string }`.
+- Suggested platforms: Facebook, Instagram, YouTube, LinkedIn, Twitter / X, Pinterest, Telegram, Koo, ShareChat.
+- If no rows exist, show empty state: `No social media links added yet.`
 
 Shared form primitives:
 
@@ -816,6 +914,7 @@ frontend/src/components/public/schools/SchoolCard.tsx
 Implemented behaviour:
 
 - School profile contact section accepts latitude/longitude.
+- School profile contact section supports dynamic social media links via `socialLinks`.
 - Latitude validation: `-90` to `90`.
 - Longitude validation: `-180` to `180`.
 - Public school detail page shows map iframe when coordinates or map URL exists.
@@ -1013,13 +1112,19 @@ https://your-domain.com/api/auth/callback/google
 - Inquiry/lead management.
 - Status update workflow.
 - Full 22-section profile editor.
+- Backend-synced board values: CBSE, ICSE, IB, IGCSE, NIOS, State Board, Other.
+- State Board stores selected state board name in `stateBoardName`.
+- Medium Other stores custom medium text in `mediumOther`.
 - Updated Indian school categories and full classes offered list.
 - Custom add support for languages, classes, facilities, sports, programs, and academics streams.
 - Reload-safe custom grouping for Facilities and Sports.
 - Board results use repeatable rows with `classLevel` and `passPercent`.
 - Admission section supports repeatable coordinators.
 - Contact section supports additional labelled phone numbers.
+- Contact section supports dynamic social media links stored as `socialLinks`.
 - School timing, recognition number, affiliated since, uniform policy, canteen/tiffin, student-teacher ratio, and total students fields.
+- Frontend validation for school timing, admission date range, and faculty teacher counts.
+- Fee structure includes `earlyChildhoodFee` before pre-primary fee.
 - Gallery image management.
 - Latitude/longitude fields.
 
