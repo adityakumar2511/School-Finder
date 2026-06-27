@@ -32,7 +32,15 @@ export const loginSchema = z.object({
   expectedRole: expectedRoleSchema.optional(),
 });
 
-const boardSchema = z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]);
+const boardSchema = z.enum([
+  "CBSE",
+  "ICSE",
+  "IB",
+  "IGCSE",
+  "NIOS",
+  "STATE_BOARD",
+  "OTHER",
+]);
 const schoolTypeSchema = z.enum(["BOYS", "GIRLS", "CO_ED"]);
 const mediumSchema = z.enum(["HINDI", "ENGLISH", "BOTH"]);
 
@@ -67,9 +75,11 @@ export const registerSchoolSchema = z.object({
     preprocessOptionalString,
     z.string().regex(/^\d{6}$/, "Enter a valid 6-digit pincode").optional(),
   ),
-  board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]).optional(),
+  // board: z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]).optional(),
+  board: boardSchema.optional(),
+stateBoardName: z.string().trim().max(100).optional(),
   schoolType: z.enum(["BOYS", "GIRLS", "CO_ED"]).optional(),
-  medium: z.enum(["HINDI", "ENGLISH", "BOTH"]).optional(),
+  medium: z.enum(["HINDI", "ENGLISH", "BOTH", "OTHER"]).optional(),
   classesFrom: z.coerce.number().int().min(1).max(12).optional(),
   classesTo: z.coerce.number().int().min(1).max(12).optional(),
   email: z.preprocess(

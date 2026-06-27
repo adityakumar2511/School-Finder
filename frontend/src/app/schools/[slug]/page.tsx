@@ -32,6 +32,21 @@ const TrackSchoolView = dynamic(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type BoardType =
+  | "CBSE"
+  | "ICSE"
+  | "IB"
+  | "IGCSE"
+  | "NIOS"
+  | "STATE_BOARD"
+  | "OTHER";
+
+type LegacyBoardType = BoardType | "UP_BOARD";
+
+type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
+
+type MediumType = "HINDI" | "ENGLISH" | "BOTH" | "OTHER";
+
 interface SchoolImage {
   id: string;
   url: string;
@@ -42,8 +57,15 @@ interface SchoolImage {
 interface BoardResult {
   id: string;
   year: string;
-  class10Pass: string | null;
-  class12Pass: string | null;
+
+  // New backend fields
+  classLevel?: string | null;
+  passPercent?: string | null;
+
+  // Legacy fallback fields
+  class10Pass?: string | null;
+  class12Pass?: string | null;
+
   topperName: string | null;
   topperScore: string | null;
 }
@@ -79,6 +101,25 @@ interface Facility {
   facility: { id: string; name: string; icon: string | null };
 }
 
+interface AdditionalPhone {
+  label?: string;
+  number?: string;
+  phone?: string;
+  value?: string;
+}
+
+interface AdmissionCoordinator {
+  name?: string;
+  designation?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface SocialLink {
+  platform?: string;
+  url?: string;
+}
+
 interface SchoolDetail {
   id: string;
   name: string;
@@ -92,19 +133,22 @@ interface SchoolDetail {
   city: string;
   state: string;
   pincode: string | null;
-  board: "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
-  schoolType: "BOYS" | "GIRLS" | "CO_ED";
-  medium: "HINDI" | "ENGLISH" | "BOTH";
+  board: LegacyBoardType;
+  stateBoardName: string | null;
+  schoolType: SchoolType;
+  medium: MediumType;
+  mediumOther: string | null;
   classesFrom: number;
   classesTo: number;
   totalStudents: number | null;
   phone: string;
+  additionalPhones: AdditionalPhone[] | null;
   email: string | null;
   website: string | null;
   logoUrl: string | null;
   coverImageUrl: string | null;
 
-  // Phase 8 — location coordinates
+  // Location coordinates
   latitude?: number | null;
   longitude?: number | null;
 
@@ -115,6 +159,11 @@ interface SchoolDetail {
   schoolCategory: string | null;
   schoolFormat: string | null;
   affiliationNumber: string | null;
+  recognitionNumber: string | null;
+  affiliatedSince: string | null;
+  languagesOffered: string[];
+  uniformPolicy: string | null;
+  canteenAvailable: string | null;
   startTime: string | null;
   endTime: string | null;
   workingDays: string | null;
@@ -136,6 +185,7 @@ interface SchoolDetail {
   ageCriteria: string | null;
   requiredDocuments: string | null;
   admissionProcess: string | null;
+  admissionCoordinators: AdmissionCoordinator[] | null;
 
   // Fees
   admissionFee: number | null;
@@ -144,6 +194,7 @@ interface SchoolDetail {
   transportFee: number | null;
   hostelFee: number | null;
   averageAnnualFee: number | null;
+  earlyChildhoodFee: number | null;
   prePrimaryFee: number | null;
   class1to5Fee: number | null;
   class6to8Fee: number | null;
@@ -207,6 +258,7 @@ interface SchoolDetail {
   instagram: string | null;
   youtube: string | null;
   linkedin: string | null;
+  socialLinks: SocialLink[] | null;
   admissionCoordinatorName: string | null;
   admissionPhone: string | null;
   admissionEmail: string | null;
@@ -251,7 +303,7 @@ export async function generateMetadata({
     state: school.state,
     address: school.address,
     pincode: school.pincode,
-    board: school.board,
+    board: getBoardLabel(school),
     phone: school.phone,
     website: school.website,
     logoUrl: school.logoUrl,
@@ -265,6 +317,10 @@ export async function generateMetadata({
 const BOARD_LABEL: Record<string, string> = {
   CBSE: "CBSE",
   ICSE: "ICSE",
+  IB: "IB",
+  IGCSE: "IGCSE / Cambridge",
+  NIOS: "NIOS",
+  STATE_BOARD: "State Board",
   UP_BOARD: "UP Board",
   OTHER: "Other Board",
 };
@@ -279,7 +335,61 @@ const MEDIUM_LABEL: Record<string, string> = {
   HINDI: "Hindi Medium",
   ENGLISH: "English Medium",
   BOTH: "Hindi + English Medium",
+  OTHER: "Other Medium",
 };
+
+function getBoardLabel(
+  school: Pick<SchoolDetail, "board" | "stateBoardName">,
+) {
+  if (school.board === "STATE_BOARD") {
+    return school.stateBoardName
+      ? `${school.stateBoardName} Board`
+      : "State Board";
+  }
+
+  return BOARD_LABEL[school.board] ?? school.board;
+}
+
+function decodeHtmlEntities(value: string) {
+  let output = value;
+
+  for (let i = 0; i < 5; i++) {
+    const next = output
+      .replace(/&amp;/g, "&")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
+
+    if (next === output) break;
+    output = next;
+  }
+
+  return output;
+}
+
+function getMediumLabel(
+  schoolOrMedium: Pick<SchoolDetail, "medium" | "mediumOther"> | string,
+) {
+  if (typeof schoolOrMedium === "string") {
+    return MEDIUM_LABEL[schoolOrMedium] ?? schoolOrMedium;
+  }
+
+  if (schoolOrMedium.medium === "OTHER") {
+    return schoolOrMedium.mediumOther
+      ? decodeHtmlEntities(schoolOrMedium.mediumOther)
+      : "Other Medium";
+  }
+
+  return MEDIUM_LABEL[schoolOrMedium.medium] ?? schoolOrMedium.medium;
+}
+
+
+// function getMediumLabel(medium: string) {
+//   return MEDIUM_LABEL[medium] ?? medium;
+// }
 
 function fmtINR(amount: number) {
   return "₹" + amount.toLocaleString("en-IN");
@@ -352,6 +462,31 @@ function getDirectionsUrl(school: SchoolDetail) {
   )}`;
 }
 
+function getSocialLinks(school: SchoolDetail): SocialLink[] {
+  const fixedLinks: Array<SocialLink | null> = [
+    school.facebook ? { platform: "Facebook", url: school.facebook } : null,
+    school.instagram ? { platform: "Instagram", url: school.instagram } : null,
+    school.youtube ? { platform: "YouTube", url: school.youtube } : null,
+    school.linkedin ? { platform: "LinkedIn", url: school.linkedin } : null,
+  ];
+
+  const dynamicLinks = Array.isArray(school.socialLinks)
+    ? school.socialLinks.filter((item) => item?.platform && item?.url)
+    : [];
+
+  return [...fixedLinks.filter(Boolean), ...dynamicLinks] as SocialLink[];
+}
+
+function getPhoneValue(phone: AdditionalPhone) {
+  return phone.number || phone.phone || phone.value || "";
+}
+
+function getClassLevelLabel(classLevel?: string | null) {
+  if (classLevel === "CLASS_12") return "Class 12";
+  if (classLevel === "CLASS_10") return "Class 10";
+  return classLevel || "—";
+}
+
 // ─── Section visibility guards ────────────────────────────────────────────────
 
 function hasAbout(s: SchoolDetail) {
@@ -362,9 +497,21 @@ function hasAcademics(s: SchoolDetail) {
   return !!(
     s.classesOffered?.length ||
     s.streamsOffered?.length ||
+    s.languagesOffered?.length ||
     s.studentTeacherRatio ||
     s.totalStudents ||
-    s.establishedYear
+    s.establishedYear ||
+    s.managementType ||
+    s.schoolCategory ||
+    s.schoolFormat ||
+    s.affiliationNumber ||
+    s.recognitionNumber ||
+    s.affiliatedSince ||
+    s.uniformPolicy ||
+    s.canteenAvailable ||
+    s.workingDays ||
+    s.startTime ||
+    s.endTime
   );
 }
 
@@ -375,13 +522,18 @@ function hasAdmissions(s: SchoolDetail) {
     s.admissionEndDate ||
     s.ageCriteria ||
     s.requiredDocuments ||
-    s.admissionProcess
+    s.admissionProcess ||
+    s.admissionCoordinators?.length ||
+    s.admissionCoordinatorName ||
+    s.admissionPhone ||
+    s.admissionEmail
   );
 }
 
 function hasFees(s: SchoolDetail) {
   return !!(
     s.averageAnnualFee ||
+    s.earlyChildhoodFee ||
     s.prePrimaryFee ||
     s.class1to5Fee ||
     s.class6to8Fee ||
@@ -505,7 +657,7 @@ export default async function SchoolDetailPage({
       state: school.state,
       address: school.address,
       pincode: school.pincode,
-      board: school.board,
+      board: getBoardLabel(school),
       phone: school.phone,
       website: school.website,
       logoUrl: school.logoUrl,
@@ -523,12 +675,14 @@ export default async function SchoolDetailPage({
   const mapEmbedUrl = getMapEmbedUrl(school);
   const directionsUrl = getDirectionsUrl(school);
 
-  const hasSocialLinks = !!(
-    school.facebook ||
-    school.instagram ||
-    school.youtube ||
-    school.linkedin
-  );
+  const socialLinks = getSocialLinks(school);
+  const hasSocialLinks = socialLinks.length > 0;
+  const additionalPhones = Array.isArray(school.additionalPhones)
+    ? school.additionalPhones
+    : [];
+  const admissionCoordinators = Array.isArray(school.admissionCoordinators)
+    ? school.admissionCoordinators
+    : [];
 
   return (
     <div className="min-h-screen bg-gray-50 font-body">
@@ -608,14 +762,17 @@ export default async function SchoolDetailPage({
 
               <div className="flex flex-wrap gap-2 mt-4">
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
-                  {BOARD_LABEL[school.board]}
+                  {getBoardLabel(school)}
                 </span>
+
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
                   {TYPE_LABEL[school.schoolType]}
                 </span>
+
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
-                  {MEDIUM_LABEL[school.medium]}
+                  {getMediumLabel(school)}
                 </span>
+
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
                   Class {school.classesFrom}–{school.classesTo}
                 </span>
@@ -659,25 +816,11 @@ export default async function SchoolDetailPage({
                 )}
 
                 {school.vision && (
-                  <div>
-                    <p className="font-heading font-semibold text-label text-blue-700 mb-1">
-                      Vision
-                    </p>
-                    <p className="font-body text-body text-gray-700 leading-relaxed">
-                      {school.vision}
-                    </p>
-                  </div>
+                  <TextBlock label="Vision" value={school.vision} />
                 )}
 
                 {school.mission && (
-                  <div>
-                    <p className="font-heading font-semibold text-label text-blue-700 mb-1">
-                      Mission
-                    </p>
-                    <p className="font-body text-body text-gray-700 leading-relaxed">
-                      {school.mission}
-                    </p>
-                  </div>
+                  <TextBlock label="Mission" value={school.mission} />
                 )}
 
                 {school.principalMessage && (
@@ -701,19 +844,26 @@ export default async function SchoolDetailPage({
               </h2>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <InfoTile label="Board" value={BOARD_LABEL[school.board]} />
+                <InfoTile label="Board" value={getBoardLabel(school)} />
+
                 <InfoTile
                   label="School Type"
                   value={TYPE_LABEL[school.schoolType]}
                 />
+
                 <InfoTile
                   label="Medium"
-                  value={MEDIUM_LABEL[school.medium]}
+                  value={getMediumLabel(school)}
                 />
+
                 <InfoTile
                   label="Classes"
                   value={`Class ${school.classesFrom} to ${school.classesTo}`}
                 />
+
+                {school.schoolCategory && (
+                  <InfoTile label="Category" value={school.schoolCategory} />
+                )}
 
                 {school.totalStudents && (
                   <InfoTile
@@ -754,6 +904,34 @@ export default async function SchoolDetailPage({
                   />
                 )}
 
+                {school.recognitionNumber && (
+                  <InfoTile
+                    label="Recognition No."
+                    value={school.recognitionNumber}
+                  />
+                )}
+
+                {school.affiliatedSince && (
+                  <InfoTile
+                    label="Affiliated Since"
+                    value={school.affiliatedSince}
+                  />
+                )}
+
+                {school.uniformPolicy && (
+                  <InfoTile
+                    label="Uniform Policy"
+                    value={school.uniformPolicy}
+                  />
+                )}
+
+                {school.canteenAvailable && (
+                  <InfoTile
+                    label="Canteen / Tiffin"
+                    value={school.canteenAvailable}
+                  />
+                )}
+
                 {school.workingDays && (
                   <InfoTile
                     label="Working Days"
@@ -772,39 +950,27 @@ export default async function SchoolDetailPage({
               </div>
 
               {school.classesOffered?.length > 0 && (
-                <div className="mt-5">
-                  <p className="font-heading font-semibold text-label text-gray-500 mb-2">
-                    Classes Offered
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {school.classesOffered.map((c) => (
-                      <span
-                        key={c}
-                        className="px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-label"
-                      >
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                <ChipGroup
+                  title="Classes Offered"
+                  items={school.classesOffered}
+                  color="blue"
+                />
               )}
 
               {school.streamsOffered?.length > 0 && (
-                <div className="mt-4">
-                  <p className="font-heading font-semibold text-label text-gray-500 mb-2">
-                    Streams Offered
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {school.streamsOffered.map((s) => (
-                      <span
-                        key={s}
-                        className="px-3 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-label"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                <ChipGroup
+                  title="Streams Offered"
+                  items={school.streamsOffered}
+                  color="green"
+                />
+              )}
+
+              {school.languagesOffered?.length > 0 && (
+                <ChipGroup
+                  title="Languages Offered"
+                  items={school.languagesOffered}
+                  color="purple"
+                />
               )}
             </section>
           )}
@@ -843,24 +1009,18 @@ export default async function SchoolDetailPage({
               </div>
 
               {school.requiredDocuments && (
-                <div className="mb-4">
-                  <p className="font-heading font-semibold text-label text-gray-500 mb-1">
-                    Required Documents
-                  </p>
-                  <p className="font-body text-body text-gray-700 whitespace-pre-line">
-                    {school.requiredDocuments}
-                  </p>
-                </div>
+                <TextBlock
+                  label="Required Documents"
+                  value={school.requiredDocuments}
+                />
               )}
 
               {school.admissionProcess && (
-                <div>
-                  <p className="font-heading font-semibold text-label text-gray-500 mb-1">
-                    Admission Process
-                  </p>
-                  <p className="font-body text-body text-gray-700 whitespace-pre-line">
-                    {school.admissionProcess}
-                  </p>
+                <div className="mt-4">
+                  <TextBlock
+                    label="Admission Process"
+                    value={school.admissionProcess}
+                  />
                 </div>
               )}
             </section>
@@ -893,48 +1053,63 @@ export default async function SchoolDetailPage({
                         highlight
                       />
                     )}
+
+                    {school.earlyChildhoodFee && (
+                      <FeeRow
+                        label="Early Childhood / Play School"
+                        amount={fmtINR(school.earlyChildhoodFee)}
+                      />
+                    )}
+
                     {school.prePrimaryFee && (
                       <FeeRow
                         label="Pre-Primary"
                         amount={fmtINR(school.prePrimaryFee)}
                       />
                     )}
+
                     {school.class1to5Fee && (
                       <FeeRow
                         label="Class 1–5"
                         amount={fmtINR(school.class1to5Fee)}
                       />
                     )}
+
                     {school.class6to8Fee && (
                       <FeeRow
                         label="Class 6–8"
                         amount={fmtINR(school.class6to8Fee)}
                       />
                     )}
+
                     {school.class9to10Fee && (
                       <FeeRow
                         label="Class 9–10"
                         amount={fmtINR(school.class9to10Fee)}
                       />
                     )}
+
                     {school.class11to12Fee && (
                       <FeeRow
                         label="Class 11–12"
                         amount={fmtINR(school.class11to12Fee)}
                       />
                     )}
+
                     {school.admissionFee && (
                       <FeeRow
                         label="Admission Fee (One-time)"
                         amount={fmtINR(school.admissionFee)}
                       />
                     )}
+
                     {school.tuitionFeeMonthly && (
                       <FeeRow
                         label="Tuition Fee (Monthly)"
                         amount={fmtINR(school.tuitionFeeMonthly)}
                       />
                     )}
+
                     {school.totalAnnualFee && !school.averageAnnualFee && (
                       <FeeRow
                         label="Total Annual Fee"
@@ -942,12 +1117,14 @@ export default async function SchoolDetailPage({
                         highlight
                       />
                     )}
+
                     {school.transportFee && (
                       <FeeRow
                         label="Transport Fee (Monthly)"
                         amount={fmtINR(school.transportFee)}
                       />
                     )}
+
                     {school.hostelFee && (
                       <FeeRow
                         label="Hostel Fee (Monthly)"
@@ -972,31 +1149,16 @@ export default async function SchoolDetailPage({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {school.facilitiesList?.map((name) => (
-                  <div
-                    key={name}
-                    className="flex items-center gap-2.5 p-3 bg-blue-50 rounded-xl border border-blue-200"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    <span className="font-body text-label text-gray-800">
-                      {name}
-                    </span>
-                  </div>
+                  <FeatureCard key={name} label={name} color="blue" />
                 ))}
 
                 {school.facilities?.map(({ facility }) => (
-                  <div
+                  <FeatureCard
                     key={facility.id}
-                    className="flex items-center gap-2.5 p-3 bg-blue-50 rounded-xl border border-blue-200"
-                  >
-                    {facility.icon ? (
-                      <span className="text-xl">{facility.icon}</span>
-                    ) : (
-                      <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    )}
-                    <span className="font-body text-label text-gray-800">
-                      {facility.name}
-                    </span>
-                  </div>
+                    label={facility.name}
+                    icon={facility.icon}
+                    color="blue"
+                  />
                 ))}
               </div>
             </section>
@@ -1010,15 +1172,7 @@ export default async function SchoolDetailPage({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {school.sportsList.map((name) => (
-                  <div
-                    key={name}
-                    className="flex items-center gap-2.5 p-3 bg-green-50 rounded-xl border border-green-200"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-                    <span className="font-body text-label text-gray-800">
-                      {name}
-                    </span>
-                  </div>
+                  <FeatureCard key={name} label={name} color="green" />
                 ))}
               </div>
             </section>
@@ -1053,27 +1207,32 @@ export default async function SchoolDetailPage({
                 {school.campusArea && (
                   <InfoTile label="Campus Area" value={school.campusArea} />
                 )}
+
                 {school.totalClassrooms && (
                   <InfoTile
                     label="Classrooms"
                     value={String(school.totalClassrooms)}
                   />
                 )}
+
                 {school.totalLabs && (
                   <InfoTile label="Labs" value={String(school.totalLabs)} />
                 )}
+
                 {school.libraryBooks && (
                   <InfoTile
                     label="Library Books"
                     value={school.libraryBooks.toLocaleString("en-IN")}
                   />
                 )}
+
                 {school.hostelCapacity && (
                   <InfoTile
                     label="Hostel Capacity"
                     value={String(school.hostelCapacity)}
                   />
                 )}
+
                 {school.totalBuses && (
                   <InfoTile label="Buses" value={String(school.totalBuses)} />
                 )}
@@ -1094,23 +1253,30 @@ export default async function SchoolDetailPage({
                     value={String(school.totalTeachers)}
                   />
                 )}
+
                 {school.qualifiedTeachers && (
                   <InfoTile
                     label="Qualified Teachers"
                     value={String(school.qualifiedTeachers)}
                   />
                 )}
+
+                {school.totalTeachers && school.qualifiedTeachers && (
+                  <InfoTile
+                    label="Qualified %"
+                    value={`${(
+                      (school.qualifiedTeachers / school.totalTeachers) *
+                      100
+                    ).toFixed(1)}%`}
+                  />
+                )}
               </div>
 
               {school.trainingPrograms && (
-                <div>
-                  <p className="font-heading font-semibold text-label text-gray-500 mb-1">
-                    Training Programs
-                  </p>
-                  <p className="font-body text-body text-gray-700 whitespace-pre-line">
-                    {school.trainingPrograms}
-                  </p>
-                </div>
+                <TextBlock
+                  label="Training Programs"
+                  value={school.trainingPrograms}
+                />
               )}
             </section>
           )}
@@ -1123,19 +1289,31 @@ export default async function SchoolDetailPage({
 
               <div className="space-y-4">
                 {school.clubsActivities && (
-                  <TextBlock label="Clubs & Activities" value={school.clubsActivities} />
+                  <TextBlock
+                    label="Clubs & Activities"
+                    value={school.clubsActivities}
+                  />
                 )}
 
                 {school.culturalActivities && (
-                  <TextBlock label="Cultural Activities" value={school.culturalActivities} />
+                  <TextBlock
+                    label="Cultural Activities"
+                    value={school.culturalActivities}
+                  />
                 )}
 
                 {school.annualEvents && (
-                  <TextBlock label="Annual Events" value={school.annualEvents} />
+                  <TextBlock
+                    label="Annual Events"
+                    value={school.annualEvents}
+                  />
                 )}
 
                 {school.educationalTours && (
-                  <TextBlock label="Educational Tours" value={school.educationalTours} />
+                  <TextBlock
+                    label="Educational Tours"
+                    value={school.educationalTours}
+                  />
                 )}
               </div>
             </section>
@@ -1149,11 +1327,17 @@ export default async function SchoolDetailPage({
 
               <div className="space-y-4">
                 {school.academicAchievements && (
-                  <TextBlock label="Academic" value={school.academicAchievements} />
+                  <TextBlock
+                    label="Academic"
+                    value={school.academicAchievements}
+                  />
                 )}
 
                 {school.sportsAchievements && (
-                  <TextBlock label="Sports" value={school.sportsAchievements} />
+                  <TextBlock
+                    label="Sports"
+                    value={school.sportsAchievements}
+                  />
                 )}
 
                 {school.awardsRecognitions && (
@@ -1179,11 +1363,11 @@ export default async function SchoolDetailPage({
                       <th className="pb-3 font-heading font-semibold text-label text-gray-400 uppercase tracking-wide">
                         Year
                       </th>
-                      <th className="pb-3 font-heading font-semibold text-label text-gray-400 uppercase tracking-wide text-center">
-                        Class 10 Pass%
+                      <th className="pb-3 font-heading font-semibold text-label text-gray-400 uppercase tracking-wide">
+                        Class
                       </th>
                       <th className="pb-3 font-heading font-semibold text-label text-gray-400 uppercase tracking-wide text-center">
-                        Class 12 Pass%
+                        Pass %
                       </th>
                       <th className="pb-3 font-heading font-semibold text-label text-gray-400 uppercase tracking-wide">
                         Topper
@@ -1197,11 +1381,14 @@ export default async function SchoolDetailPage({
                         <td className="py-3 font-heading font-semibold text-body text-gray-800">
                           {r.year}
                         </td>
-                        <td className="py-3 text-center font-body text-body text-gray-700">
-                          {r.class10Pass ?? "—"}
+                        <td className="py-3 font-body text-body text-gray-700">
+                          {getClassLevelLabel(r.classLevel)}
                         </td>
                         <td className="py-3 text-center font-body text-body text-gray-700">
-                          {r.class12Pass ?? "—"}
+                          {r.passPercent ??
+                            r.class10Pass ??
+                            r.class12Pass ??
+                            "—"}
                         </td>
                         <td className="py-3 font-body text-body text-gray-700">
                           {r.topperName
@@ -1284,7 +1471,10 @@ export default async function SchoolDetailPage({
               </div>
 
               {school.transportAreas && (
-                <TextBlock label="Coverage Areas" value={school.transportAreas} />
+                <TextBlock
+                  label="Coverage Areas"
+                  value={school.transportAreas}
+                />
               )}
             </section>
           )}
@@ -1300,7 +1490,9 @@ export default async function SchoolDetailPage({
                 {school.hasGuards && <FeatureBadge label="Security Guards" />}
                 {school.hasMedicalRoom && <FeatureBadge label="Medical Room" />}
                 {school.hasFireSafety && <FeatureBadge label="Fire Safety" />}
-                {school.hasVisitorMgmt && <FeatureBadge label="Visitor Management" />}
+                {school.hasVisitorMgmt && (
+                  <FeatureBadge label="Visitor Management" />
+                )}
               </div>
             </section>
           )}
@@ -1431,6 +1623,25 @@ export default async function SchoolDetailPage({
                 </span>
               </a>
 
+              {additionalPhones.map((item, index) => {
+                const phone = getPhoneValue(item);
+                if (!phone) return null;
+
+                return (
+                  <a
+                    key={`${phone}-${index}`}
+                    href={`tel:${phone}`}
+                    className="flex items-center gap-3 group"
+                  >
+                    <ContactIcon icon="phone" />
+                    <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
+                      {item.label ? `${item.label}: ` : ""}
+                      {phone}
+                    </span>
+                  </a>
+                );
+              })}
+
               {school.whatsapp && (
                 <a
                   href={`https://wa.me/${school.whatsapp.replace(/\D/g, "")}`}
@@ -1539,61 +1750,87 @@ export default async function SchoolDetailPage({
               </div>
             )}
 
+            {admissionCoordinators.length > 0 && (
+              <div className="border-t border-gray-100 pt-4 mb-5">
+                <p className="font-heading font-semibold text-label text-gray-500 mb-2">
+                  Admission Coordinators
+                </p>
+
+                <div className="space-y-3">
+                  {admissionCoordinators.map((coordinator, index) => (
+                    <div
+                      key={`${coordinator.name}-${index}`}
+                      className="rounded-xl bg-blue-50 border border-blue-100 p-3"
+                    >
+                      {coordinator.name && (
+                        <p className="font-heading font-semibold text-body text-gray-800">
+                          {coordinator.name}
+                        </p>
+                      )}
+
+                      {coordinator.designation && (
+                        <p className="font-body text-meta text-gray-500 mb-1">
+                          {coordinator.designation}
+                        </p>
+                      )}
+
+                      {coordinator.phone && (
+                        <a
+                          href={`tel:${coordinator.phone}`}
+                          className="block font-body text-label text-blue-600 hover:text-blue-800"
+                        >
+                          {coordinator.phone}
+                        </a>
+                      )}
+
+                      {coordinator.email && (
+                        <a
+                          href={`mailto:${coordinator.email}`}
+                          className="block font-body text-label text-blue-600 hover:text-blue-800 truncate"
+                        >
+                          {coordinator.email}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {hasSocialLinks && (
               <div className="border-t border-gray-100 pt-4 mb-5">
                 <p className="font-heading font-semibold text-label text-gray-500 mb-3">
                   Follow Us
                 </p>
 
-                <div className="flex gap-3">
-                  {school.facebook && (
-                    <a
-                      href={school.facebook}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 hover:bg-blue-100 transition-colors text-label font-bold"
-                    >
-                      f
-                    </a>
-                  )}
+                <div className="space-y-2">
+                  {socialLinks.map((link, index) => {
+                    if (!link.url) return null;
 
-                  {school.instagram && (
-                    <a
-                      href={school.instagram}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-9 h-9 rounded-lg bg-pink-50 border border-pink-200 flex items-center justify-center text-pink-600 hover:bg-pink-100 transition-colors text-label font-bold"
-                    >
-                      in
-                    </a>
-                  )}
-
-                  {school.youtube && (
-                    <a
-                      href={school.youtube}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-9 h-9 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-600 hover:bg-red-100 transition-colors text-label font-bold"
-                    >
-                      yt
-                    </a>
-                  )}
-
-                  {school.linkedin && (
-                    <a
-                      href={school.linkedin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 hover:bg-blue-100 transition-colors text-label font-bold"
-                    >
-                      li
-                    </a>
-                  )}
+                    return (
+                      <a
+                        key={`${link.platform}-${index}`}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                      >
+                        <span className="font-body text-label">
+                          {link.platform || "Social Link"}
+                        </span>
+                        <span className="text-meta">Open</span>
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            <InquiryModal schoolId={school.id} schoolName={school.name} fullWidth />
+            <InquiryModal
+              schoolId={school.id}
+              schoolName={school.name}
+              fullWidth
+            />
           </div>
 
           <Link
@@ -1657,7 +1894,10 @@ function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
               <div className="w-12 h-12 rounded-xl bg-white border border-blue-100 flex items-center justify-center shrink-0 overflow-hidden">
                 {school.logoUrl ? (
                   <Image
-                    src={optimizeCloudinaryUrl(school.logoUrl, { width: 96 }) ?? school.logoUrl}
+                    src={
+                      optimizeCloudinaryUrl(school.logoUrl, { width: 96 }) ??
+                      school.logoUrl
+                    }
                     alt=""
                     width={48}
                     height={48}
@@ -1684,7 +1924,7 @@ function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
 
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className="px-2 py-0.5 rounded-full bg-white border border-gray-100 text-meta text-gray-600">
-                    {BOARD_LABEL[school.board]}
+                    {BOARD_LABEL[school.board] ?? school.board}
                   </span>
 
                   {typeof school.distanceKm === "number" && (
@@ -1719,9 +1959,74 @@ function InfoTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-blue-50 rounded-xl p-3.5 border border-blue-200">
       <p className="font-body text-meta text-gray-400 mb-1">{label}</p>
-      <p className="font-heading font-semibold text-label text-gray-800">
-        {value}
+      <p className="font-heading font-semibold text-label text-gray-800 whitespace-pre-line">
+        {decodeHtmlEntities(value)}
       </p>
+    </div>
+  );
+}
+
+function ChipGroup({
+  title,
+  items,
+  color,
+}: {
+  title: string;
+  items: string[];
+  color: "blue" | "green" | "purple";
+}) {
+  const cls =
+    color === "green"
+      ? "bg-green-50 border-green-200 text-green-700"
+      : color === "purple"
+        ? "bg-purple-50 border-purple-200 text-purple-700"
+        : "bg-blue-50 border-blue-200 text-blue-700";
+
+  return (
+    <div className="mt-5">
+      <p className="font-heading font-semibold text-label text-gray-500 mb-2">
+        {title}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={item}
+            className={`px-3 py-1 rounded-full border text-label ${cls}`}
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeatureCard({
+  label,
+  icon,
+  color,
+}: {
+  label: string;
+  icon?: string | null;
+  color: "blue" | "green";
+}) {
+  const cls =
+    color === "green"
+      ? "bg-green-50 border-green-200"
+      : "bg-blue-50 border-blue-200";
+
+  const dotCls = color === "green" ? "bg-green-400" : "bg-blue-400";
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 p-3 rounded-xl border ${cls}`}
+    >
+      {icon ? (
+        <span className="text-xl">{icon}</span>
+      ) : (
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />
+      )}
+      <span className="font-body text-label text-gray-800">{label}</span>
     </div>
   );
 }
@@ -1782,8 +2087,18 @@ function ContactIcon({ icon }: { icon: string }) {
   if (icon === "phone")
     return (
       <div className={cls}>
-        <svg className={svgCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+        <svg
+          className={svgCls}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+          />
         </svg>
       </div>
     );
@@ -1791,7 +2106,11 @@ function ContactIcon({ icon }: { icon: string }) {
   if (icon === "whatsapp")
     return (
       <div className="w-9 h-9 rounded-lg bg-green-50 border border-green-200 flex items-center justify-center flex-shrink-0">
-        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-4 h-4 text-green-600"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
         </svg>
       </div>
@@ -1800,8 +2119,18 @@ function ContactIcon({ icon }: { icon: string }) {
   if (icon === "email")
     return (
       <div className={cls}>
-        <svg className={svgCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        <svg
+          className={svgCls}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+          />
         </svg>
       </div>
     );
@@ -1809,8 +2138,18 @@ function ContactIcon({ icon }: { icon: string }) {
   if (icon === "website")
     return (
       <div className={cls}>
-        <svg className={svgCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+        <svg
+          className={svgCls}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+          />
         </svg>
       </div>
     );
@@ -1818,17 +2157,42 @@ function ContactIcon({ icon }: { icon: string }) {
   if (icon === "map")
     return (
       <div className={cls}>
-        <svg className={svgCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        <svg
+          className={svgCls}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+          />
         </svg>
       </div>
     );
 
   return (
     <div className={cls}>
-      <svg className={svgCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      <svg
+        className={svgCls}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+        />
       </svg>
     </div>
   );

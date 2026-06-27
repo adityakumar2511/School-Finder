@@ -6,9 +6,9 @@ import {
 } from "../lib/sanitize";
 
 // ── Enum schemas ──────────────────────────────────────────────────────────────
-const boardSchema = z.enum(["CBSE", "ICSE", "UP_BOARD", "OTHER"]);
+const boardSchema = z.enum(["CBSE", "ICSE", "IB", "IGCSE", "NIOS", "STATE_BOARD", "OTHER"]);
 const schoolTypeSchema = z.enum(["BOYS", "GIRLS", "CO_ED"]);
-const mediumSchema = z.enum(["HINDI", "ENGLISH", "BOTH"]);
+const mediumSchema = z.enum(["HINDI", "ENGLISH", "BOTH", "OTHER"]);
 
 // ── Reusable preprocessors ────────────────────────────────────────────────────
 const optionalFee = z.preprocess(
@@ -153,6 +153,7 @@ const schoolBodyFields = {
   board: boardSchema,
   schoolType: schoolTypeSchema,
   medium: mediumSchema,
+  mediumOther: optionalStr,
   classesFrom: z.coerce.number().int().min(1).max(12),
   classesTo: z.coerce.number().int().min(1).max(12),
   phone: z.preprocess(
@@ -221,6 +222,7 @@ const schoolBodyFields = {
 
   // ── Section 5: Fee Structure ────────────────────────────────────────────
   averageAnnualFee: optionalInt,
+  earlyChildhoodFee: optionalInt,
   prePrimaryFee: optionalInt,
   class1to5Fee: optionalInt,
   class6to8Fee: optionalInt,
@@ -292,6 +294,11 @@ const schoolBodyFields = {
   instagram: optionalStr,
   youtube: optionalStr,
   linkedin: optionalStr,
+  stateBoardName: optionalStr,
+  socialLinks: z
+    .array(z.object({ platform: optionalStr, url: optionalStr }))
+    .optional()
+    .default([]),
   admissionCoordinatorName: optionalStr,
   admissionPhone: z.preprocess(
     preprocessOptionalString,
@@ -302,7 +309,10 @@ const schoolBodyFields = {
   ),
   admissionEmail: optionalEmail,
   additionalPhones: z.array(additionalPhoneSchema).optional().default([]),
-  admissionCoordinators: z.array(admissionCoordinatorSchema).optional().default([]),
+  admissionCoordinators: z
+    .array(admissionCoordinatorSchema)
+    .optional()
+    .default([]),
 
   // ── Related models (arrays) ─────────────────────────────────────────────
   boardResults: z.array(boardResultSchema).optional().default([]),

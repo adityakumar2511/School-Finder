@@ -18,7 +18,11 @@ export default function AdmissionsSection({
   watch,
   setValue,
 }: SectionProps) {
-  const { fields: customFields, append, remove } = useFieldArray({
+  const {
+    fields: customFields,
+    append,
+    remove,
+  } = useFieldArray({
     control,
     name: "admissions.customFields",
   });
@@ -27,10 +31,11 @@ export default function AdmissionsSection({
 
   return (
     <div className="space-y-6">
-
       {/* Header */}
       <div>
-        <h2 className="font-heading text-h2 font-bold text-blue-800">Admissions</h2>
+        <h2 className="font-heading text-h2 font-bold text-blue-800">
+          Admissions
+        </h2>
         <p className="font-body text-body text-gray-400 mt-1">
           Admission status, important dates, eligibility criteria, and process
         </p>
@@ -49,14 +54,17 @@ export default function AdmissionsSection({
                 Admissions Open
               </p>
               <p className="font-body text-meta text-gray-400 mt-0.5">
-                Toggle to show parents that you are currently accepting applications
+                Toggle to show parents that you are currently accepting
+                applications
               </p>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={admissionOpen}
-              onClick={() => setValue("admissions.admissionOpen", !admissionOpen)}
+              onClick={() =>
+                setValue("admissions.admissionOpen", !admissionOpen)
+              }
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                 admissionOpen ? "bg-blue-600" : "bg-gray-300"
               }`}
@@ -69,17 +77,22 @@ export default function AdmissionsSection({
             </button>
           </div>
 
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-heading font-semibold ${
-            admissionOpen
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-gray-100 text-gray-500 border border-gray-200"
-          }`}>
-            <span className={`w-2 h-2 rounded-full ${admissionOpen ? "bg-green-500" : "bg-gray-400"}`} />
+          <div
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-heading font-semibold ${
+              admissionOpen
+                ? "bg-green-50 text-green-700 border border-green-200"
+                : "bg-gray-100 text-gray-500 border border-gray-200"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${admissionOpen ? "bg-green-500" : "bg-gray-400"}`}
+            />
             {admissionOpen ? "Admissions Open" : "Admissions Closed"}
           </div>
         </CardContent>
       </Card>
 
+      {/* ── Important Dates ───────────────────────────────── */}
       {/* ── Important Dates ───────────────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
         <CardContent className="p-6 space-y-5">
@@ -89,10 +102,31 @@ export default function AdmissionsSection({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <FormField label="Application Start Date">
-              <Input type="date" className={inputClass} {...register("admissions.startDate")} />
+              <Input
+                type="date"
+                className={inputClass}
+                {...register("admissions.startDate")}
+              />
             </FormField>
             <FormField label="Last Date to Apply">
-              <Input type="date" className={inputClass} {...register("admissions.endDate")} />
+              <Input
+                type="date"
+                min={watch("admissions.startDate") || undefined}
+                className={inputClass}
+                {...register("admissions.endDate")}
+              />
+              {(() => {
+                const start = watch("admissions.startDate");
+                const end = watch("admissions.endDate");
+                if (start && end && end < start) {
+                  return (
+                    <p className="text-red-500 text-sm mt-1 font-body">
+                      Last date cannot be before application start date
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </FormField>
           </div>
         </CardContent>
@@ -156,7 +190,9 @@ export default function AdmissionsSection({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ label: "", value: "", fieldType: "text" })}
+              onClick={() =>
+                append({ label: "", value: "", fieldType: "text" })
+              }
               className="rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-heading text-sm"
             >
               <Plus className="w-3.5 h-3.5 mr-1" /> Add field
@@ -165,7 +201,8 @@ export default function AdmissionsSection({
 
           {customFields.length === 0 && (
             <p className="font-body text-meta text-gray-400 text-center py-3">
-              No custom fields yet. Add details like registration fee, lottery date, etc.
+              No custom fields yet. Add details like registration fee, lottery
+              date, etc.
             </p>
           )}
 
@@ -196,7 +233,6 @@ export default function AdmissionsSection({
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 }

@@ -13,16 +13,22 @@ export default function FacultySection({ register, watch }: SectionProps) {
   const total = watch("faculty.totalTeachers");
   const qualified = watch("faculty.qualifiedTeachers");
 
+  // line replace karo — Math.round se upar
   const qualifiedPercent =
     total && qualified && Number(total) > 0
-      ? Math.min(100, Math.round((Number(qualified) / Number(total)) * 100))
+      ? Math.min(
+          100,
+          Math.round((Number(qualified) / Number(total)) * 1000) / 10,
+        )
       : null;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="font-heading text-h2 font-bold text-blue-800">Faculty</h2>
+        <h2 className="font-heading text-h2 font-bold text-blue-800">
+          Faculty
+        </h2>
         <p className="font-body text-body text-gray-400 mt-1">
           Teaching staff strength, qualifications, and training programs
         </p>
@@ -50,19 +56,32 @@ export default function FacultySection({ register, watch }: SectionProps) {
               <Input
                 type="number"
                 min={0}
+                max={Number(total) > 0 ? Number(total) : undefined}
                 placeholder="e.g. 52"
                 className={inputClass}
                 {...register("faculty.qualifiedTeachers")}
               />
+              {(() => {
+                if (total && qualified && Number(qualified) > Number(total)) {
+                  return (
+                    <p className="text-red-500 text-sm mt-1 font-body">
+                      Cannot exceed total teachers
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </FormField>
           </div>
 
           {qualifiedPercent !== null && (
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between">
-                <p className="font-body text-sm text-gray-500">Qualified faculty ratio</p>
+                <p className="font-body text-sm text-gray-500">
+                  Qualified faculty ratio
+                </p>
                 <p className="font-heading text-sm font-semibold text-blue-700">
-                  {qualifiedPercent}%
+                  {qualifiedPercent.toFixed(1)}%
                 </p>
               </div>
               <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
@@ -90,7 +109,8 @@ export default function FacultySection({ register, watch }: SectionProps) {
               {...register("faculty.trainingPrograms")}
             />
             <p className="font-body text-meta text-gray-400 mt-1">
-              Describe any professional development programs your teachers attend.
+              Describe any professional development programs your teachers
+              attend.
             </p>
           </FormField>
         </CardContent>

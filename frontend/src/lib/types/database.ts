@@ -9,11 +9,18 @@ export type InquiryStatus =
   | "CONVERTED"
   | "CLOSED";
 
-export type BoardType = "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
+export type BoardType = 
+  | "CBSE"
+  | "ICSE"
+  | "IB"
+  | "IGCSE"
+  | "NIOS"
+  | "STATE_BOARD"
+  | "OTHER";
 
 export type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
 
-export type MediumType = "HINDI" | "ENGLISH" | "BOTH";
+export type MediumType = "HINDI" | "ENGLISH" | "BOTH" | "OTHER";
 
 export type SchoolStatus = "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 

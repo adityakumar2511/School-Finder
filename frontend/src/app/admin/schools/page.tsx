@@ -118,7 +118,11 @@ async function SchoolsTable({
                       </Link>
                     </TableCell>
                     <TableCell>{school.city}</TableCell>
-                    <TableCell>{school.board.replace("_", " ")}</TableCell>
+                    <TableCell>
+  {school.board === "STATE_BOARD"
+    ? (school.stateBoardName || "State Board")
+    : school.board.replace("_", " ")}
+</TableCell>
                     <TableCell>{school.owner.email}</TableCell>
                     <TableCell>
                      <SchoolStatusBadge status={school.status} isVisible={school.isVisible} />

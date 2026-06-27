@@ -16,6 +16,19 @@ import type { SectionProps } from "./types";
 
 const PHONE_LABELS = ["Office", "Principal", "Admissions", "Reception", "Other"];
 
+const SOCIAL_PLATFORMS = [
+  "Facebook",
+  "Instagram",
+  "YouTube",
+  "LinkedIn",
+  "Twitter / X",
+  "Pinterest",
+  "Telegram",
+  "Koo",
+  "ShareChat",
+  "Other",
+];
+
 export default function ContactSection({ register, errors, control, watch }: SectionProps) {
   const {
     fields: phoneFields,
@@ -28,6 +41,12 @@ export default function ContactSection({ register, errors, control, watch }: Sec
     append: appendCoordinator,
     remove: removeCoordinator,
   } = useFieldArray({ control, name: "contact.admissionCoordinators" });
+
+  const {
+    fields: socialFields,
+    append: appendSocial,
+    remove: removeSocial,
+  } = useFieldArray({ control, name: "contact.socialLinks" });
 
   return (
     <div className="space-y-6">
@@ -192,25 +211,66 @@ export default function ContactSection({ register, errors, control, watch }: Sec
         </CardContent>
       </Card>
 
-      {/* ── Social Media ────────────────────────────────── */}
+      {/* ── Social Media (dynamic) ──────────────────────── */}
       <Card className="border border-gray-100 shadow-card rounded-2xl bg-white">
-        <CardContent className="p-6 space-y-5">
-          <p className="font-heading text-label font-semibold text-gray-700 uppercase tracking-wide">
-            Social Media
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <FormField label="Facebook Page">
-              <Input type="url" placeholder="https://facebook.com/yourschool" className={inputClass} {...register("contact.facebook")} />
-            </FormField>
-            <FormField label="Instagram">
-              <Input type="url" placeholder="https://instagram.com/yourschool" className={inputClass} {...register("contact.instagram")} />
-            </FormField>
-            <FormField label="YouTube Channel">
-              <Input type="url" placeholder="https://youtube.com/@yourschool" className={inputClass} {...register("contact.youtube")} />
-            </FormField>
-            <FormField label="LinkedIn">
-              <Input type="url" placeholder="https://linkedin.com/school/yourschool" className={inputClass} {...register("contact.linkedin")} />
-            </FormField>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-heading text-label font-semibold text-gray-700 uppercase tracking-wide">
+                Social Media
+              </p>
+              <p className="font-body text-meta text-gray-400 mt-0.5">
+                Add any platform — Facebook, Instagram, YouTube, Twitter/X, etc.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => appendSocial({ platform: "", url: "" })}
+              className="rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-heading text-sm"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add Platform
+            </Button>
+          </div>
+
+          {socialFields.length === 0 && (
+            <p className="font-body text-meta text-gray-400 text-center py-3">
+              No social media links added yet.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {socialFields.map((field, index) => (
+              <div key={field.id} className="flex gap-2 items-start">
+                <div className="w-44 flex-shrink-0">
+                  <select
+                    className={selectClass}
+                    {...register(`contact.socialLinks.${index}.platform`)}
+                  >
+                    <option value="">Select platform</option>
+                    {SOCIAL_PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  className={cn(inputClass, "flex-1")}
+                  {...register(`contact.socialLinks.${index}.url`)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeSocial(index)}
+                  className="rounded-xl text-red-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

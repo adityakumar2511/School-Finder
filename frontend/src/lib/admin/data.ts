@@ -104,6 +104,7 @@ export type AdminSchoolRow = {
   state: string;
   address: string;
   board: string;
+  stateBoardName: string | null; 
   schoolType: string;
   medium: string;
   classesFrom: number;

@@ -9,12 +9,22 @@ import { FormField, inputClass } from "@/components/shared/form/FormField";
 import { cn } from "@/lib/utils";
 import type { SectionProps } from "./types";
 
-const FEE_ROWS: { label: string; field: "fees.prePrimaryFee" | "fees.class1to5Fee" | "fees.class6to8Fee" | "fees.class9to10Fee" | "fees.class11to12Fee" }[] = [
-  { label: "Pre-Primary (Nursery – UKG)",   field: "fees.prePrimaryFee"   },
-  { label: "Class 1 – 5",                   field: "fees.class1to5Fee"    },
-  { label: "Class 6 – 8",                   field: "fees.class6to8Fee"    },
-  { label: "Class 9 – 10",                  field: "fees.class9to10Fee"   },
-  { label: "Class 11 – 12",                 field: "fees.class11to12Fee"  },
+const FEE_ROWS: {
+  label: string;
+  field:
+    | "fees.earlyChildhoodFee"
+    | "fees.prePrimaryFee"
+    | "fees.class1to5Fee"
+    | "fees.class6to8Fee"
+    | "fees.class9to10Fee"
+    | "fees.class11to12Fee";
+}[] = [
+  { label: "Early Childhood (Daycare / Toddler / Play Group / Pre-Nursery)", field: "fees.earlyChildhoodFee" },
+  { label: "Pre-Primary (Nursery – UKG)",  field: "fees.prePrimaryFee"    },
+  { label: "Class 1 – 5",                  field: "fees.class1to5Fee"     },
+  { label: "Class 6 – 8",                  field: "fees.class6to8Fee"     },
+  { label: "Class 9 – 10",                 field: "fees.class9to10Fee"    },
+  { label: "Class 11 – 12",                field: "fees.class11to12Fee"   },
 ];
 
 export default function FeeStructureSection({

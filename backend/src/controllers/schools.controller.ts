@@ -325,7 +325,6 @@ function normalizeCustomGroups(
     : undefined;
 }
 
-
 function normalizeAdditionalPhones(
   value: unknown,
 ): Prisma.InputJsonValue | undefined {
@@ -401,6 +400,134 @@ function normalizeAdmissionCoordinators(
     : undefined;
 }
 
+function normalizeSocialLinks(value: unknown): Prisma.InputJsonValue | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const cleaned = value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const platform =
+        typeof record.platform === "string" ? record.platform.trim() : "";
+      const url = typeof record.url === "string" ? record.url.trim() : "";
+
+      if (!platform && !url) return null;
+
+      return {
+        platform,
+        url,
+      };
+    })
+    .filter(
+      (item): item is { platform: string; url: string } => item !== null,
+    );
+
+  return cleaned.length > 0
+    ? (cleaned as unknown as Prisma.InputJsonValue)
+    : undefined;
+}
+
+// ── Manual field fallback helpers ─────────────────────────────────────────────
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function readInputField(
+  rawBody: unknown,
+  sanitizedData: unknown,
+  key: string,
+  section?: string,
+): unknown {
+  if (isPlainRecord(sanitizedData) && sanitizedData[key] !== undefined) {
+    return sanitizedData[key];
+  }
+
+  if (!isPlainRecord(rawBody)) {
+    return undefined;
+  }
+
+  if (rawBody[key] !== undefined) {
+    return rawBody[key];
+  }
+
+  if (section && isPlainRecord(rawBody[section])) {
+    return rawBody[section][key];
+  }
+
+  return undefined;
+}
+
+function toTrimmedStringOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toIntOrNull(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return null;
+
+  return Math.trunc(numberValue);
+}
+
+function buildManualSchoolFields(
+  rawBody: unknown,
+  data: UpdateSchoolInput,
+): Prisma.SchoolUpdateInput {
+  const manualFields: Prisma.SchoolUpdateInput = {};
+
+  const board = toTrimmedStringOrNull(
+    readInputField(rawBody, data, "board", "basicInfo"),
+  );
+  const stateBoardName = toTrimmedStringOrNull(
+    readInputField(rawBody, data, "stateBoardName", "basicInfo"),
+  );
+
+  if (board) {
+    manualFields.stateBoardName =
+      board === "STATE_BOARD" ? stateBoardName : null;
+  } else if (stateBoardName !== null) {
+    manualFields.stateBoardName = stateBoardName;
+  }
+
+  const medium = toTrimmedStringOrNull(
+    readInputField(rawBody, data, "medium", "basicInfo"),
+  );
+  const mediumOther =
+    toTrimmedStringOrNull(
+      readInputField(rawBody, data, "mediumOther", "basicInfo"),
+    ) ??
+    toTrimmedStringOrNull(
+      readInputField(rawBody, data, "otherMedium", "basicInfo"),
+    );
+
+  if (medium) {
+    manualFields.mediumOther = medium === "OTHER" ? mediumOther : null;
+  } else if (mediumOther !== null) {
+    manualFields.mediumOther = mediumOther;
+  }
+
+  const earlyChildhoodFee = readInputField(
+    rawBody,
+    data,
+    "earlyChildhoodFee",
+    "fees",
+  );
+
+  if (earlyChildhoodFee !== undefined) {
+    manualFields.earlyChildhoodFee = toIntOrNull(earlyChildhoodFee);
+  }
+
+  return manualFields;
+}
+
 // ── Extract scalar fields from validated input ────────────────────────────────
 
 function extractScalarFields(data: UpdateSchoolInput) {
@@ -415,8 +542,9 @@ function extractScalarFields(data: UpdateSchoolInput) {
     sportsCustomGroups,
     additionalPhones,
     admissionCoordinators,
+    socialLinks,
     ...scalars
-  } = data;
+  } = data as UpdateSchoolInput & { socialLinks?: unknown };
 
   return scalars;
 }
@@ -607,57 +735,62 @@ export const getNearbySchools = async (req: Request, res: Response) => {
     excludeId,
   });
 
-  const nearbySchools = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, async () => {
-    const rows = await prisma.school.findMany({
-      where: {
-        status: "APPROVED",
-        isVisible: true,
-        latitude: {
-          not: null,
-          gte: lat - latDelta,
-          lte: lat + latDelta,
+  const nearbySchools = await withCache(
+    cacheKey,
+    CACHE_TTL.SCHOOL_LIST,
+    async () => {
+      const rows = await prisma.school.findMany({
+        where: {
+          status: "APPROVED",
+          isVisible: true,
+          latitude: {
+            not: null,
+            gte: lat - latDelta,
+            lte: lat + latDelta,
+          },
+          longitude: {
+            not: null,
+            gte: lng - lngDelta,
+            lte: lng + lngDelta,
+          },
+          ...(excludeId ? { id: { not: excludeId } } : {}),
         },
-        longitude: {
-          not: null,
-          gte: lng - lngDelta,
-          lte: lng + lngDelta,
-        },
-        ...(excludeId ? { id: { not: excludeId } } : {}),
-      },
-      take: Math.max(limit * 4, limit),
-      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
-      select: schoolListSelect,
-    });
+        take: Math.max(limit * 4, limit),
+        orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+        select: schoolListSelect,
+      });
 
-    return rows
-      .map((school) => {
-        const distanceKm =
-          typeof school.latitude === "number" &&
-          typeof school.longitude === "number"
-            ? calculateDistanceKm(lat, lng, school.latitude, school.longitude)
-            : null;
+      return rows
+        .map((school) => {
+          const distanceKm =
+            typeof school.latitude === "number" &&
+            typeof school.longitude === "number"
+              ? calculateDistanceKm(lat, lng, school.latitude, school.longitude)
+              : null;
 
-        return {
-          ...mapSchoolListItem(school),
-          distanceKm: distanceKm === null ? null : Number(distanceKm.toFixed(2)),
-        };
-      })
-      .filter(
-        (school) =>
-          typeof school.distanceKm === "number" &&
-          school.distanceKm <= radiusKm,
-      )
-      .sort((a, b) => {
-        const distanceA =
-          typeof a.distanceKm === "number" ? a.distanceKm : Number.MAX_VALUE;
-        const distanceB =
-          typeof b.distanceKm === "number" ? b.distanceKm : Number.MAX_VALUE;
+          return {
+            ...mapSchoolListItem(school),
+            distanceKm:
+              distanceKm === null ? null : Number(distanceKm.toFixed(2)),
+          };
+        })
+        .filter(
+          (school) =>
+            typeof school.distanceKm === "number" &&
+            school.distanceKm <= radiusKm,
+        )
+        .sort((a, b) => {
+          const distanceA =
+            typeof a.distanceKm === "number" ? a.distanceKm : Number.MAX_VALUE;
+          const distanceB =
+            typeof b.distanceKm === "number" ? b.distanceKm : Number.MAX_VALUE;
 
-        if (distanceA !== distanceB) return distanceA - distanceB;
-        return Number(b.isFeatured) - Number(a.isFeatured);
-      })
-      .slice(0, limit);
-  });
+          if (distanceA !== distanceB) return distanceA - distanceB;
+          return Number(b.isFeatured) - Number(a.isFeatured);
+        })
+        .slice(0, limit);
+    },
+  );
 
   res.json({
     data: nearbySchools,
@@ -758,41 +891,54 @@ export const getSchool = async (req: AuthRequest, res: Response) => {
 // ── POST /api/schools — create school ────────────────────────────────────────
 
 export const createSchool = async (req: AuthRequest, res: Response) => {
+  const rawBody = req.body as Record<string, unknown>;
   const data = sanitizeSchoolData(req.body as CreateSchoolInput);
   const slug = await generateSlug(data.name);
 
+  const mediumOther =
+    toTrimmedStringOrNull(readInputField(rawBody, data, "mediumOther", "basicInfo")) ??
+    toTrimmedStringOrNull(readInputField(rawBody, data, "otherMedium", "basicInfo"));
+
+  const stateBoardName = toTrimmedStringOrNull(
+    readInputField(rawBody, data, "stateBoardName", "basicInfo"),
+  );
+
   const school = await prisma.school.create({
-    data: {
-      name: data.name,
-      slug,
-      description: data.description ?? null,
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      pincode: data.pincode ?? null,
-      latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null,
-      board: data.board,
-      schoolType: data.schoolType,
-      medium: data.medium,
-      classesFrom: data.classesFrom,
-      classesTo: data.classesTo,
-      phone: data.phone,
-      email: data.email ?? null,
-      website: data.website ?? null,
-      logoUrl: data.logoUrl ?? null,
-      coverImageUrl: data.coverImageUrl ?? null,
-      admissionFee: data.admissionFee ?? null,
-      tuitionFeeMonthly: data.tuitionFeeMonthly ?? null,
-      totalAnnualFee: data.totalAnnualFee ?? null,
-      transportFee: data.transportFee ?? null,
-      hostelFee: data.hostelFee ?? null,
-      totalStudents: data.totalStudents ?? null,
-      establishedYear: data.establishedYear ?? null,
-      status: "PENDING",
-      ownerId: req.user!.id,
+  data: {
+    name: data.name,
+    slug,
+    description: data.description ?? null,
+    address: data.address,
+    city: data.city,
+    state: data.state,
+    pincode: data.pincode ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    board: data.board,
+    stateBoardName: data.board === "STATE_BOARD" ? stateBoardName : null,
+    schoolType: data.schoolType,
+    medium: data.medium,
+    mediumOther: data.medium === "OTHER" ? mediumOther : null,
+    classesFrom: data.classesFrom,
+    classesTo: data.classesTo,
+    phone: data.phone,
+    email: data.email ?? null,
+    website: data.website ?? null,
+    logoUrl: data.logoUrl ?? null,
+    coverImageUrl: data.coverImageUrl ?? null,
+    admissionFee: data.admissionFee ?? null,
+    tuitionFeeMonthly: data.tuitionFeeMonthly ?? null,
+    totalAnnualFee: data.totalAnnualFee ?? null,
+    transportFee: data.transportFee ?? null,
+    hostelFee: data.hostelFee ?? null,
+    totalStudents: data.totalStudents ?? null,
+    establishedYear: data.establishedYear ?? null,
+    status: "PENDING",
+    owner: {
+      connect: { id: req.user!.id },
     },
-  });
+  },
+});
 
   invalidateSchoolCache();
 
@@ -805,6 +951,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id).trim();
   if (!id) throw Errors.BadRequest("Invalid school identifier");
 
+  const rawBody = req.body as Record<string, unknown>;
   const data = sanitizeSchoolData(req.body as UpdateSchoolInput);
 
   const existing = await prisma.school.findUnique({
@@ -822,6 +969,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     req.user!.role === "SCHOOL_ADMIN" ? { status: "PENDING" as const } : {};
 
   const scalars = extractScalarFields(data);
+  const manualFields = buildManualSchoolFields(rawBody, data);
 
   const jsonFields: Prisma.SchoolUpdateInput = {};
 
@@ -835,16 +983,25 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     jsonFields.sportsCustomGroups = sportsCustomGroups;
   }
 
-  const additionalPhones = normalizeAdditionalPhones(data.additionalPhones);
+  const additionalPhones = normalizeAdditionalPhones(
+    readInputField(rawBody, data, "additionalPhones", "contact"),
+  );
   if (additionalPhones !== undefined) {
     jsonFields.additionalPhones = additionalPhones;
   }
 
   const admissionCoordinators = normalizeAdmissionCoordinators(
-    data.admissionCoordinators,
+    readInputField(rawBody, data, "admissionCoordinators", "contact"),
   );
   if (admissionCoordinators !== undefined) {
     jsonFields.admissionCoordinators = admissionCoordinators;
+  }
+
+  const socialLinks = normalizeSocialLinks(
+    readInputField(rawBody, data, "socialLinks", "contact"),
+  );
+  if (socialLinks !== undefined) {
+    jsonFields.socialLinks = socialLinks;
   }
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -852,6 +1009,7 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: {
         ...scalars,
+        ...manualFields,
         ...jsonFields,
         ...statusReset,
       } as Prisma.SchoolUpdateInput,

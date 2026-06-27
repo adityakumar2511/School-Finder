@@ -44,7 +44,9 @@ const customFieldSchema = z.object({
   fieldType: z.enum(["text", "number", "date", "url", "richtext"]),
 });
 
-const customGroupMapSchema = z.record(z.string(), z.array(z.string())).optional();
+const customGroupMapSchema = z
+  .record(z.string(), z.array(z.string()))
+  .optional();
 const boardResultSchema = z.object({
   id: z.string().optional(),
   year: z.string(),
@@ -112,7 +114,10 @@ export const schoolProfileSchema = z.object({
     format: z.string().optional(),
     genderType: z.string().optional(),
     board: z.string().optional(),
+    boardLabel: z.string().optional(), // ← ADD
+    stateBoardName: z.string().optional(),
     medium: z.string().optional(),
+    mediumOther: z.string().optional(),
     city: z.string().optional(),
     state: z.string().optional(),
     affiliationNumber: z.string().optional(),
@@ -158,6 +163,7 @@ export const schoolProfileSchema = z.object({
   fees: z.object({
     feeMode: z.enum(["simple", "detailed"]).optional(),
     averageAnnualFee: z.string().optional(),
+    earlyChildhoodFee: z.string().optional(),
     prePrimaryFee: z.string().optional(),
     class1to5Fee: z.string().optional(),
     class6to8Fee: z.string().optional(),
@@ -276,6 +282,15 @@ export const schoolProfileSchema = z.object({
     //   .email("Invalid email")
     //   .optional()
     //   .or(z.literal("")),
+    socialLinks: z
+      .array(
+        // ← ADD
+        z.object({
+          platform: z.string().optional(),
+          url: z.string().optional(),
+        }),
+      )
+      .optional(),
     additionalPhones: z
       .array(
         z.object({
@@ -441,7 +456,10 @@ function mapSchoolToFormData(
       format: (school.schoolFormat as string) || "",
       genderType: (school.schoolType as string) || "",
       board: (school.board as string) || "",
+      boardLabel: (school.board as string) || "", // ← ADD (same as board initially)
+      stateBoardName: (school.stateBoardName as string) || "", // ← ADD
       medium: (school.medium as string) || "",
+      mediumOther: (school.mediumOther as string) || "", // ← YE ADD KARO
       city: (school.city as string) || "",
       state: (school.state as string) || "",
       affiliationNumber: (school.affiliationNumber as string) || "",
@@ -483,6 +501,7 @@ function mapSchoolToFormData(
     fees: {
       feeMode: "simple",
       averageAnnualFee: toStringValue(school.averageAnnualFee),
+      earlyChildhoodFee: toStringValue(school.earlyChildhoodFee), // ← ADD
       prePrimaryFee: toStringValue(school.prePrimaryFee),
       class1to5Fee: toStringValue(school.class1to5Fee),
       class6to8Fee: toStringValue(school.class6to8Fee),
@@ -665,6 +684,14 @@ function mapSchoolToFormData(
       instagram: (school.instagram as string) || "",
       youtube: (school.youtube as string) || "",
       linkedin: (school.linkedin as string) || "",
+      socialLinks: Array.isArray(school.socialLinks) // ← ADD
+        ? (
+            school.socialLinks as Array<{ platform?: string; url?: string }>
+          ).map((s) => ({
+            platform: s.platform ?? "",
+            url: s.url ?? "",
+          }))
+        : [],
       additionalPhones: readAdditionalPhones(school.additionalPhones),
       admissionCoordinators: readAdmissionCoordinators(school),
     },
@@ -802,7 +829,12 @@ export default function SchoolProfileForm({
           schoolFormat: data.basicInfo.format || undefined,
           schoolType: data.basicInfo.genderType || undefined,
           board: data.basicInfo.board || undefined,
+          stateBoardName: data.basicInfo.stateBoardName || undefined, // ← ADD
           medium: data.basicInfo.medium || undefined,
+          mediumOther:
+            data.basicInfo.medium === "OTHER" // ← YE ADD KARO
+              ? data.basicInfo.mediumOther || undefined
+              : undefined,
           city: data.basicInfo.city || undefined,
           state: data.basicInfo.state || undefined,
           affiliationNumber: data.basicInfo.affiliationNumber || undefined,
@@ -811,8 +843,8 @@ export default function SchoolProfileForm({
           startTime: data.basicInfo.startTime || undefined,
           endTime: data.basicInfo.endTime || undefined,
           workingDays: data.basicInfo.workingDays || undefined,
-          uniformPolicy: data.basicInfo.uniformPolicy || undefined,   
-canteenAvailable: data.basicInfo.canteenAvailable || undefined,
+          uniformPolicy: data.basicInfo.uniformPolicy || undefined,
+          canteenAvailable: data.basicInfo.canteenAvailable || undefined,
           logoUrl: data.basicInfo.logoUrl || undefined,
           coverImageUrl: data.basicInfo.coverImageUrl || undefined,
           classesOffered: data.basicInfo.classesOffered ?? [],
@@ -835,6 +867,9 @@ canteenAvailable: data.basicInfo.canteenAvailable || undefined,
 
           averageAnnualFee: data.fees.averageAnnualFee
             ? Number(data.fees.averageAnnualFee)
+            : undefined,
+          earlyChildhoodFee: data.fees.earlyChildhoodFee // ← ADD
+            ? Number(data.fees.earlyChildhoodFee)
             : undefined,
           prePrimaryFee: data.fees.prePrimaryFee
             ? Number(data.fees.prePrimaryFee)
@@ -923,6 +958,12 @@ canteenAvailable: data.basicInfo.canteenAvailable || undefined,
           instagram: data.contact.instagram || undefined,
           youtube: data.contact.youtube || undefined,
           linkedin: data.contact.linkedin || undefined,
+          socialLinks: (data.contact.socialLinks ?? []) // ← ADD
+            .filter((s) => s.platform?.trim() || s.url?.trim())
+            .map((s) => ({
+              platform: s.platform?.trim() || "",
+              url: s.url?.trim() || "",
+            })),
           additionalPhones: (data.contact.additionalPhones ?? [])
             .filter((phone) => phone.number?.trim() || phone.label?.trim())
             .map((phone) => ({

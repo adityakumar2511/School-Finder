@@ -8,8 +8,10 @@ export const schoolListSelect = {
   city: true,
   state: true,
   board: true,
+  stateBoardName: true,
   schoolType: true,
   medium: true,
+  mediumOther: true,
   classesFrom: true,
   classesTo: true,
   tuitionFeeMonthly: true,
@@ -121,8 +123,10 @@ export function mapSchoolListItem(
     city,
     state,
     board,
+    stateBoardName,
     schoolType,
     medium,
+    mediumOther,
     classesFrom,
     classesTo,
     tuitionFeeMonthly,
@@ -140,8 +144,10 @@ export function mapSchoolListItem(
     city,
     state,
     board,
+    stateBoardName,
     schoolType,
     medium,
+    mediumOther,
     classesFrom,
     classesTo,
     tuitionFeeMonthly,
@@ -167,6 +173,33 @@ export function buildSchoolSearchWhere(
       { state: { contains: term, mode: "insensitive" } },
     ],
   };
+}
+
+const VALID_BOARD_FILTERS = new Set([
+  "CBSE",
+  "ICSE",
+  "IB",
+  "IGCSE",
+  "NIOS",
+  "STATE_BOARD",
+  "OTHER",
+]);
+
+function normalizeBoardFilters(
+  board: string | string[] | undefined,
+): string[] {
+  if (!board) return [];
+
+  const values = Array.isArray(board) ? board : [board];
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().toUpperCase())
+        .map((value) => (value === "UP_BOARD" ? "STATE_BOARD" : value))
+        .filter((value) => VALID_BOARD_FILTERS.has(value)),
+    ),
+  );
 }
 
 export function buildSchoolListWhere(filters: {
@@ -198,8 +231,8 @@ export function buildSchoolListWhere(filters: {
     where.state = { contains: filters.state, mode: "insensitive" };
   }
 
-  if (filters.board) {
-    const boards = Array.isArray(filters.board) ? filters.board : [filters.board];
+  const boards = normalizeBoardFilters(filters.board);
+  if (boards.length > 0) {
     where.board = { in: boards as Prisma.EnumBoardTypeFilter["in"] };
   }
 
@@ -276,8 +309,10 @@ export const schoolDetailSelect = {
   latitude: true,
   longitude: true,
   board: true,
+  stateBoardName: true,
   schoolType: true,
   medium: true,
+  mediumOther: true,
   classesFrom: true,
   classesTo: true,
   totalStudents: true,
@@ -330,6 +365,7 @@ export const schoolDetailSelect = {
 
   // Fees — grade-wise
   averageAnnualFee: true,
+  earlyChildhoodFee: true,
   prePrimaryFee: true,
   class1to5Fee: true,
   class6to8Fee: true,
@@ -395,6 +431,7 @@ export const schoolDetailSelect = {
   instagram: true,
   youtube: true,
   linkedin: true,
+  socialLinks: true,
   admissionCoordinatorName: true,
   admissionPhone: true,
   admissionEmail: true,
@@ -456,8 +493,10 @@ export const adminSchoolListSelect = {
   latitude: true,
   longitude: true,
   board: true,
+  stateBoardName: true,
   schoolType: true,
   medium: true,
+  mediumOther: true,
   classesFrom: true,
   classesTo: true,
   phone: true,

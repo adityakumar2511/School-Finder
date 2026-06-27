@@ -82,6 +82,7 @@ model School {
   board                    BoardType
   schoolType               SchoolType
   medium                   MediumType
+  mediumOther String?
   classesFrom              Int
   classesTo                Int
   totalStudents            Int?
@@ -176,6 +177,9 @@ model School {
   affiliatedSince          String?
   uniformPolicy            String?
   canteenAvailable         String?
+  stateBoardName           String?
+  earlyChildhoodFee        Int?
+  socialLinks              Json?
   youtube                  String?
   isVisible                Boolean             @default(true)
   isFeatured               Boolean             @default(false)
@@ -352,9 +356,13 @@ enum SchoolStatus {
 enum BoardType {
   CBSE
   ICSE
-  UP_BOARD
+  IB
+  IGCSE
+  NIOS
+  STATE_BOARD
   OTHER
 }
+
 
 enum SchoolType {
   BOYS
@@ -366,6 +374,7 @@ enum MediumType {
   HINDI
   ENGLISH
   BOTH
+  OTHER
 }
 
 enum InquiryStatus {

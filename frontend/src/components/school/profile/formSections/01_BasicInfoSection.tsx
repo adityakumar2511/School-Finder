@@ -61,14 +61,112 @@ const GENDERS: { label: string; value: string }[] = [
   { label: "Girls Only", value: "GIRLS" },
 ];
 
-const BOARDS: { label: string; value: string }[] = [
-  { label: "CBSE", value: "CBSE" },
-  { label: "ICSE", value: "ICSE" },
-  { label: "UP Board", value: "UP_BOARD" },
-  { label: "Other", value: "OTHER" },
+const BOARDS: { label: string; value: string; group: string }[] = [
+  // National boards
+  { label: "CBSE", value: "CBSE", group: "National Boards" },
+  { label: "ICSE / ISC (CISCE)", value: "ICSE", group: "National Boards" },
+  {
+    label: "IB (International Baccalaureate)",
+    value: "IB",
+    group: "National Boards",
+  },
+  { label: "IGCSE (Cambridge)", value: "IGCSE", group: "National Boards" },
+  { label: "NIOS (National Open)", value: "NIOS", group: "National Boards" },
+  // State boards — map to OTHER in backend, stateBoardName stores the actual name
+  { label: "UP Board (UPMSP)", value: "UP_BOARD", group: "State Boards" },
+  { label: "MP Board (MPBSE)", value: "STATE_BOARD", group: "State Boards" },
+  { label: "Bihar Board (BSEB)", value: "STATE_BOARD", group: "State Boards" },
+  {
+    label: "Rajasthan Board (RBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Maharashtra Board (MSBSHSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Gujarat Board (GSEB)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  { label: "Punjab Board (PSEB)", value: "STATE_BOARD", group: "State Boards" },
+  {
+    label: "Haryana Board (HBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  { label: "Delhi Board (DBSE)", value: "STATE_BOARD", group: "State Boards" },
+  {
+    label: "West Bengal Board (WBBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Tamil Nadu Board (TNBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Karnataka Board (KSEEB)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Kerala Board (SCERT Kerala)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Andhra Pradesh Board (BSEAP)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Telangana Board (BSETS)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Odisha Board (BSE Odisha)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  { label: "Assam Board (SEBA)", value: "STATE_BOARD", group: "State Boards" },
+  {
+    label: "Jharkhand Board (JAC)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Chhattisgarh Board (CGBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Uttarakhand Board (UBSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  {
+    label: "Himachal Pradesh Board (HPBOSE)",
+    value: "STATE_BOARD",
+    group: "State Boards",
+  },
+  { label: "J&K Board (JKBOSE)", value: "STATE_BOARD", group: "State Boards" },
+  { label: "Goa Board (GBSHSE)", value: "STATE_BOARD", group: "State Boards" },
+  { label: "Other State Board", value: "STATE_BOARD", group: "State Boards" },
+  { label: "Other", value: "OTHER", group: "Other" },
 ];
 
-const MEDIUMS = ["English", "Hindi", "Both"];
+// Boards that require stateBoardName — anything with value STATE_BOARD
+// UP_BOARD is a known enum value so it does NOT need stateBoardName
+const STATE_BOARD_LABELS = BOARDS.filter((b) => b.value === "STATE_BOARD").map(
+  (b) => b.label,
+);
+
+const MEDIUMS = ["English", "Hindi", "Both", "Other"];
 
 const LANGUAGES = [
   "Hindi",
@@ -167,6 +265,11 @@ export default function BasicInfoSection({
 
   const classesSelected = watch("basicInfo.classesOffered") || [];
   const langsSelected = watch("basicInfo.languagesOffered") || [];
+  const selectedBoard = watch("basicInfo.board") || "";
+  const selectedBoardLabel = watch("basicInfo.boardLabel") || "";
+
+  // Show stateBoardName input when a STATE_BOARD option is selected
+  const showStateBoardInput = selectedBoard === "STATE_BOARD";
 
   function toggleArrayItem(
     field: "basicInfo.classesOffered" | "basicInfo.languagesOffered",
@@ -178,6 +281,9 @@ export default function BasicInfoSection({
       : [...current, value];
     setValue(field, next);
   }
+
+  // Group boards for rendering
+  const boardGroups = ["National Boards", "State Boards", "Other"];
 
   return (
     <div className="space-y-6">
@@ -320,26 +426,174 @@ export default function BasicInfoSection({
               </select>
             </FormField>
 
-            <FormField label="Board Affiliation">
-              <select className={selectClass} {...register("basicInfo.board")}>
+            {/* Board Affiliation — grouped select + conditional stateBoardName */}
+            {/* Board Affiliation */}
+            <FormField label="Board Affiliation" className="sm:col-span-2">
+              <select
+                className={selectClass}
+                value={
+                  selectedBoard === "STATE_BOARD"
+                    ? "STATE_BOARD"
+                    : selectedBoard
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setValue("basicInfo.board", val);
+                  setValue("basicInfo.boardLabel", val);
+                  if (val !== "STATE_BOARD") {
+                    setValue("basicInfo.stateBoardName", "");
+                  }
+                }}
+              >
                 <option value="">Select board</option>
-                {BOARDS.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
+                <optgroup label="National Boards">
+                  <option value="CBSE">CBSE</option>
+                  <option value="ICSE">ICSE / ISC (CISCE)</option>
+                  <option value="IB">IB (International Baccalaureate)</option>
+                  <option value="IGCSE">IGCSE (Cambridge)</option>
+                  <option value="NIOS">NIOS (National Open)</option>
+                </optgroup>
+                <optgroup label="State Boards">
+                  <option value="STATE_BOARD">State Board</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option value="OTHER">Other</option>
+                </optgroup>
               </select>
+
+              {/* State Board — secondary dropdown */}
+              {/* State Board — secondary dropdown */}
+              {selectedBoard === "STATE_BOARD" && (
+                <div className="mt-3 space-y-1">
+                  <p className="font-body text-sm text-gray-500">
+                    Which state board?
+                  </p>
+                  <select
+                    className={selectClass}
+                    {...register("basicInfo.stateBoardName")}
+                  >
+                    <option value="">Select state board</option>
+                    <option value="Andhra Pradesh Board (BSEAP)">
+                      Andhra Pradesh Board (BSEAP)
+                    </option>
+                    <option value="Arunachal Pradesh Board (APDHSE)">
+                      Arunachal Pradesh Board (APDHSE)
+                    </option>
+                    <option value="Assam Board (SEBA)">
+                      Assam Board (SEBA)
+                    </option>
+                    <option value="Bihar Board (BSEB)">
+                      Bihar Board (BSEB)
+                    </option>
+                    <option value="Chhattisgarh Board (CGBSE)">
+                      Chhattisgarh Board (CGBSE)
+                    </option>
+                    <option value="Delhi Board (DBSE)">
+                      Delhi Board (DBSE)
+                    </option>
+                    <option value="Goa Board (GBSHSE)">
+                      Goa Board (GBSHSE)
+                    </option>
+                    <option value="Gujarat Board (GSEB)">
+                      Gujarat Board (GSEB)
+                    </option>
+                    <option value="Haryana Board (HBSE)">
+                      Haryana Board (HBSE)
+                    </option>
+                    <option value="Himachal Pradesh Board (HPBOSE)">
+                      Himachal Pradesh Board (HPBOSE)
+                    </option>
+                    <option value="J&K Board (JKBOSE)">
+                      J&K Board (JKBOSE)
+                    </option>
+                    <option value="Jharkhand Board (JAC)">
+                      Jharkhand Board (JAC)
+                    </option>
+                    <option value="Karnataka Board (KSEEB)">
+                      Karnataka Board (KSEEB)
+                    </option>
+                    <option value="Kerala Board (SCERT Kerala)">
+                      Kerala Board (SCERT Kerala)
+                    </option>
+                    <option value="Madhya Pradesh Board (MPBSE)">
+                      Madhya Pradesh Board (MPBSE)
+                    </option>
+                    <option value="Maharashtra Board (MSBSHSE)">
+                      Maharashtra Board (MSBSHSE)
+                    </option>
+                    <option value="Manipur Board (BSEM)">
+                      Manipur Board (BSEM)
+                    </option>
+                    <option value="Meghalaya Board (MBOSE)">
+                      Meghalaya Board (MBOSE)
+                    </option>
+                    <option value="Mizoram Board (MBSE)">
+                      Mizoram Board (MBSE)
+                    </option>
+                    <option value="Nagaland Board (NBSE)">
+                      Nagaland Board (NBSE)
+                    </option>
+                    <option value="Odisha Board (BSE Odisha)">
+                      Odisha Board (BSE Odisha)
+                    </option>
+                    <option value="Punjab Board (PSEB)">
+                      Punjab Board (PSEB)
+                    </option>
+                    <option value="Rajasthan Board (RBSE)">
+                      Rajasthan Board (RBSE)
+                    </option>
+                    <option value="Sikkim Board (SBSE)">
+                      Sikkim Board (SBSE)
+                    </option>
+                    <option value="Tamil Nadu Board (TNBSE)">
+                      Tamil Nadu Board (TNBSE)
+                    </option>
+                    <option value="Telangana Board (BSETS)">
+                      Telangana Board (BSETS)
+                    </option>
+                    <option value="Tripura Board (TBSE)">
+                      Tripura Board (TBSE)
+                    </option>
+                    <option value="Uttar Pradesh Board (UPMSP)">
+                      Uttar Pradesh Board (UPMSP)
+                    </option>
+                    <option value="Uttarakhand Board (UBSE)">
+                      Uttarakhand Board (UBSE)
+                    </option>
+                    <option value="West Bengal Board (WBBSE)">
+                      West Bengal Board (WBBSE)
+                    </option>
+                  </select>
+                </div>
+              )}
+
+              {/* Other board — text input */}
+              {selectedBoard === "OTHER" && (
+                <div className="mt-3">
+                  <Input
+                    placeholder="Specify board name..."
+                    className={inputClass}
+                    {...register("basicInfo.stateBoardName")}
+                  />
+                </div>
+              )}
             </FormField>
 
             <FormField label="Medium of Instruction">
               <select className={selectClass} {...register("basicInfo.medium")}>
                 <option value="">Select medium</option>
-                {MEDIUMS.map((m) => (
-                  <option key={m} value={m.toUpperCase()}>
-                    {m}
-                  </option>
-                ))}
+                <option value="ENGLISH">English</option>
+                <option value="HINDI">Hindi</option>
+                <option value="BOTH">Both</option>
+                <option value="OTHER">Other</option>
               </select>
+              {watch("basicInfo.medium") === "OTHER" && (
+                <Input
+                  placeholder="e.g. Urdu, Bengali, Marathi"
+                  className={cn(inputClass, "mt-2")}
+                  {...register("basicInfo.mediumOther")}
+                />
+              )}
             </FormField>
           </div>
         </CardContent>
@@ -436,7 +690,7 @@ export default function BasicInfoSection({
               </label>
             ))}
 
-            {/* Custom added classes as checkboxes */}
+            {/* Custom added classes */}
             {classesSelected
               .filter((c) => !CLASSES.includes(c))
               .map((cls) => (
@@ -504,7 +758,7 @@ export default function BasicInfoSection({
               </label>
             ))}
 
-            {/* Custom added languages as checkboxes */}
+            {/* Custom added languages */}
             {langsSelected
               .filter((l) => !LANGUAGES.includes(l))
               .map((lang) => (
@@ -556,9 +810,22 @@ export default function BasicInfoSection({
             <FormField label="End Time">
               <Input
                 type="time"
+                min={watch("basicInfo.startTime") || undefined}
                 className={inputClass}
                 {...register("basicInfo.endTime")}
               />
+              {(() => {
+                const start = watch("basicInfo.startTime");
+                const end = watch("basicInfo.endTime");
+                if (start && end && end <= start) {
+                  return (
+                    <p className="text-red-500 text-sm mt-1 font-body">
+                      End time must be after start time
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </FormField>
             <FormField label="Working Days">
               <select
