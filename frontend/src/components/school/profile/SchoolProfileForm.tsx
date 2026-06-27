@@ -80,25 +80,25 @@ const downloadFileSchema = z.object({
   url: z.string(),
 });
 
-const optionalLatitudeSchema = z
-  .string()
-  .optional()
-  .or(z.literal(""))
-  .refine((value) => {
-    if (!value) return true;
-    const numeric = Number(value);
-    return Number.isFinite(numeric) && numeric >= -90 && numeric <= 90;
-  }, "Latitude must be between -90 and 90");
+// const optionalLatitudeSchema = z
+//   .string()
+//   .optional()
+//   .or(z.literal(""))
+//   .refine((value) => {
+//     if (!value) return true;
+//     const numeric = Number(value);
+//     return Number.isFinite(numeric) && numeric >= -90 && numeric <= 90;
+//   }, "Latitude must be between -90 and 90");
 
-const optionalLongitudeSchema = z
-  .string()
-  .optional()
-  .or(z.literal(""))
-  .refine((value) => {
-    if (!value) return true;
-    const numeric = Number(value);
-    return Number.isFinite(numeric) && numeric >= -180 && numeric <= 180;
-  }, "Longitude must be between -180 and 180");
+// const optionalLongitudeSchema = z
+//   .string()
+//   .optional()
+//   .or(z.literal(""))
+//   .refine((value) => {
+//     if (!value) return true;
+//     const numeric = Number(value);
+//     return Number.isFinite(numeric) && numeric >= -180 && numeric <= 180;
+//   }, "Longitude must be between -180 and 180");
 
 // ─────────────────────────────────────────────────────────────
 // Master schema
@@ -269,8 +269,8 @@ export const schoolProfileSchema = z.object({
     website: z.string().url("Invalid URL").optional().or(z.literal("")),
     address: z.string().optional(),
     mapUrl: z.string().optional(),
-    latitude: optionalLatitudeSchema,
-    longitude: optionalLongitudeSchema,
+    //latitude: optionalLatitudeSchema,
+    //longitude: optionalLongitudeSchema,
     facebook: z.string().optional(),
     instagram: z.string().optional(),
     youtube: z.string().optional(),
@@ -678,8 +678,8 @@ function mapSchoolToFormData(
       website: (school.website as string) || "",
       address: (school.address as string) || "",
       mapUrl: (school.mapUrl as string) || "",
-      latitude: toStringValue(school.latitude),
-      longitude: toStringValue(school.longitude),
+      //latitude: toStringValue(school.latitude),
+      //longitude: toStringValue(school.longitude),
       facebook: (school.facebook as string) || "",
       instagram: (school.instagram as string) || "",
       youtube: (school.youtube as string) || "",
@@ -957,8 +957,8 @@ export default function SchoolProfileForm({
           website: data.contact.website || undefined,
           address: data.contact.address || undefined,
           mapUrl: data.contact.mapUrl || undefined,
-          latitude: toNumberOrUndefined(data.contact.latitude),
-          longitude: toNumberOrUndefined(data.contact.longitude),
+          //latitude: toNumberOrUndefined(data.contact.latitude),
+          //longitude: toNumberOrUndefined(data.contact.longitude),
           facebook: data.contact.facebook || undefined,
           instagram: data.contact.instagram || undefined,
           youtube: data.contact.youtube || undefined,
