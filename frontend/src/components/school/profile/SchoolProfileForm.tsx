@@ -1031,6 +1031,81 @@ export default function SchoolProfileForm({
               label: d.label,
               url: d.url,
             })),
+          // ── Section Custom Fields ─────────────────────────────────
+          customFields: [
+            ...(data.basicInfo.customFields ?? []).map((f) => ({
+              section: "basicInfo",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.about.customFields ?? []).map((f) => ({
+              section: "about",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.academics.customFields ?? []).map((f) => ({
+              section: "academics",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.admissions.customFields ?? []).map((f) => ({
+              section: "admissions",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.fees.customFeeHeads ?? []).map((f) => ({
+              section: "fees",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.facilities.customFields ?? []).map((f) => ({
+              section: "facilities",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.sports.customFields ?? []).map((f) => ({
+              section: "sports",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.programs.customFields ?? []).map((f) => ({
+              section: "programs",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.studentLife.customFields ?? []).map((f) => ({
+              section: "studentLife",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.achievements.customFields ?? []).map((f) => ({
+              section: "achievements",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.boardResults.customFields ?? []).map((f) => ({
+              section: "boardResults",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+            ...(data.hostel.customFields ?? []).map((f) => ({
+              section: "hostel",
+              label: f.label,
+              value: f.value,
+              fieldType: f.fieldType,
+            })),
+          ].filter((f) => f.label?.trim() && f.value?.trim()),
         };
 
         const res = await fetch(submitEndpoint, {

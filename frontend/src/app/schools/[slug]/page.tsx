@@ -177,6 +177,7 @@ interface SchoolDetail {
   classesOffered: string[];
   streamsOffered: string[];
   studentTeacherRatio: string | null;
+  academicCalendar: string | null;
 
   // Admissions
   admissionOpen: boolean;
@@ -203,7 +204,9 @@ interface SchoolDetail {
 
   // Facilities & Sports
   facilitiesList: string[];
+  facilityCustomGroups: Record<string, string[]> | null;
   sportsList: string[];
+  sportsCustomGroups: Record<string, string[]> | null;
 
   // Infrastructure
   campusArea: string | null;
@@ -496,6 +499,7 @@ function hasAcademics(s: SchoolDetail) {
     s.streamsOffered?.length ||
     s.languagesOffered?.length ||
     s.studentTeacherRatio ||
+    s.academicCalendar ||
     s.totalStudents ||
     s.establishedYear ||
     s.managementType ||
@@ -882,6 +886,13 @@ export default async function SchoolDetailPage({
                   />
                 )}
 
+                {school.academicCalendar && (
+                  <InfoTile
+                    label="Academic Calendar"
+                    value={school.academicCalendar}
+                  />
+                )}
+
                 {school.managementType && (
                   <InfoTile label="Management" value={school.managementType} />
                 )}
@@ -1151,6 +1162,18 @@ export default async function SchoolDetailPage({
                     color="blue"
                   />
                 ))}
+
+                {/* Custom group items */}
+                {school.facilityCustomGroups &&
+                  Object.values(school.facilityCustomGroups)
+                    .flat()
+                    .map((name) => (
+                      <FeatureCard
+                        key={`custom-facility-${name}`}
+                        label={name}
+                        color="blue"
+                      />
+                    ))}
               </div>
             </section>
           )}
@@ -1165,6 +1188,16 @@ export default async function SchoolDetailPage({
                 {school.sportsList.map((name) => (
                   <FeatureCard key={name} label={name} color="green" />
                 ))}
+                {school.sportsCustomGroups &&
+                  Object.values(school.sportsCustomGroups)
+                    .flat()
+                    .map((name) => (
+                      <FeatureCard
+                        key={`custom-sport-${name}`}
+                        label={name}
+                        color="green"
+                      />
+                    ))}
               </div>
             </section>
           )}
@@ -1590,28 +1623,66 @@ export default async function SchoolDetailPage({
             </section>
           )}
 
-          {school.customFields?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Additional Information
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {school.customFields.map((field) => (
-                  <div
-                    key={field.id}
-                    className="bg-blue-50 rounded-xl p-3.5 border border-blue-200"
-                  >
-                    <p className="font-body text-meta text-gray-400 mb-1">
-                      {field.label}
-                    </p>
-                    <p className="font-heading font-semibold text-label text-gray-800">
-                      {field.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
+         {school.customFields?.length > 0 && (
+  <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
+    <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
+      Additional Information
+    </h2>
+
+    {/* Section-wise grouping */}
+    {(() => {
+      const SECTION_LABELS: Record<string, string> = {
+        basicInfo: "Basic Info",
+        about: "About",
+        academics: "Academics",
+        admissions: "Admissions",
+        fees: "Fee Details",
+        facilities: "Facilities",
+        sports: "Sports",
+        programs: "Programs",
+        studentLife: "Student Life",
+        achievements: "Achievements",
+        boardResults: "Board Results",
+        hostel: "Hostel",
+      };
+
+      const grouped = school.customFields.reduce<Record<string, CustomField[]>>(
+        (acc, field) => {
+          const key = field.section || "other";
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(field);
+          return acc;
+        },
+        {},
+      );
+
+      return Object.entries(grouped).map(([section, fields]) => (
+        <div key={section} className="mb-5 last:mb-0">
+          {Object.keys(grouped).length > 1 && (
+            <p className="font-heading text-label font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              {SECTION_LABELS[section] ?? section}
+            </p>
           )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {fields.map((field) => (
+              <div
+                key={field.id}
+                className="bg-blue-50 rounded-xl p-3.5 border border-blue-200"
+              >
+                <p className="font-body text-meta text-gray-400 mb-1">
+                  {field.label}
+                </p>
+                <p className="font-heading font-semibold text-label text-gray-800">
+                  {field.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ));
+    })()}
+  </section>
+)}
 
           <NearbySchoolsSection schools={nearbySchools} />
         </div>
