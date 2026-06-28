@@ -224,3 +224,25 @@ export async function fetchSchoolsByBoard(
 ): Promise<SchoolListResult> {
   return fetchSchoolList({ board, page: String(page) }, { revalidate: 60 });
 }
+
+
+
+/**
+ * Client-side school detail fetcher for compare page.
+ * Does NOT use next: cache — safe to call from browser.
+ */
+export async function fetchSchoolDetailClient(
+  slug: string,
+): Promise<import("@/lib/types/database").SchoolDetail | null> {
+  const base = process.env.NEXT_PUBLIC_API_URL;
+  if (!base) return null;
+
+  try {
+    const res = await fetch(`${base}/api/schools/${slug}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json.data ?? json.school ?? json) ?? null;
+  } catch {
+    return null;
+  }
+}

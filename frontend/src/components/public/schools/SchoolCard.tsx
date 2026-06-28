@@ -25,11 +25,14 @@ export interface SchoolCardProps {
   slug: string;
   city: string;
   state: string;
-  board: "CBSE" | "ICSE" | "UP_BOARD" | "OTHER";
+  board: "CBSE" | "ICSE" | "IB" | "IGCSE" | "NIOS" | "STATE_BOARD" | "OTHER";
+  stateBoardName?: string | null;
   schoolType: "BOYS" | "GIRLS" | "CO_ED";
-  medium: "HINDI" | "ENGLISH" | "BOTH";
+  medium: "HINDI" | "ENGLISH" | "BOTH" | "OTHER";
+  mediumOther?: string | null;
   classesFrom: number;
   classesTo: number;
+  classesOffered?: string[] | null;
   tuitionFeeMonthly?: number | null;
   logoUrl?: string | null;
   facilitiesCount?: number;
@@ -39,23 +42,43 @@ export interface SchoolCardProps {
 }
 
 const BOARD_LABELS: Record<SchoolCardProps["board"], string> = {
-  CBSE: "CBSE",
-  ICSE: "ICSE",
-  UP_BOARD: "UP Board",
-  OTHER: "Other",
+  CBSE:        "CBSE",
+  ICSE:        "ICSE",
+  IB:          "IB",
+  IGCSE:       "IGCSE",
+  NIOS:        "NIOS",
+  STATE_BOARD: "State Board",
+  OTHER:       "Other",
 };
 
 const TYPE_LABELS: Record<SchoolCardProps["schoolType"], string> = {
-  BOYS: "Boys",
+  BOYS:  "Boys",
   GIRLS: "Girls",
   CO_ED: "Co-Ed",
 };
 
 const MEDIUM_LABELS: Record<SchoolCardProps["medium"], string> = {
-  HINDI: "Hindi",
+  HINDI:   "Hindi",
   ENGLISH: "English",
-  BOTH: "Bilingual",
+  BOTH:    "Bilingual",
+  OTHER:   "Other",
 };
+
+function getBoardLabel(
+  board: SchoolCardProps["board"],
+  stateBoardName?: string | null,
+): string {
+  if (board === "STATE_BOARD" && stateBoardName) return stateBoardName;
+  return BOARD_LABELS[board];
+}
+
+function getMediumLabel(
+  medium: SchoolCardProps["medium"],
+  mediumOther?: string | null,
+): string {
+  if (medium === "OTHER" && mediumOther) return mediumOther;
+  return MEDIUM_LABELS[medium];
+}
 
 function getInitials(name: string): string {
   return name
@@ -66,21 +89,48 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+
+// ORDER matters: Daycare first, Class 12 last
+const CLASS_ORDER = [
+  'Daycare / Creche', 'Toddler', 'Play Group', 'Pre-Nursery',
+  'Nursery', 'LKG', 'UKG',
+  'Class 1','Class 2','Class 3','Class 4','Class 5','Class 6',
+  'Class 7','Class 8','Class 9','Class 10','Class 11','Class 12',
+];
+
+function formatClassRange(
+  classesOffered: string[] | null | undefined,
+  classesFrom: number,
+  classesTo: number,
+): string {
+  if (classesOffered && classesOffered.length > 0) {
+    // Filter to only known valid values — discard garbage like "60m"
+    const valid = classesOffered.filter((c) => CLASS_ORDER.includes(c));
+
+    if (valid.length > 0) {
+      const sorted = [...valid].sort(
+        (a, b) => CLASS_ORDER.indexOf(a) - CLASS_ORDER.indexOf(b),
+      );
+      const first = sorted[0];
+      const last  = sorted[sorted.length - 1];
+      if (first === last) return first;
+      return `${first} – ${last}`;
+    }
+  }
+  // Fallback: classesFrom/classesTo numeric fields
+  return `Class ${classesFrom} – Class ${classesTo}`;
+}
+
 function readCompareSchools(): SchoolCardProps[] {
   if (typeof window === "undefined") return [];
-
   try {
     const raw = window.localStorage.getItem(COMPARE_STORAGE_KEY);
     if (!raw) return [];
-
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-
     return parsed.filter(
       (school): school is SchoolCardProps =>
-        Boolean(school?.id) &&
-        Boolean(school?.name) &&
-        Boolean(school?.slug),
+        Boolean(school?.id) && Boolean(school?.name) && Boolean(school?.slug),
     );
   } catch {
     return [];
@@ -89,7 +139,6 @@ function readCompareSchools(): SchoolCardProps[] {
 
 function writeCompareSchools(schools: SchoolCardProps[]) {
   if (typeof window === "undefined") return;
-
   window.localStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify(schools));
   window.dispatchEvent(new Event("schoolfinder:compare-updated"));
 }
@@ -102,10 +151,13 @@ function SchoolCardComponent(props: SchoolCardProps) {
     city,
     state,
     board,
+    stateBoardName,
     schoolType,
     medium,
+    mediumOther,
     classesFrom,
     classesTo,
+    classesOffered,
     tuitionFeeMonthly,
     logoUrl,
     facilitiesCount,
@@ -113,7 +165,7 @@ function SchoolCardComponent(props: SchoolCardProps) {
     isFeatured,
   } = props;
 
-  const reduceMotion = useReducedMotion();
+  const reduceMotion    = useReducedMotion();
   const optimizedLogoUrl = optimizeCloudinaryUrl(logoUrl, { width: 128 });
   const [isInCompare, setIsInCompare] = useState(false);
 
@@ -122,41 +174,34 @@ function SchoolCardComponent(props: SchoolCardProps) {
       const currentSchools = readCompareSchools();
       setIsInCompare(currentSchools.some((school) => school.id === id));
     };
-
     syncCompareState();
-
     window.addEventListener("storage", syncCompareState);
     window.addEventListener("schoolfinder:compare-updated", syncCompareState);
-
     return () => {
       window.removeEventListener("storage", syncCompareState);
-      window.removeEventListener(
-        "schoolfinder:compare-updated",
-        syncCompareState,
-      );
+      window.removeEventListener("schoolfinder:compare-updated", syncCompareState);
     };
   }, [id]);
 
   function handleCompareClick() {
     const currentSchools = readCompareSchools();
-    const alreadyAdded = currentSchools.some((school) => school.id === id);
+    const alreadyAdded   = currentSchools.some((school) => school.id === id);
 
     if (alreadyAdded) {
-      const nextSchools = currentSchools.filter((school) => school.id !== id);
-      writeCompareSchools(nextSchools);
+      writeCompareSchools(currentSchools.filter((school) => school.id !== id));
       setIsInCompare(false);
       return;
     }
-
     if (currentSchools.length >= MAX_COMPARE) {
       alert("You can compare maximum 3 schools at a time.");
       return;
     }
-
-    const nextSchools = [...currentSchools, props];
-    writeCompareSchools(nextSchools);
+    writeCompareSchools([...currentSchools, props]);
     setIsInCompare(true);
   }
+
+  const boardLabel  = getBoardLabel(board, stateBoardName);
+  const mediumLabel = getMediumLabel(medium, mediumOther);
 
   const card = (
     <article
@@ -164,6 +209,7 @@ function SchoolCardComponent(props: SchoolCardProps) {
         "group rounded-2xl border border-gray-100 bg-white shadow-card overflow-hidden relative",
         "transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1",
         "focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2",
+        "flex flex-col",
       )}
     >
       <div className="h-1.5 w-full bg-gradient-to-r from-blue-700 via-blue-500 to-amber-400" />
@@ -177,8 +223,9 @@ function SchoolCardComponent(props: SchoolCardProps) {
         </div>
       )}
 
-      <div className="p-5">
-        <Link href={`/schools/${slug}`} className="block">
+      <div className="p-5 flex flex-col flex-1">
+        <Link href={`/schools/${slug}`} className="flex flex-col flex-1">
+          {/* Header: logo + name + location */}
           <div className="flex items-start gap-4 mb-4">
             <div className="relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-sm flex items-center justify-center ring-2 ring-white">
               {optimizedLogoUrl ? (
@@ -204,12 +251,8 @@ function SchoolCardComponent(props: SchoolCardProps) {
               <h3 className="font-heading font-semibold text-h3 text-gray-800 leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
                 {name}
               </h3>
-
               <p className="font-body text-label text-gray-500 mt-1 flex items-center gap-1">
-                <MapPin
-                  className="w-3.5 h-3.5 shrink-0 text-blue-400"
-                  aria-hidden
-                />
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-blue-400" aria-hidden />
                 <span className="truncate">
                   {city}, {state}
                 </span>
@@ -217,25 +260,27 @@ function SchoolCardComponent(props: SchoolCardProps) {
             </div>
           </div>
 
+          {/* Badges: board, type, medium */}
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="badge-premium bg-info-bg text-info-text border-blue-200">
-              {BOARD_LABELS[board]}
+              {boardLabel}
             </span>
             <span className="badge-premium bg-blue-50 text-blue-700 border-blue-100">
               {TYPE_LABELS[schoolType]}
             </span>
             <span className="badge-premium bg-gray-50 text-gray-600 border-gray-100">
-              {MEDIUM_LABELS[medium]}
+              {mediumLabel}
             </span>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 flex items-end justify-between gap-3">
+          {/* Classes + fee — pushed to bottom */}
+          <div className="mt-auto border-t border-gray-100 pt-4 flex items-end justify-between gap-3">
             <div className="min-w-0">
               <p className="font-body text-meta text-gray-400 uppercase tracking-wide">
                 Classes
               </p>
               <p className="font-heading font-semibold text-label text-gray-700">
-                {classesFrom}–{classesTo}
+                {formatClassRange(classesOffered, classesFrom, classesTo)}
               </p>
               {typeof facilitiesCount === "number" && facilitiesCount > 0 && (
                 <p className="font-body text-meta text-gray-400 mt-1">
@@ -244,7 +289,7 @@ function SchoolCardComponent(props: SchoolCardProps) {
               )}
             </div>
 
-            {tuitionFeeMonthly ? (
+            {/* {tuitionFeeMonthly ? (
               <div className="text-right shrink-0">
                 <p className="font-body text-meta text-gray-400">From</p>
                 <p className="font-heading font-bold text-blue-600 text-body-lg tabular-nums">
@@ -256,10 +301,11 @@ function SchoolCardComponent(props: SchoolCardProps) {
               <span className="font-body text-meta text-gray-400 italic shrink-0">
                 Fee on request
               </span>
-            )}
+            )} */}
           </div>
         </Link>
 
+        {/* Actions */}
         <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between gap-3">
           <Link
             href={`/schools/${slug}`}
@@ -300,6 +346,7 @@ function SchoolCardComponent(props: SchoolCardProps) {
 
   return (
     <motion.div
+      className="h-full"
       variants={fadeInUp}
       initial="hidden"
       whileInView="visible"

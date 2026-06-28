@@ -10,12 +10,8 @@ export const metadata: Metadata = {
 
 export default async function ComparePage() {
   const { schools } = await fetchSchoolList(
-    {
-      limit: "100",
-    },
-    {
-      revalidate: 60,
-    },
+    { limit: "100" },
+    { revalidate: 60 },
   );
 
   return <CompareClient schools={schools ?? []} />;

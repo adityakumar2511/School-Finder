@@ -369,6 +369,34 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+const CLASS_ORDER_DETAIL = [
+  'Daycare / Creche', 'Toddler', 'Play Group', 'Pre-Nursery',
+  'Nursery', 'LKG', 'UKG',
+  'Class 1','Class 2','Class 3','Class 4','Class 5','Class 6',
+  'Class 7','Class 8','Class 9','Class 10','Class 11','Class 12',
+];
+
+function formatDetailClassRange(
+  classesOffered: string[] | null | undefined,
+  classesFrom: number,
+  classesTo: number,
+): string {
+  if (classesOffered && classesOffered.length > 0) {
+    const valid = classesOffered.filter((c) => CLASS_ORDER_DETAIL.includes(c));
+    if (valid.length > 0) {
+      const sorted = [...valid].sort(
+        (a, b) => CLASS_ORDER_DETAIL.indexOf(a) - CLASS_ORDER_DETAIL.indexOf(b),
+      );
+      const first = sorted[0];
+      const last  = sorted[sorted.length - 1];
+      if (first === last) return first;
+      return `${first} – ${last}`;
+    }
+  }
+  return `Class ${classesFrom} – Class ${classesTo}`;
+}
+
+
 function fmt(date: string | null) {
   if (!date) return null;
   return new Date(date).toLocaleDateString("en-IN", {
@@ -672,7 +700,14 @@ export default async function SchoolDetailPage({
     school.establishedYear
       ? { label: "Est.", value: String(school.establishedYear) }
       : null,
-    { label: "Classes", value: `${school.classesFrom}–${school.classesTo}` },
+    {
+      label: "Classes",
+      value: formatDetailClassRange(
+        school.classesOffered,
+        school.classesFrom,
+        school.classesTo,
+      ),
+    },
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
@@ -871,7 +906,11 @@ export default async function SchoolDetailPage({
                 <InfoTile label="Medium" value={getMediumLabel(school)} />
                 <InfoTile
                   label="Classes"
-                  value={`Class ${school.classesFrom} to ${school.classesTo}`}
+                  value={formatDetailClassRange(
+                    school.classesOffered,
+                    school.classesFrom,
+                    school.classesTo,
+                  )}
                 />
                 {school.schoolCategory && (
                   <InfoTile label="Category" value={school.schoolCategory} />

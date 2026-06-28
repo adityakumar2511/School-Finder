@@ -1,54 +1,110 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  CheckCircle2,
   GitCompare,
+  Loader2,
   MapPin,
   Plus,
   Trash2,
   X,
+  XCircle,
 } from "lucide-react";
 import type { SchoolCardProps } from "@/components/public/schools/SchoolCard";
+import type { SchoolDetail } from "@/lib/types/database";
+import { fetchSchoolDetailClient } from "@/lib/data/schools-public";
+
+const CLASS_ORDER = [
+  "Daycare / Creche",
+  "Toddler",
+  "Play Group",
+  "Pre-Nursery",
+  "Nursery",
+  "LKG",
+  "UKG",
+  "Class 1",
+  "Class 2",
+  "Class 3",
+  "Class 4",
+  "Class 5",
+  "Class 6",
+  "Class 7",
+  "Class 8",
+  "Class 9",
+  "Class 10",
+  "Class 11",
+  "Class 12",
+];
+
+function formatClassRange(
+  classesOffered: string[] | null | undefined,
+  classesFrom: number | string | null | undefined,
+  classesTo: number | string | null | undefined,
+): string {
+  if (classesOffered && classesOffered.length > 0) {
+    const valid = classesOffered.filter((c) => CLASS_ORDER.includes(c));
+    if (valid.length > 0) {
+      const sorted = [...valid].sort(
+        (a, b) => CLASS_ORDER.indexOf(a) - CLASS_ORDER.indexOf(b),
+      );
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      if (first === last) return first;
+      return `${first} – ${last}`;
+    }
+  }
+  if (classesFrom && classesTo) {
+    return `Class ${classesFrom} – Class ${classesTo}`;
+  }
+  return "—";
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const COMPARE_STORAGE_KEY = "schoolfinder_compare_schools";
 const MAX_COMPARE = 3;
 
-const BOARD_LABELS: Record<SchoolCardProps["board"], string> = {
+// ─── Label maps ───────────────────────────────────────────────────────────────
+
+const BOARD_LABELS: Record<string, string> = {
   CBSE: "CBSE",
   ICSE: "ICSE",
-  UP_BOARD: "UP Board",
+  IB: "IB",
+  IGCSE: "IGCSE",
+  NIOS: "NIOS",
+  STATE_BOARD: "State Board",
   OTHER: "Other",
+  UP_BOARD: "UP Board", // legacy fallback
 };
 
-const TYPE_LABELS: Record<SchoolCardProps["schoolType"], string> = {
-  BOYS: "Boys",
-  GIRLS: "Girls",
+const TYPE_LABELS: Record<string, string> = {
+  BOYS: "Boys only",
+  GIRLS: "Girls only",
   CO_ED: "Co-Ed",
 };
 
-const MEDIUM_LABELS: Record<SchoolCardProps["medium"], string> = {
+const MEDIUM_LABELS: Record<string, string> = {
   HINDI: "Hindi",
   ENGLISH: "English",
   BOTH: "Hindi + English",
+  OTHER: "Other",
 };
+
+// ─── Storage helpers ──────────────────────────────────────────────────────────
 
 function readCompareSchools(): SchoolCardProps[] {
   if (typeof window === "undefined") return [];
-
   try {
     const raw = window.localStorage.getItem(COMPARE_STORAGE_KEY);
     if (!raw) return [];
-
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-
     return parsed.filter(
-      (school): school is SchoolCardProps =>
-        Boolean(school?.id) &&
-        Boolean(school?.name) &&
-        Boolean(school?.slug),
+      (s): s is SchoolCardProps =>
+        Boolean(s?.id) && Boolean(s?.name) && Boolean(s?.slug),
     );
   } catch {
     return [];
@@ -57,15 +113,185 @@ function readCompareSchools(): SchoolCardProps[] {
 
 function writeCompareSchools(schools: SchoolCardProps[]) {
   if (typeof window === "undefined") return;
-
   window.localStorage.setItem(COMPARE_STORAGE_KEY, JSON.stringify(schools));
   window.dispatchEvent(new Event("schoolfinder:compare-updated"));
 }
 
-function formatFee(value?: number | null) {
-  if (!value) return "Fee on request";
-  return `₹${value.toLocaleString("en-IN")} / month`;
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+function fmt(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
 }
+
+function fmtFee(v: number | null | undefined): string {
+  if (!v) return "—";
+  return `₹${v.toLocaleString("en-IN")}`;
+}
+
+function fmtBool(v: boolean | null | undefined): string {
+  if (v === true) return "Yes";
+  if (v === false) return "No";
+  return "—";
+}
+
+function fmtDate(v: string | null | undefined): string {
+  if (!v) return "—";
+  try {
+    return new Date(v).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return v;
+  }
+}
+
+function fmtList(arr: string[] | null | undefined): string {
+  if (!arr || arr.length === 0) return "—";
+  if (arr.length <= 4) return arr.join(", ");
+  return `${arr.slice(0, 4).join(", ")} +${arr.length - 4} more`;
+}
+
+function fmtBoardLabel(school: SchoolDetail): string {
+  if (school.board === "STATE_BOARD" && school.stateBoardName) {
+    return `State Board — ${school.stateBoardName}`;
+  }
+  return BOARD_LABELS[school.board] ?? school.board;
+}
+
+function fmtMediumLabel(school: SchoolDetail): string {
+  if (school.medium === "OTHER" && school.mediumOther) {
+    return `Other (${school.mediumOther})`;
+  }
+  return MEDIUM_LABELS[school.medium] ?? school.medium;
+}
+
+function fmtQualifiedPercent(
+  qualified: number | null | undefined,
+  total: number | null | undefined,
+): string {
+  if (!qualified || !total || total === 0) return "—";
+  return `${((qualified / total) * 100).toFixed(1)}%`;
+}
+
+function fmtBoardResults(school: SchoolDetail): string {
+  if (!school.boardResults || school.boardResults.length === 0) return "—";
+  return school.boardResults
+    .map((r) => {
+      const level = r.classLevel === "CLASS_10" ? "Class 10" : "Class 12";
+      const year = r.year ? ` (${r.year})` : "";
+      const pass = r.passPercent != null ? ` — ${r.passPercent}% pass` : "";
+      return `${level}${year}${pass}`;
+    })
+    .join("\n");
+}
+
+function fmtAdmissionCoordinator(school: SchoolDetail): string {
+  // Prefer admissionCoordinators JSON array (new), fallback to legacy single fields
+  const coords = school.admissionCoordinators;
+  if (Array.isArray(coords) && coords.length > 0) {
+    const first = coords[0];
+    const parts = [first.name, first.phone, first.email].filter(Boolean);
+    return parts.length > 0 ? parts.join(" · ") : "—";
+  }
+  const parts = [
+    school.admissionCoordinatorName,
+    school.admissionPhone,
+    school.admissionEmail,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
+  return (
+    <tr className="bg-blue-50 border-y border-blue-100">
+      <td
+        colSpan={colSpan}
+        className="px-5 py-2 font-heading text-xs text-blue-700 uppercase tracking-widest"
+      >
+        {label}
+      </td>
+    </tr>
+  );
+}
+
+function CompareRow({
+  label,
+  values,
+  multiline,
+}: {
+  label: string;
+  values: (string | null | undefined)[];
+  multiline?: boolean;
+}) {
+  return (
+    <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50/60 transition-colors">
+      <td className="px-5 py-3.5 font-heading text-label text-gray-500 uppercase tracking-wide bg-gray-50 w-44 align-top whitespace-nowrap">
+        {label}
+      </td>
+      {values.map((value, i) => (
+        <td
+          key={i}
+          className={`px-5 py-3.5 font-body text-body text-gray-700 align-top ${multiline ? "whitespace-pre-line" : ""}`}
+        >
+          {value && value !== "—" ? (
+            value
+          ) : (
+            <span className="text-gray-300">—</span>
+          )}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function BoolRow({
+  label,
+  values,
+}: {
+  label: string;
+  values: (boolean | null | undefined)[];
+}) {
+  return (
+    <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50/60 transition-colors">
+      <td className="px-5 py-3.5 font-heading text-label text-gray-500 uppercase tracking-wide bg-gray-50 w-44 align-top whitespace-nowrap">
+        {label}
+      </td>
+      {values.map((value, i) => (
+        <td key={i} className="px-5 py-3.5 align-top">
+          {value === true ? (
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
+          ) : value === false ? (
+            <XCircle className="w-4 h-4 text-gray-300" />
+          ) : (
+            <span className="text-gray-300 font-body text-body">—</span>
+          )}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function SkeletonRow({ cols }: { cols: number }) {
+  return (
+    <tr className="border-b border-gray-100">
+      <td className="px-5 py-3.5 bg-gray-50 w-44">
+        <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      </td>
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i} className="px-5 py-3.5">
+          <div className="h-3 w-28 bg-gray-100 rounded animate-pulse" />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CompareClient({
   schools = [],
@@ -74,65 +300,120 @@ export default function CompareClient({
 }) {
   const safeSchools = Array.isArray(schools) ? schools : [];
 
-  const [selectedSchools, setSelectedSchools] = useState<SchoolCardProps[]>([]);
+  // Shallow list items from localStorage (for card display + remove)
+  const [selectedCards, setSelectedCards] = useState<SchoolCardProps[]>([]);
+  // Full detail data keyed by school id
+  const [detailMap, setDetailMap] = useState<
+    Record<string, SchoolDetail | null>
+  >({});
+  // Loading state per school id
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  // Dropdown selection
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
+  // Track which ids have been fetched to avoid duplicate requests
+  const fetchedIds = useRef<Set<string>>(new Set());
 
+  // Sync localStorage on mount and storage events
   useEffect(() => {
-    const sync = () => {
-      setSelectedSchools(readCompareSchools());
-    };
-
+    const sync = () => setSelectedCards(readCompareSchools());
     sync();
-
     window.addEventListener("storage", sync);
     window.addEventListener("schoolfinder:compare-updated", sync);
-
     return () => {
       window.removeEventListener("storage", sync);
       window.removeEventListener("schoolfinder:compare-updated", sync);
     };
   }, []);
 
+  // Fetch detail for any selected card that doesn't have detail yet
+  const fetchDetail = useCallback(async (card: SchoolCardProps) => {
+    if (fetchedIds.current.has(card.id)) return;
+    fetchedIds.current.add(card.id);
+
+    setLoadingIds((prev) => new Set(prev).add(card.id));
+
+    try {
+      const detail = await fetchSchoolDetailClient(card.slug);
+      console.log(
+        "DETAIL classesFrom:",
+        detail?.classesFrom,
+        "classesTo:",
+        detail?.classesTo,
+      );
+      setDetailMap((prev) => ({ ...prev, [card.id]: detail }));
+    } catch {
+      setDetailMap((prev) => ({ ...prev, [card.id]: null }));
+    } finally {
+      setLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(card.id);
+        return next;
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    for (const card of selectedCards) {
+      fetchDetail(card);
+    }
+  }, [selectedCards, fetchDetail]);
+
   const availableSchools = useMemo(() => {
-    const selectedIds = new Set(selectedSchools.map((school) => school.id));
-    return safeSchools.filter((school) => !selectedIds.has(school.id));
-  }, [safeSchools, selectedSchools]);
+    const selectedIds = new Set(selectedCards.map((s) => s.id));
+    return safeSchools.filter((s) => !selectedIds.has(s.id));
+  }, [safeSchools, selectedCards]);
 
   function handleAddSchool() {
     if (!selectedSchoolId) return;
-
-    const school = safeSchools.find((item) => item.id === selectedSchoolId);
+    const school = safeSchools.find((s) => s.id === selectedSchoolId);
     if (!school) return;
-
-    if (selectedSchools.some((item) => item.id === school.id)) {
+    if (selectedCards.some((s) => s.id === school.id)) {
       setSelectedSchoolId("");
       return;
     }
-
-    if (selectedSchools.length >= MAX_COMPARE) {
+    if (selectedCards.length >= MAX_COMPARE) {
       alert("You can compare maximum 3 schools at a time.");
       return;
     }
-
-    const nextSchools = [...selectedSchools, school];
-    setSelectedSchools(nextSchools);
-    writeCompareSchools(nextSchools);
+    const next = [...selectedCards, school];
+    setSelectedCards(next);
+    writeCompareSchools(next);
     setSelectedSchoolId("");
   }
 
   function handleRemoveSchool(id: string) {
-    const nextSchools = selectedSchools.filter((school) => school.id !== id);
-    setSelectedSchools(nextSchools);
-    writeCompareSchools(nextSchools);
+    const next = selectedCards.filter((s) => s.id !== id);
+    setSelectedCards(next);
+    writeCompareSchools(next);
+    // Clean up detail cache and fetchedIds so re-adding re-fetches cleanly
+    setDetailMap((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    fetchedIds.current.delete(id);
   }
 
   function handleClearAll() {
-    setSelectedSchools([]);
+    setSelectedCards([]);
     writeCompareSchools([]);
+    setDetailMap({});
+    fetchedIds.current.clear();
+  }
+
+  // Details in order of selected cards
+  const details = selectedCards.map((c) => detailMap[c.id] ?? null);
+  const isAnyLoading = selectedCards.some((c) => loadingIds.has(c.id));
+  const colSpan = selectedCards.length + 1;
+
+  // Helper: get value for each selected school from its detail
+  function vals<T>(fn: (d: SchoolDetail) => T, fallback: T): T[] {
+    return details.map((d) => (d ? fn(d) : fallback));
   }
 
   return (
     <main className="min-h-screen bg-gray-50">
+      {/* ── Hero ── */}
       <section className="bg-blue-800 px-4 py-10">
         <div className="max-w-7xl mx-auto">
           <Link
@@ -149,18 +430,16 @@ export default function CompareClient({
                 <GitCompare className="w-4 h-4" />
                 Compare Schools
               </div>
-
               <h1 className="font-heading text-h1 text-white mb-2">
                 Compare schools side by side
               </h1>
-
               <p className="font-body text-body text-blue-200 max-w-2xl">
-                Select 2–3 schools and compare them on board, medium, classes,
-                fees, facilities, and location.
+                Select up to 3 schools and compare them on fees, board, medium,
+                faculty, infrastructure, safety, and more.
               </p>
             </div>
 
-            {selectedSchools.length > 0 && (
+            {selectedCards.length > 0 && (
               <button
                 type="button"
                 onClick={handleClearAll}
@@ -175,31 +454,30 @@ export default function CompareClient({
       </section>
 
       <section className="max-w-7xl mx-auto px-4 py-8">
+        {/* ── Add schools panel ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-5 mb-8">
-          <h2 className="font-heading text-h3 text-blue-800 mb-2">
+          <h2 className="font-heading text-h3 text-blue-800 mb-1">
             Add schools to compare
           </h2>
-
           <p className="font-body text-body text-gray-500 mb-5">
-            You can compare maximum {MAX_COMPARE} schools at a time.
+            You can compare up to {MAX_COMPARE} schools at a time.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3">
             <select
               value={selectedSchoolId}
-              onChange={(event) => setSelectedSchoolId(event.target.value)}
-              disabled={selectedSchools.length >= MAX_COMPARE}
+              onChange={(e) => setSelectedSchoolId(e.target.value)}
+              disabled={selectedCards.length >= MAX_COMPARE}
               className="flex-1 h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 font-body text-body focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60"
             >
               <option value="">
-                {selectedSchools.length >= MAX_COMPARE
+                {selectedCards.length >= MAX_COMPARE
                   ? "Maximum 3 schools selected"
-                  : "Select a school"}
+                  : "Select a school to compare"}
               </option>
-
-              {availableSchools.map((school) => (
-                <option key={school.id} value={school.id}>
-                  {school.name} — {school.city}
+              {availableSchools.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.city}
                 </option>
               ))}
             </select>
@@ -207,7 +485,9 @@ export default function CompareClient({
             <button
               type="button"
               onClick={handleAddSchool}
-              disabled={!selectedSchoolId || selectedSchools.length >= MAX_COMPARE}
+              disabled={
+                !selectedSchoolId || selectedCards.length >= MAX_COMPARE
+              }
               className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-blue-600 text-white font-heading text-btn hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
@@ -217,178 +497,535 @@ export default function CompareClient({
 
           {safeSchools.length === 0 && (
             <p className="mt-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              No schools loaded. Please check backend connection or approved
-              school listings.
+              No schools loaded. Please check your connection or try again.
             </p>
           )}
         </div>
 
-        {selectedSchools.length === 0 ? (
+        {/* ── Empty state ── */}
+        {selectedCards.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card py-20 px-4 text-center">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-5">
               <GitCompare className="w-8 h-8 text-blue-500" />
             </div>
-
             <h2 className="font-heading text-h2 text-blue-800 mb-2">
               No schools selected yet
             </h2>
-
             <p className="font-body text-body text-gray-500 max-w-md mx-auto mb-6">
-              Add schools from the dropdown above or click “Compare” from school
-              listing cards.
+              Add schools from the dropdown above or click "Compare" on any
+              school card.
             </p>
-
             <Link
               href="/schools"
               className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-white font-heading text-btn hover:bg-blue-700 transition-colors"
             >
-              Browse Schools
+              Browse schools
             </Link>
           </div>
         ) : (
           <>
+            {/* ── Selected school cards ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-8">
-              {selectedSchools.map((school) => (
+              {selectedCards.map((card) => (
                 <div
-                  key={school.id}
+                  key={card.id}
                   className="bg-white rounded-2xl border border-gray-100 shadow-card p-5 relative"
                 >
                   <button
                     type="button"
-                    onClick={() => handleRemoveSchool(school.id)}
-                    className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center"
-                    aria-label={`Remove ${school.name} from compare`}
+                    onClick={() => handleRemoveSchool(card.id)}
+                    className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors flex items-center justify-center"
+                    aria-label={`Remove ${card.name}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
 
-                  <h3 className="font-heading text-h3 text-gray-900 pr-10 mb-2">
-                    {school.name}
-                  </h3>
-
-                  <p className="font-body text-label text-gray-500 flex items-center gap-1 mb-4">
-                    <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                    {school.city}, {school.state}
-                  </p>
+                  <div className="flex items-start gap-3 pr-10">
+                    {loadingIds.has(card.id) ? (
+                      <Loader2 className="w-4 h-4 text-blue-400 animate-spin mt-1 shrink-0" />
+                    ) : detailMap[card.id] === null ? (
+                      <XCircle className="w-4 h-4 text-red-400 mt-1 shrink-0" />
+                    ) : detailMap[card.id] ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-1 shrink-0" />
+                    ) : null}
+                    <div className="min-w-0">
+                      <h3 className="font-heading text-h3 text-gray-900 mb-1 truncate">
+                        {card.name}
+                      </h3>
+                      <p className="font-body text-label text-gray-500 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        {card.city}, {card.state}
+                      </p>
+                    </div>
+                  </div>
 
                   <Link
-                    href={`/schools/${school.slug}`}
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-800"
+                    href={`/schools/${card.slug}`}
+                    className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
                   >
-                    View profile
+                    View full profile →
                   </Link>
                 </div>
               ))}
             </div>
 
-            {selectedSchools.length < 2 && (
+            {/* Minimum 2 schools notice */}
+            {selectedCards.length < 2 && (
               <div className="mb-6 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                Add at least one more school to see a proper side-by-side
-                comparison.
+                Add at least one more school to see the comparison table.
               </div>
             )}
 
+            {/* Global loading bar */}
+            {isAnyLoading && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-blue-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading school details…
+              </div>
+            )}
+
+            {/* ── Comparison table ── */}
             <div className="overflow-x-auto bg-white rounded-2xl border border-gray-100 shadow-card">
               <table className="min-w-full text-left">
+                {/* Sticky header */}
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-5 py-4 font-heading text-label text-gray-500 uppercase tracking-wide">
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-5 py-4 font-heading text-label text-gray-400 uppercase tracking-wide w-44">
                       Criteria
                     </th>
-                    {selectedSchools.map((school) => (
+                    {selectedCards.map((card) => (
                       <th
-                        key={school.id}
-                        className="px-5 py-4 font-heading text-label text-gray-800 min-w-56"
+                        key={card.id}
+                        className="px-5 py-4 font-heading text-label text-blue-800 min-w-[220px]"
                       >
-                        {school.name}
+                        <div className="flex items-center gap-2">
+                          {card.name}
+                          {loadingIds.has(card.id) && (
+                            <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+                          )}
+                        </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
 
                 <tbody>
-                  <CompareRow
-                    label="Location"
-                    values={selectedSchools.map(
-                      (school) => `${school.city}, ${school.state}`,
-                    )}
+                  {/* ═══ SECTION 1 — Basic Info ═══ */}
+                  <SectionHeader label="Basic Info" colSpan={colSpan} />
+
+                  {isAnyLoading ? (
+                    <>
+                      <SkeletonRow cols={selectedCards.length} />
+                      <SkeletonRow cols={selectedCards.length} />
+                      <SkeletonRow cols={selectedCards.length} />
+                    </>
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Location"
+                        values={vals((d) => `${d.city}, ${d.state}`, "—")}
+                      />
+                      <CompareRow
+                        label="Board"
+                        values={vals(fmtBoardLabel, "—")}
+                      />
+                      <CompareRow
+                        label="School Type"
+                        values={vals(
+                          (d) => TYPE_LABELS[d.schoolType] ?? d.schoolType,
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Medium"
+                        values={vals(fmtMediumLabel, "—")}
+                      />
+                      <CompareRow
+                        label="Category"
+                        values={vals((d) => fmt(d.schoolCategory), "—")}
+                      />
+                      <CompareRow
+                        label="Format"
+                        values={vals((d) => fmt(d.schoolFormat), "—")}
+                      />
+                      <CompareRow
+                        label="Classes"
+                        values={selectedCards.map((card) => {
+                          const d = detailMap[card.id];
+                          return formatClassRange(
+                            d?.classesOffered ?? card.classesOffered,
+                            d?.classesFrom ?? card.classesFrom,
+                            d?.classesTo ?? card.classesTo,
+                          );
+                        })}
+                      />
+                      <CompareRow
+                        label="Est. Year"
+                        values={vals((d) => fmt(d.establishedYear), "—")}
+                      />
+                      <CompareRow
+                        label="Timing"
+                        values={vals(
+                          (d) =>
+                            d.startTime && d.endTime
+                              ? `${d.startTime} – ${d.endTime}`
+                              : "—",
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Working Days"
+                        values={vals(
+                          (d) =>
+                            d.workingDays ? `${d.workingDays} days/week` : "—",
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Languages"
+                        values={vals((d) => fmtList(d.languagesOffered), "—")}
+                      />
+                      <BoolRow
+                        label="Uniform"
+                        values={vals((d) => Boolean(d.uniformPolicy), null)}
+                      />
+                      <BoolRow
+                        label="Canteen"
+                        values={vals((d) => d.canteenAvailable, null)}
+                      />
+                      <CompareRow
+                        label="Total Students"
+                        values={vals((d) => fmt(d.totalStudents), "—")}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 2 — Academics ═══ */}
+                  <SectionHeader label="Academics" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <>
+                      <SkeletonRow cols={selectedCards.length} />
+                      <SkeletonRow cols={selectedCards.length} />
+                    </>
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Streams"
+                        values={vals((d) => fmtList(d.streamsOffered), "—")}
+                      />
+                      <CompareRow
+                        label="Programs"
+                        values={vals((d) => fmtList(d.programsList), "—")}
+                      />
+                      <CompareRow
+                        label="Board Results"
+                        values={vals(fmtBoardResults, "—")}
+                        multiline
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 3 — Fee Structure ═══ */}
+                  <SectionHeader label="Fee Structure" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <>
+                      <SkeletonRow cols={selectedCards.length} />
+                      <SkeletonRow cols={selectedCards.length} />
+                    </>
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Annual Fee"
+                        values={vals(
+                          (d) => fmtFee(d.totalAnnualFee ?? d.averageAnnualFee),
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Early Childhood"
+                        values={vals((d) => fmtFee(d.earlyChildhoodFee), "—")}
+                      />
+                      <CompareRow
+                        label="Pre-Primary"
+                        values={vals((d) => fmtFee(d.prePrimaryFee), "—")}
+                      />
+                      <CompareRow
+                        label="Class 1–5"
+                        values={vals((d) => fmtFee(d.class1to5Fee), "—")}
+                      />
+                      <CompareRow
+                        label="Class 6–8"
+                        values={vals((d) => fmtFee(d.class6to8Fee), "—")}
+                      />
+                      <CompareRow
+                        label="Class 9–10"
+                        values={vals((d) => fmtFee(d.class9to10Fee), "—")}
+                      />
+                      <CompareRow
+                        label="Class 11–12"
+                        values={vals((d) => fmtFee(d.class11to12Fee), "—")}
+                      />
+                      {/* <CompareRow
+                        label="Monthly Tuition"
+                        values={vals(
+                          (d) =>
+                            d.tuitionFeeMonthly
+                              ? `${fmtFee(d.tuitionFeeMonthly)} / month`
+                              : "—",
+                          "—",
+                        )}
+                      /> */}
+
+                      {/* <CompareRow
+                        label="Admission Fee"
+                        values={vals(
+                          (d) => fmtFee(d.admissionFee),
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Transport Fee"
+                        values={vals(
+                          (d) => fmtFee(d.transportFee),
+                          "—",
+                        )}
+                      /> */}
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 4 — Admissions ═══ */}
+                  <SectionHeader label="Admissions" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <BoolRow
+                        label="Admissions Open"
+                        values={vals((d) => d.admissionOpen, null)}
+                      />
+                      <CompareRow
+                        label="Start Date"
+                        values={vals((d) => fmtDate(d.admissionStartDate), "—")}
+                      />
+                      <CompareRow
+                        label="Last Date"
+                        values={vals((d) => fmtDate(d.admissionEndDate), "—")}
+                      />
+                      <CompareRow
+                        label="Age Criteria"
+                        values={vals((d) => fmt(d.ageCriteria), "—")}
+                      />
+                      <CompareRow
+                        label="Coordinator"
+                        values={vals(fmtAdmissionCoordinator, "—")}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 5 — Faculty ═══ */}
+                  <SectionHeader label="Faculty" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Total Teachers"
+                        values={vals((d) => fmt(d.totalTeachers), "—")}
+                      />
+                      <CompareRow
+                        label="Qualified"
+                        values={vals((d) => fmt(d.qualifiedTeachers), "—")}
+                      />
+                      <CompareRow
+                        label="Qualified %"
+                        values={vals(
+                          (d) =>
+                            fmtQualifiedPercent(
+                              d.qualifiedTeachers,
+                              d.totalTeachers,
+                            ),
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Student:Teacher"
+                        values={vals((d) => fmt(d.studentTeacherRatio), "—")}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 6 — Infrastructure ═══ */}
+                  <SectionHeader label="Infrastructure" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Campus Area"
+                        values={vals((d) => fmt(d.campusArea), "—")}
+                      />
+                      <CompareRow
+                        label="Classrooms"
+                        values={vals((d) => fmt(d.totalClassrooms), "—")}
+                      />
+                      <CompareRow
+                        label="Labs"
+                        values={vals((d) => fmt(d.totalLabs), "—")}
+                      />
+                      <CompareRow
+                        label="Library Books"
+                        values={vals((d) => fmt(d.libraryBooks), "—")}
+                      />
+                      <CompareRow
+                        label="Total Buses"
+                        values={vals((d) => fmt(d.totalBuses), "—")}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 7 — Facilities & Sports ═══ */}
+                  <SectionHeader
+                    label="Facilities & Sports"
+                    colSpan={colSpan}
                   />
-                  <CompareRow
-                    label="Board"
-                    values={selectedSchools.map(
-                      (school) => BOARD_LABELS[school.board],
-                    )}
-                  />
-                  <CompareRow
-                    label="School Type"
-                    values={selectedSchools.map(
-                      (school) => TYPE_LABELS[school.schoolType],
-                    )}
-                  />
-                  <CompareRow
-                    label="Medium"
-                    values={selectedSchools.map(
-                      (school) => MEDIUM_LABELS[school.medium],
-                    )}
-                  />
-                  <CompareRow
-                    label="Classes"
-                    values={selectedSchools.map(
-                      (school) => `${school.classesFrom}–${school.classesTo}`,
-                    )}
-                  />
-                  <CompareRow
-                    label="Monthly Fee"
-                    values={selectedSchools.map((school) =>
-                      formatFee(school.tuitionFeeMonthly),
-                    )}
-                  />
-                  <CompareRow
-                    label="Facilities"
-                    values={selectedSchools.map((school) =>
-                      typeof school.facilitiesCount === "number" &&
-                      school.facilitiesCount > 0
-                        ? `${school.facilitiesCount} facilities`
-                        : "Not specified",
-                    )}
-                  />
-                  <CompareRow
-                    label="Featured"
-                    values={selectedSchools.map((school) =>
-                      school.isFeatured ? "Yes" : "No",
-                    )}
-                  />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Facilities"
+                        values={vals(
+                          (d) =>
+                            d.facilitiesList?.length
+                              ? `${d.facilitiesList.length} — ${fmtList(d.facilitiesList)}`
+                              : "—",
+                          "—",
+                        )}
+                      />
+                      <CompareRow
+                        label="Sports"
+                        values={vals(
+                          (d) =>
+                            d.sportsList?.length
+                              ? `${d.sportsList.length} — ${fmtList(d.sportsList)}`
+                              : "—",
+                          "—",
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 8 — Hostel & Transport ═══ */}
+                  <SectionHeader label="Hostel & Transport" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <BoolRow
+                        label="Hostel"
+                        values={vals((d) => d.hostelAvailable, null)}
+                      />
+                      <BoolRow
+                        label="Boys Hostel"
+                        values={vals((d) => d.hostelBoys, null)}
+                      />
+                      <BoolRow
+                        label="Girls Hostel"
+                        values={vals((d) => d.hostelGirls, null)}
+                      />
+                      <BoolRow
+                        label="Mess"
+                        values={vals((d) => d.hostelMess, null)}
+                      />
+                      <CompareRow
+                        label="Hostel Capacity"
+                        values={vals(
+                          (d) =>
+                            d.hostelCapacity
+                              ? `${d.hostelCapacity} students`
+                              : "—",
+                          "—",
+                        )}
+                      />
+                      <BoolRow
+                        label="Transport"
+                        values={vals((d) => d.transportAvailable, null)}
+                      />
+                      <BoolRow
+                        label="GPS Tracking"
+                        values={vals((d) => d.gpsTracking, null)}
+                      />
+                      <CompareRow
+                        label="Transport Areas"
+                        values={vals((d) => fmt(d.transportAreas), "—")}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 9 — Safety ═══ */}
+                  <SectionHeader label="Safety" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <BoolRow
+                        label="CCTV"
+                        values={vals((d) => d.hasCCTV, null)}
+                      />
+                      <BoolRow
+                        label="Security Guards"
+                        values={vals((d) => d.hasGuards, null)}
+                      />
+                      <BoolRow
+                        label="Medical Room"
+                        values={vals((d) => d.hasMedicalRoom, null)}
+                      />
+                      <BoolRow
+                        label="Fire Safety"
+                        values={vals((d) => d.hasFireSafety, null)}
+                      />
+                      <BoolRow
+                        label="Visitor Mgmt"
+                        values={vals((d) => d.hasVisitorMgmt, null)}
+                      />
+                    </>
+                  )}
+
+                  {/* ═══ SECTION 10 — Student Life ═══ */}
+                  <SectionHeader label="Student Life" colSpan={colSpan} />
+                  {isAnyLoading ? (
+                    <SkeletonRow cols={selectedCards.length} />
+                  ) : (
+                    <>
+                      <CompareRow
+                        label="Clubs"
+                        values={vals((d) => fmt(d.clubsActivities), "—")}
+                      />
+                      <CompareRow
+                        label="Annual Events"
+                        values={vals((d) => fmt(d.annualEvents), "—")}
+                      />
+                      <CompareRow
+                        label="Edu. Tours"
+                        values={vals((d) => fmt(d.educationalTours), "—")}
+                      />
+                      <CompareRow
+                        label="Achievements"
+                        values={vals((d) => fmt(d.academicAchievements), "—")}
+                      />
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
+
+            <p className="mt-4 text-xs text-gray-400 text-center">
+              Data shown is as filled by each school. Fields marked — are not
+              yet provided by the school.
+            </p>
           </>
         )}
       </section>
     </main>
-  );
-}
-
-function CompareRow({
-  label,
-  values,
-}: {
-  label: string;
-  values: string[];
-}) {
-  return (
-    <tr className="border-b border-gray-100 last:border-0">
-      <td className="px-5 py-4 font-heading text-label text-gray-500 uppercase tracking-wide bg-gray-50">
-        {label}
-      </td>
-
-      {values.map((value, index) => (
-        <td
-          key={`${label}-${index}`}
-          className="px-5 py-4 font-body text-body text-gray-700"
-        >
-          {value}
-        </td>
-      ))}
-    </tr>
   );
 }

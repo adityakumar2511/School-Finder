@@ -14,6 +14,7 @@ export const schoolListSelect = {
   mediumOther: true,
   classesFrom: true,
   classesTo: true,
+  classesOffered: true,
   tuitionFeeMonthly: true,
   logoUrl: true,
   latitude: true,
@@ -130,6 +131,7 @@ export function mapSchoolListItem(
     mediumOther,
     classesFrom,
     classesTo,
+    classesOffered,
     tuitionFeeMonthly,
     logoUrl,
     latitude,
@@ -151,6 +153,7 @@ export function mapSchoolListItem(
     mediumOther,
     classesFrom,
     classesTo,
+    classesOffered,
     tuitionFeeMonthly,
     logoUrl,
     latitude,
@@ -209,6 +212,7 @@ export function buildSchoolListWhere(filters: {
   board?: string | string[];
   schoolType?: string;
   medium?: string;
+  schoolCategory?: string;
   featured?: string;
 }): Prisma.SchoolWhereInput {
   const where: Prisma.SchoolWhereInput = {
@@ -242,6 +246,13 @@ export function buildSchoolListWhere(filters: {
 
   if (filters.medium) {
     where.medium = filters.medium as Prisma.EnumMediumTypeFilter["equals"];
+  }
+
+  if (filters.schoolCategory) {
+    where.schoolCategory = {
+      contains: filters.schoolCategory,
+      mode: "insensitive",
+    };
   }
 
   if (filters.featured === "true") {

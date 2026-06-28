@@ -5,7 +5,7 @@ import SchoolFilters from "@/components/public/schools/SchoolFilters";
 import SchoolGridSkeleton from "@/components/public/schools/SchoolGridSkeleton";
 import { GraduationCap, ServerOff } from "lucide-react";
 import { buildPageMetadata } from "@/lib/seo/seo";
-import { fetchSchoolList, fetchCities  } from "@/lib/data/schools-public";
+import { fetchSchoolList, fetchCities } from "@/lib/data/schools-public";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Browse Schools — CBSE, ICSE & State Board Listings",
@@ -21,16 +21,82 @@ export const metadata: Metadata = buildPageMetadata({
   ],
 });
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface PageProps {
   searchParams: {
     search?: string;
     city?: string;
-    board?: string;       
-    schoolType?: string;
-    medium?: string;
+    board?: string | string[];
+    schoolType?: string | string[];
+    medium?: string | string[];
+    stateBoardName?: string;
+    schoolCategory?: string;
     page?: string;
   };
 }
+
+// Human-readable label for board values (for chips in header)
+const BOARD_CHIP_LABELS: Record<string, string> = {
+  CBSE:        "CBSE",
+  ICSE:        "ICSE",
+  IB:          "IB",
+  IGCSE:       "IGCSE",
+  NIOS:        "NIOS",
+  STATE_BOARD: "State Board",
+  OTHER:       "Other",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Always returns string[] regardless of whether Next gives string or string[] */
+function toArray(val: string | string[] | undefined): string[] {
+  if (!val) return [];
+  return Array.isArray(val) ? val : [val];
+}
+
+/** Build a URL preserving all current params, replacing `page` */
+function buildPageUrl(
+  searchParams: PageProps["searchParams"],
+  page: number,
+): string {
+  const p = new URLSearchParams();
+  if (searchParams.search) p.set("search", searchParams.search);
+  if (searchParams.city)   p.set("city",   searchParams.city);
+  toArray(searchParams.board).forEach((b)      => p.append("board",      b));
+  toArray(searchParams.schoolType).forEach((t) => p.append("schoolType", t));
+  toArray(searchParams.medium).forEach((m)     => p.append("medium",     m));
+  if (searchParams.stateBoardName) p.set("stateBoardName", searchParams.stateBoardName);
+  if (searchParams.schoolCategory) p.set("schoolCategory", searchParams.schoolCategory);
+  p.set("page", String(page));
+  return `/schools?${p.toString()}`;
+}
+
+/** Remove one param value from URL */
+function removeParam(
+  searchParams: PageProps["searchParams"],
+  key: string,
+  removeValue?: string,
+): string {
+  const p = new URLSearchParams();
+  if (searchParams.search && key !== "search") p.set("search", searchParams.search);
+  if (searchParams.city   && key !== "city")   p.set("city",   searchParams.city);
+  if (searchParams.stateBoardName && key !== "stateBoardName")
+    p.set("stateBoardName", searchParams.stateBoardName);
+  if (searchParams.schoolCategory && key !== "schoolCategory")
+    p.set("schoolCategory", searchParams.schoolCategory);
+
+  ["board", "schoolType", "medium"].forEach((param) => {
+    toArray(searchParams[param as keyof PageProps["searchParams"]] as string | string[])
+      .filter((v) => !(param === key && v === removeValue))
+      .forEach((v) => p.append(param, v));
+  });
+
+  p.delete("page");
+  return p.toString() ? `/schools?${p.toString()}` : "/schools";
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
 
 function Pagination({
   currentPage,
@@ -42,17 +108,6 @@ function Pagination({
   searchParams: PageProps["searchParams"];
 }) {
   if (totalPages <= 1) return null;
-
-  function buildUrl(page: number) {
-    const p = new URLSearchParams();
-    if (searchParams.search) p.set("search", searchParams.search);
-    if (searchParams.city) p.set("city", searchParams.city);
-    if (searchParams.board) p.set("board", searchParams.board);
-    if (searchParams.schoolType) p.set("schoolType", searchParams.schoolType);
-    if (searchParams.medium) p.set("medium", searchParams.medium);
-    p.set("page", String(page));
-    return `/schools?${p.toString()}`;
-  }
 
   const maxVisible = 7;
   let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
@@ -67,7 +122,7 @@ function Pagination({
     >
       {currentPage > 1 && (
         <a
-          href={buildUrl(currentPage - 1)}
+          href={buildPageUrl(searchParams, currentPage - 1)}
           className="px-4 py-2 rounded-xl border border-gray-100 bg-white font-heading text-btn text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all duration-200"
         >
           Previous
@@ -76,7 +131,7 @@ function Pagination({
       {pages.map((p) => (
         <a
           key={p}
-          href={buildUrl(p)}
+          href={buildPageUrl(searchParams, p)}
           aria-current={p === currentPage ? "page" : undefined}
           className={`w-10 h-10 flex items-center justify-center rounded-xl font-heading text-btn transition-all duration-200 ${
             p === currentPage
@@ -89,7 +144,7 @@ function Pagination({
       ))}
       {currentPage < totalPages && (
         <a
-          href={buildUrl(currentPage + 1)}
+          href={buildPageUrl(searchParams, currentPage + 1)}
           className="px-4 py-2 rounded-xl border border-gray-100 bg-white font-heading text-btn text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all duration-200"
         >
           Next
@@ -99,6 +154,8 @@ function Pagination({
   );
 }
 
+// ─── Empty / Error states ─────────────────────────────────────────────────────
+
 function EmptyState({ backendMissing }: { backendMissing: boolean }) {
   if (backendMissing) {
     return (
@@ -106,7 +163,9 @@ function EmptyState({ backendMissing }: { backendMissing: boolean }) {
         <div className="w-14 h-14 rounded-2xl bg-warning-bg flex items-center justify-center mb-4">
           <ServerOff className="w-7 h-7 text-warning-text" />
         </div>
-        <h3 className="font-heading text-h3 text-blue-800 mb-2">Backend not connected</h3>
+        <h3 className="font-heading text-h3 text-blue-800 mb-2">
+          Backend not connected
+        </h3>
         <p className="font-body text-body text-gray-400 max-w-sm">
           Set{" "}
           <code className="bg-gray-100 px-2 py-0.5 rounded text-meta text-blue-600">
@@ -123,7 +182,9 @@ function EmptyState({ backendMissing }: { backendMissing: boolean }) {
       <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
         <GraduationCap className="w-7 h-7 text-blue-400" />
       </div>
-      <h3 className="font-heading text-h3 text-blue-800 mb-2">No schools found</h3>
+      <h3 className="font-heading text-h3 text-blue-800 mb-2">
+        No schools found
+      </h3>
       <p className="font-body text-body text-gray-400 max-w-sm">
         Try changing your filters or clearing your search.
       </p>
@@ -137,17 +198,34 @@ function EmptyState({ backendMissing }: { backendMissing: boolean }) {
   );
 }
 
+// ─── School Grid (async) ──────────────────────────────────────────────────────
+
 async function SchoolGrid({ searchParams }: PageProps) {
-  const currentPage = Number(searchParams.page ?? "1");
-  const { schools, pagination } = await fetchSchoolList(searchParams);
+  const currentPage    = Number(searchParams.page ?? "1");
   const backendMissing = !process.env.NEXT_PUBLIC_API_URL;
+
+  // Normalize params for fetchSchoolList — board/schoolType/medium as arrays
+  const fetchParams: Record<string, string | string[] | undefined> = {
+    search:         searchParams.search,
+    city:           searchParams.city,
+    board:          toArray(searchParams.board),
+    schoolType:     toArray(searchParams.schoolType),
+    medium:         toArray(searchParams.medium),
+    stateBoardName: searchParams.stateBoardName,
+    schoolCategory: searchParams.schoolCategory,
+    page:           String(currentPage),
+  };
+
+  const { schools, pagination } = await fetchSchoolList(fetchParams);
 
   const hasFilters =
     searchParams.search ||
     searchParams.city ||
-    searchParams.board ||
-    searchParams.schoolType ||
-    searchParams.medium;
+    toArray(searchParams.board).length > 0 ||
+    toArray(searchParams.schoolType).length > 0 ||
+    toArray(searchParams.medium).length > 0 ||
+    searchParams.stateBoardName ||
+    searchParams.schoolCategory;
 
   return (
     <>
@@ -161,11 +239,13 @@ async function SchoolGrid({ searchParams }: PageProps) {
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 items-stretch">
         {schools.length === 0 ? (
           <EmptyState backendMissing={backendMissing} />
         ) : (
-          schools.map((school) => <SchoolCard key={school.id} {...school} />)
+          schools.map((school) => (
+            <SchoolCard key={school.id} {...school} />
+          ))
         )}
       </div>
 
@@ -178,17 +258,71 @@ async function SchoolGrid({ searchParams }: PageProps) {
   );
 }
 
+// ─── Active filter chips (in header area) ────────────────────────────────────
+
+function HeaderChips({ searchParams }: { searchParams: PageProps["searchParams"] }) {
+  const chips: { key: string; val: string; label: string }[] = [];
+
+  if (searchParams.search)
+    chips.push({ key: "search", val: searchParams.search, label: `"${searchParams.search}"` });
+
+  if (searchParams.city)
+    chips.push({ key: "city", val: searchParams.city, label: searchParams.city });
+
+  toArray(searchParams.board).forEach((b) =>
+    chips.push({ key: "board", val: b, label: BOARD_CHIP_LABELS[b] ?? b }),
+  );
+
+  toArray(searchParams.schoolType).forEach((t) =>
+    chips.push({ key: "schoolType", val: t, label: t === "CO_ED" ? "Co-Ed" : t === "BOYS" ? "Boys" : "Girls" }),
+  );
+
+  toArray(searchParams.medium).forEach((m) =>
+    chips.push({
+      key: "medium",
+      val: m,
+      label: m === "HINDI" ? "Hindi" : m === "ENGLISH" ? "English" : m === "BOTH" ? "Hindi+English" : "Other",
+    }),
+  );
+
+  if (searchParams.stateBoardName)
+    chips.push({ key: "stateBoardName", val: searchParams.stateBoardName, label: searchParams.stateBoardName });
+
+  if (searchParams.schoolCategory)
+    chips.push({ key: "schoolCategory", val: searchParams.schoolCategory, label: searchParams.schoolCategory });
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-5">
+      {chips.map(({ key, val, label }) => (
+        <a
+          key={`${key}-${val}`}
+          href={removeParam(searchParams, key, val)}
+          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 font-body text-label text-blue-700 hover:bg-blue-100 transition-colors"
+        >
+          {label}
+          <span aria-hidden className="ml-0.5 text-blue-400">✕</span>
+        </a>
+      ))}
+      <a
+        href="/schools"
+        className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 border border-gray-200 font-body text-label text-gray-500 hover:bg-gray-200 transition-colors"
+      >
+        Clear all
+      </a>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default async function SchoolsPage({ searchParams }: PageProps) {
   const cities = await fetchCities();
-  const hasFilters =
-    searchParams.search ||
-    searchParams.city ||
-    searchParams.board ||
-    searchParams.schoolType ||
-    searchParams.medium;
 
   return (
     <main className="min-h-screen bg-gray-50">
+      {/* Header */}
       <section className="bg-blue-800 py-10 px-4">
         <div className="max-w-7xl mx-auto">
           <h1 className="font-heading text-h1 text-white mb-2">Find schools</h1>
@@ -214,8 +348,10 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
         </div>
       </section>
 
+      {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-6">
+          {/* Filters sidebar */}
           <aside className="w-full lg:w-64 flex-shrink-0">
             <Suspense
               fallback={
@@ -229,47 +365,9 @@ export default async function SchoolsPage({ searchParams }: PageProps) {
             </Suspense>
           </aside>
 
+          {/* Grid */}
           <section className="flex-1 min-w-0">
-            {hasFilters && (
-              <div className="flex flex-wrap gap-2 mb-5">
-                {searchParams.search && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 font-body text-label text-blue-600">
-                    &ldquo;{searchParams.search}&rdquo;
-                    <a
-                      href={`/schools?${new URLSearchParams({ ...searchParams, search: "" }).toString()}`}
-                      className="ml-1 hover:text-blue-800"
-                      aria-label="Remove search filter"
-                    >
-                      ✕
-                    </a>
-                  </span>
-                )}
-                {searchParams.city && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 font-body text-label text-blue-600">
-                    {searchParams.city}
-                    <a
-                      href={`/schools?${new URLSearchParams({ ...searchParams, city: "" }).toString()}`}
-                      className="ml-1 hover:text-blue-800"
-                      aria-label="Remove city filter"
-                    >
-                      ✕
-                    </a>
-                  </span>
-                )}
-                {searchParams.board && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-info-bg border border-blue-200 font-body text-label text-info-text">
-                    {searchParams.board}
-                    <a
-                      href={`/schools?${new URLSearchParams({ ...searchParams, board: "" }).toString()}`}
-                      className="ml-1 hover:text-blue-800"
-                      aria-label="Remove board filter"
-                    >
-                      ✕
-                    </a>
-                  </span>
-                )}
-              </div>
-            )}
+            <HeaderChips searchParams={searchParams} />
 
             <Suspense fallback={<SchoolGridSkeleton count={12} />}>
               <SchoolGrid searchParams={searchParams} />

@@ -606,18 +606,8 @@ function extractScalarFields(data: UpdateSchoolInput) {
 
 export const getSchools = async (req: Request, res: Response) => {
   const {
-    search,
-    city,
-    state,
-    board,
-    schoolType,
-    medium,
-    page: pageQuery,
-    limit: limitQuery,
-    status,
-    cursor,
-    pagination,
-    featured,
+    search, city, state, board, schoolType, medium, schoolCategory,
+    page: pageQuery, limit: limitQuery, status, cursor, pagination, featured,
   } = req.query;
 
   const limit = parseLimit(limitQuery, DEFAULT_SCHOOL_PAGE_LIMIT);
@@ -632,6 +622,7 @@ export const getSchools = async (req: Request, res: Response) => {
     schoolType: schoolType as string | undefined,
     medium: medium as string | undefined,
     featured: featured as string | undefined,
+    schoolCategory: schoolCategory as string | undefined,
   });
 
   if (useCursorPagination) {
