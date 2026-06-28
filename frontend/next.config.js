@@ -36,6 +36,7 @@ const CONTENT_SECURITY_POLICY = [
   `img-src 'self' data: blob: https://res.cloudinary.com https://lh3.googleusercontent.com`,
   "font-src 'self' data:",
   `connect-src ${connectSrc.join(" ")}`,
+   "frame-src https://maps.google.com https://www.google.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

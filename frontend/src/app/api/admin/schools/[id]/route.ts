@@ -2,6 +2,19 @@ import { NextRequest } from "next/server";
 import { proxyToBackend } from "@/lib/api/proxy";
 import { revalidateSchoolsCache } from "@/lib/seo/revalidate-schools";
 
+export async function GET(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+
+  return proxyToBackend(
+    `/api/schools/${id}`,
+    { method: "GET" },
+    { useAdminCookie: true },
+  );
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },

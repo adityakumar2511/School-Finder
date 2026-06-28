@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -160,6 +161,7 @@ model School {
   startTime                String?
   streamsOffered           String[]
   studentTeacherRatio      String?
+  academicCalendar         String? 
   tagline                  String?
   totalBuses               Int?
   totalClassrooms          Int?

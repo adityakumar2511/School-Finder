@@ -27,11 +27,13 @@ import { requireRole, requireAdminLevel, blockIfSuperAdminTarget  } from "../mid
 import { validate } from "../middleware/validate";
 import { asyncHandler } from "../utils/asyncHandler";
 import { addParentSchema, addAdminSchema } from "../validators/auth.validator";
+import { authenticatedRateLimiter } from "../middleware/security";
 
 const router = Router();
 
 // All admin routes require authentication + ADMIN role
 router.use(auth, requireRole("ADMIN"));
+router.use(authenticatedRateLimiter);
 
 // ── READ_ONLY and above ────────────────────────────────────────────────────────
 // These are safe read operations — all three tiers can access them.

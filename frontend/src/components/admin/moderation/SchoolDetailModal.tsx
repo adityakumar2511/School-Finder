@@ -22,6 +22,12 @@ import {
   GraduationCap,
   Users,
   Calendar,
+  Building2,
+  BookOpen,
+  Shield,
+  Bus,
+  Home,
+  Star,
 } from "lucide-react";
 import type { SchoolStatus } from "@/lib/types/database";
 
@@ -32,37 +38,129 @@ type SchoolDetail = {
   city: string;
   state: string;
   address: string;
+  pincode?: string | null;
   board: string;
+  stateBoardName?: string | null;
   schoolType: string;
   medium: string;
+  mediumOther?: string | null;
   classesFrom: number;
   classesTo: number;
   phone: string;
   email: string | null;
   website: string | null;
   description: string | null;
+  tagline?: string | null;
   status: SchoolStatus;
+  isVisible?: boolean;
+  isFeatured?: boolean;
   rejectionReason: string | null;
   totalStudents: number | null;
   establishedYear: number | null;
+  managementType?: string | null;
+  schoolCategory?: string | null;
+  schoolFormat?: string | null;
+  affiliationNumber?: string | null;
+  recognitionNumber?: string | null;
+  affiliatedSince?: string | null;
+  languagesOffered?: string[];
+  classesOffered?: string[];
+  streamsOffered?: string[];
+  uniformPolicy?: string | null;
+  canteenAvailable?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  workingDays?: string | null;
+  studentTeacherRatio?: string | null;
+  totalTeachers?: number | null;
+  qualifiedTeachers?: number | null;
   admissionFee: number | null;
   tuitionFeeMonthly: number | null;
   totalAnnualFee: number | null;
   transportFee: number | null;
   hostelFee: number | null;
+  averageAnnualFee?: number | null;
+  earlyChildhoodFee?: number | null;
+  prePrimaryFee?: number | null;
+  class1to5Fee?: number | null;
+  class6to8Fee?: number | null;
+  class9to10Fee?: number | null;
+  class11to12Fee?: number | null;
+  facilitiesList?: string[];
+  sportsList?: string[];
+  programsList?: string[];
+  campusArea?: string | null;
+  totalClassrooms?: number | null;
+  totalLabs?: number | null;
+  libraryBooks?: number | null;
+  hostelAvailable?: boolean;
+  hostelBoys?: boolean;
+  hostelGirls?: boolean;
+  transportAvailable?: boolean;
+  transportAreas?: string | null;
+  gpsTracking?: boolean;
+  hasCCTV?: boolean;
+  hasGuards?: boolean;
+  hasMedicalRoom?: boolean;
+  hasFireSafety?: boolean;
+  vision?: string | null;
+  mission?: string | null;
+  admissionOpen?: boolean;
+  admissionStartDate?: string | null;
+  admissionEndDate?: string | null;
   logoUrl: string | null;
+  coverImageUrl?: string | null;
   owner: { name: string | null; email: string };
   createdAt: string;
 };
 
-// Props type — line ~49
 type Props = {
   school: SchoolDetail;
   open: boolean;
   onClose: () => void;
-  onApprove?: (id: string) => Promise<void>; // ? added
-  onReject?: (id: string, reason: string) => Promise<void>; // ? added
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string, reason: string) => Promise<void>;
 };
+
+type Tab = "overview" | "academics" | "fees" | "facilities" | "infrastructure";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "academics", label: "Academics" },
+  { key: "fees", label: "Fees" },
+  { key: "facilities", label: "Facilities" },
+  { key: "infrastructure", label: "Infrastructure" },
+];
+
+function InfoRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex justify-between py-1.5 border-b border-gray-50 last:border-0">
+      <span className="font-body text-xs text-gray-500">{label}</span>
+      <span className="font-body text-xs text-gray-800 font-medium text-right max-w-[60%]">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ChipList({ items, color = "blue" }: { items: string[]; color?: "blue" | "green" | "purple" }) {
+  if (!items?.length) return null;
+  const cls =
+    color === "green"
+      ? "bg-green-50 border-green-200 text-green-700"
+      : color === "purple"
+        ? "bg-purple-50 border-purple-200 text-purple-700"
+        : "bg-blue-50 border-blue-200 text-blue-700";
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <span key={item} className={`px-2 py-0.5 rounded-full border text-xs ${cls}`}>
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function SchoolDetailModal({
   school,
@@ -71,6 +169,7 @@ export default function SchoolDetailModal({
   onApprove,
   onReject,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [rejectMode, setRejectMode] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
@@ -80,12 +179,12 @@ export default function SchoolDetailModal({
     setRejectMode(false);
     setReason("");
     setReasonError("");
+    setActiveTab("overview");
     onClose();
   }
 
-  // handleApprove function
   async function handleApprove() {
-    if (!onApprove) return; // null guard
+    if (!onApprove) return;
     setLoading("approve");
     try {
       await onApprove(school.id);
@@ -95,9 +194,8 @@ export default function SchoolDetailModal({
     }
   }
 
-  // handleReject function
   async function handleReject() {
-    if (!onReject) return; // null guard
+    if (!onReject) return;
     if (!reason.trim()) {
       setReasonError("Rejection reason is required");
       return;
@@ -113,6 +211,18 @@ export default function SchoolDetailModal({
 
   const isPending = school.status === "PENDING";
 
+  function getBoardLabel() {
+    if (school.board === "STATE_BOARD") {
+      return school.stateBoardName ? `${school.stateBoardName} Board` : "State Board";
+    }
+    return school.board.replace(/_/g, " ");
+  }
+
+  function getMediumLabel() {
+    if (school.medium === "OTHER") return school.mediumOther || "Other";
+    return school.medium.replace(/_/g, " ");
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -122,30 +232,30 @@ export default function SchoolDetailModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 mt-2">
-          {/* Logo + basic */}
+        <div className="space-y-4 mt-1">
+          {/* Header — logo + owner */}
           <div className="flex items-center gap-4">
             {school.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={school.logoUrl}
                 alt={school.name}
-                className="h-14 w-14 rounded-xl object-cover border border-gray-100"
+                className="h-14 w-14 rounded-xl object-cover border border-gray-100 shrink-0"
               />
             ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 font-heading font-bold text-xl text-blue-700">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-100 font-heading font-bold text-xl text-blue-700">
                 {school.name.slice(0, 2).toUpperCase()}
               </div>
             )}
-            <div>
+            <div className="min-w-0">
+              {school.tagline && (
+                <p className="font-body text-xs text-gray-400 italic mb-0.5">{school.tagline}</p>
+              )}
               <p className="font-body text-sm text-gray-500">
-                Owner:{" "}
-                <span className="text-gray-800">
-                  {school.owner.name ?? "—"}
-                </span>{" "}
+                Owner: <span className="text-gray-800 font-medium">{school.owner.name ?? "—"}</span>{" "}
                 · {school.owner.email}
               </p>
-              <p className="font-body text-sm text-gray-400">
+              <p className="font-body text-xs text-gray-400">
                 Registered:{" "}
                 {new Date(school.createdAt).toLocaleDateString("en-IN", {
                   day: "numeric",
@@ -153,123 +263,333 @@ export default function SchoolDetailModal({
                   year: "numeric",
                 })}
               </p>
+              <div className="flex gap-2 mt-1.5">
+                {school.isVisible !== undefined && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${school.isVisible ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+                    {school.isVisible ? "Listed" : "Unlisted"}
+                  </span>
+                )}
+                {school.isFeatured && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border bg-amber-50 border-amber-200 text-amber-700 flex items-center gap-1">
+                    <Star className="w-3 h-3" /> Featured
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
           {/* Academic badges */}
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{school.board.replace("_", " ")}</Badge>
-            <Badge variant="secondary">
-              {school.schoolType.replace("_", " ")}
-            </Badge>
-            <Badge variant="secondary">{school.medium}</Badge>
-            <Badge variant="secondary">
-              Class {school.classesFrom}–{school.classesTo}
-            </Badge>
-          </div>
-          {/* Location + contact */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <p className="font-body text-sm text-gray-700">
-                {school.address}, {school.city}, {school.state}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              <p className="font-body text-sm text-gray-700">{school.phone}</p>
-            </div>
-            {school.email && (
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <p className="font-body text-sm text-gray-700">
-                  {school.email}
-                </p>
-              </div>
-            )}
-            {school.website && (
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <a
-                  href={school.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-body text-sm text-blue-600 hover:underline truncate"
-                >
-                  {school.website}
-                </a>
-              </div>
+            <Badge variant="secondary">{getBoardLabel()}</Badge>
+            <Badge variant="secondary">{school.schoolType.replace(/_/g, " ")}</Badge>
+            <Badge variant="secondary">{getMediumLabel()}</Badge>
+            <Badge variant="secondary">Class {school.classesFrom}–{school.classesTo}</Badge>
+            {school.admissionOpen && (
+              <Badge className="bg-green-100 text-green-700 border-green-200">Admissions Open</Badge>
             )}
           </div>
-          {/* Stats row */}
-          {(school.totalStudents || school.establishedYear) && (
-            <div className="flex gap-4">
-              {school.establishedYear && (
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4 text-gray-400" />
+
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-gray-100 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-3 py-2 text-xs font-heading font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? "border-blue-600 text-blue-700"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab: Overview */}
+          {activeTab === "overview" && (
+            <div className="space-y-4">
+              {/* Location + contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
                   <p className="font-body text-sm text-gray-700">
-                    Est. {school.establishedYear}
+                    {school.address}, {school.city}, {school.state}
+                    {school.pincode ? ` — ${school.pincode}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-400 shrink-0" />
+                  <p className="font-body text-sm text-gray-700">{school.phone}</p>
+                </div>
+                {school.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                    <p className="font-body text-sm text-gray-700">{school.email}</p>
+                  </div>
+                )}
+                {school.website && (
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-gray-400 shrink-0" />
+                    <a
+                      href={school.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-body text-sm text-blue-600 hover:underline truncate"
+                    >
+                      {school.website}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick stats */}
+              <div className="flex flex-wrap gap-4">
+                {school.establishedYear && (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <p className="font-body text-sm text-gray-700">Est. {school.establishedYear}</p>
+                  </div>
+                )}
+                {school.totalStudents && (
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-gray-400" />
+                    <p className="font-body text-sm text-gray-700">{school.totalStudents} students</p>
+                  </div>
+                )}
+                {school.totalTeachers && (
+                  <div className="flex items-center gap-1.5">
+                    <GraduationCap className="h-4 w-4 text-gray-400" />
+                    <p className="font-body text-sm text-gray-700">{school.totalTeachers} teachers</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              {school.description && (
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <p className="font-body text-sm text-gray-700 leading-relaxed">{school.description}</p>
+                </div>
+              )}
+
+              {school.vision && (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">Vision</p>
+                  <p className="font-body text-sm text-gray-700">{school.vision}</p>
+                </div>
+              )}
+              {school.mission && (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">Mission</p>
+                  <p className="font-body text-sm text-gray-700">{school.mission}</p>
+                </div>
+              )}
+
+              {/* Rejection reason */}
+              {school.rejectionReason && school.status === "REJECTED" && (
+                <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                  <p className="font-heading font-semibold text-xs text-red-700 mb-1">Previous rejection reason</p>
+                  <p className="font-body text-sm text-red-700">{school.rejectionReason}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab: Academics */}
+          {activeTab === "academics" && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 rounded-xl p-3 space-y-0">
+                {school.schoolCategory && <InfoRow label="Category" value={school.schoolCategory} />}
+                {school.schoolFormat && <InfoRow label="Format" value={school.schoolFormat} />}
+                {school.managementType && <InfoRow label="Management" value={school.managementType} />}
+                {school.affiliationNumber && <InfoRow label="Affiliation No." value={school.affiliationNumber} />}
+                {school.recognitionNumber && <InfoRow label="Recognition No." value={school.recognitionNumber} />}
+                {school.affiliatedSince && <InfoRow label="Affiliated Since" value={school.affiliatedSince} />}
+                {school.studentTeacherRatio && <InfoRow label="Student:Teacher Ratio" value={school.studentTeacherRatio} />}
+                {school.uniformPolicy && <InfoRow label="Uniform Policy" value={school.uniformPolicy} />}
+                {school.canteenAvailable && <InfoRow label="Canteen / Tiffin" value={school.canteenAvailable} />}
+                {school.workingDays && <InfoRow label="Working Days" value={school.workingDays} />}
+                {(school.startTime || school.endTime) && (
+                  <InfoRow
+                    label="Timings"
+                    value={[school.startTime, school.endTime].filter(Boolean).join(" – ")}
+                  />
+                )}
+                {school.qualifiedTeachers && school.totalTeachers && (
+                  <InfoRow
+                    label="Qualified Teachers"
+                    value={`${school.qualifiedTeachers} / ${school.totalTeachers} (${((school.qualifiedTeachers / school.totalTeachers) * 100).toFixed(1)}%)`}
+                  />
+                )}
+              </div>
+
+              {school.classesOffered?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Classes Offered</p>
+                  <ChipList items={school.classesOffered} color="blue" />
+                </div>
+              ) : null}
+
+              {school.streamsOffered?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Streams</p>
+                  <ChipList items={school.streamsOffered} color="green" />
+                </div>
+              ) : null}
+
+              {school.languagesOffered?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Languages</p>
+                  <ChipList items={school.languagesOffered} color="purple" />
+                </div>
+              ) : null}
+
+              {school.admissionStartDate && (
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="font-heading font-semibold text-xs text-blue-700 mb-1">Admission Window</p>
+                  <p className="font-body text-sm text-blue-800">
+                    {new Date(school.admissionStartDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    {school.admissionEndDate && (
+                      <> → {new Date(school.admissionEndDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</>
+                    )}
                   </p>
                 </div>
               )}
-              {school.totalStudents && (
-                <div className="flex items-center gap-1.5">
-                  <Users className="h-4 w-4 text-gray-400" />
-                  <p className="font-body text-sm text-gray-700">
-                    {school.totalStudents} students
-                  </p>
-                </div>
+            </div>
+          )}
+
+          {/* Tab: Fees */}
+          {activeTab === "fees" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <GraduationCap className="h-4 w-4 text-blue-500" />
+                <p className="font-heading font-semibold text-sm text-gray-700">Fee Structure</p>
+              </div>
+              {[
+                { label: "Average Annual Fee", value: school.averageAnnualFee },
+                { label: "Early Childhood / Play School", value: school.earlyChildhoodFee },
+                { label: "Pre-Primary", value: school.prePrimaryFee },
+                { label: "Class 1–5", value: school.class1to5Fee },
+                { label: "Class 6–8", value: school.class6to8Fee },
+                { label: "Class 9–10", value: school.class9to10Fee },
+                { label: "Class 11–12", value: school.class11to12Fee },
+                { label: "Admission Fee (One-time)", value: school.admissionFee },
+                { label: "Monthly Tuition", value: school.tuitionFeeMonthly },
+                { label: "Total Annual Fee", value: school.totalAnnualFee },
+                { label: "Transport Fee (Monthly)", value: school.transportFee },
+                { label: "Hostel Fee (Monthly)", value: school.hostelFee },
+              ]
+                .filter((f) => f.value)
+                .map((f) => (
+                  <div key={f.label} className="flex justify-between items-center px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
+                    <span className="font-body text-xs text-gray-600">{f.label}</span>
+                    <span className="font-heading font-bold text-sm text-blue-800">
+                      ₹{f.value?.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                ))}
+              {![
+                school.averageAnnualFee, school.earlyChildhoodFee, school.prePrimaryFee,
+                school.class1to5Fee, school.class6to8Fee, school.class9to10Fee,
+                school.class11to12Fee, school.admissionFee, school.tuitionFeeMonthly,
+                school.totalAnnualFee, school.transportFee, school.hostelFee,
+              ].some(Boolean) && (
+                <p className="font-body text-sm text-gray-400 text-center py-4">No fee details added yet.</p>
               )}
             </div>
           )}
-          {/* Description */}
-          {school.description && (
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-              <p className="font-body text-sm text-gray-700">
-                {school.description}
-              </p>
+
+          {/* Tab: Facilities */}
+          {activeTab === "facilities" && (
+            <div className="space-y-4">
+              {school.facilitiesList?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" /> Facilities
+                  </p>
+                  <ChipList items={school.facilitiesList} color="blue" />
+                </div>
+              ) : null}
+
+              {school.sportsList?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5" /> Sports
+                  </p>
+                  <ChipList items={school.sportsList} color="green" />
+                </div>
+              ) : null}
+
+              {school.programsList?.length ? (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" /> Programs
+                  </p>
+                  <ChipList items={school.programsList} color="purple" />
+                </div>
+              ) : null}
+
+              {/* Safety */}
+              {(school.hasCCTV || school.hasGuards || school.hasMedicalRoom || school.hasFireSafety) && (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" /> Safety
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {school.hasCCTV && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">CCTV</span>}
+                    {school.hasGuards && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Security Guards</span>}
+                    {school.hasMedicalRoom && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Medical Room</span>}
+                    {school.hasFireSafety && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Fire Safety</span>}
+                  </div>
+                </div>
+              )}
+
+              {!school.facilitiesList?.length && !school.sportsList?.length && !school.programsList?.length && (
+                <p className="font-body text-sm text-gray-400 text-center py-4">No facility details added yet.</p>
+              )}
             </div>
           )}
-          {/* Fees */}
-          {(school.admissionFee ||
-            school.tuitionFeeMonthly ||
-            school.totalAnnualFee) && (
-            <div>
-              <p className="font-heading font-semibold text-sm text-gray-800 mb-2 flex items-center gap-1.5">
-                <GraduationCap className="h-4 w-4" /> Fee structure
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { label: "Admission", value: school.admissionFee },
-                  { label: "Monthly tuition", value: school.tuitionFeeMonthly },
-                  { label: "Annual", value: school.totalAnnualFee },
-                  { label: "Transport", value: school.transportFee },
-                  { label: "Hostel", value: school.hostelFee },
-                ]
-                  .filter((f) => f.value)
-                  .map((f) => (
-                    <div key={f.label} className="p-2 bg-blue-50 rounded-lg">
-                      <p className="font-body text-xs text-gray-500">
-                        {f.label}
-                      </p>
-                      <p className="font-heading font-semibold text-sm text-blue-800">
-                        ₹{f.value?.toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                  ))}
+
+          {/* Tab: Infrastructure */}
+          {activeTab === "infrastructure" && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 rounded-xl p-3 space-y-0">
+                {school.campusArea && <InfoRow label="Campus Area" value={school.campusArea} />}
+                {school.totalClassrooms && <InfoRow label="Classrooms" value={school.totalClassrooms} />}
+                {school.totalLabs && <InfoRow label="Labs" value={school.totalLabs} />}
+                {school.libraryBooks && <InfoRow label="Library Books" value={school.libraryBooks.toLocaleString("en-IN")} />}
               </div>
+
+              {school.hostelAvailable && (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Home className="w-3.5 h-3.5" /> Hostel
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {school.hostelBoys && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">Boys Hostel</span>}
+                    {school.hostelGirls && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">Girls Hostel</span>}
+                  </div>
+                </div>
+              )}
+
+              {school.transportAvailable && (
+                <div>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+                    <Bus className="w-3.5 h-3.5" /> Transport
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {school.gpsTracking && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">GPS Tracking</span>}
+                    {school.transportAreas && <p className="font-body text-sm text-gray-700 w-full mt-1">{school.transportAreas}</p>}
+                  </div>
+                </div>
+              )}
+
+              {!school.campusArea && !school.totalClassrooms && !school.totalLabs && !school.libraryBooks && !school.hostelAvailable && !school.transportAvailable && (
+                <p className="font-body text-sm text-gray-400 text-center py-4">No infrastructure details added yet.</p>
+              )}
             </div>
           )}
-          {/* Existing rejection reason if any */}
-          {school.rejectionReason && school.status === "REJECTED" && (
-            <div className="p-3 bg-red-50 rounded-xl border border-red-200">
-              <p className="font-heading font-semibold text-sm text-red-700 mb-1">
-                Previous rejection reason
-              </p>
-              <p className="font-body text-sm text-red-700">
-                {school.rejectionReason}
-              </p>
-            </div>
-          )}
+
           {/* Reject reason input */}
           {rejectMode && (
             <div className="space-y-1.5">
@@ -291,8 +611,8 @@ export default function SchoolDetailModal({
               )}
             </div>
           )}
+
           {/* Action buttons — only for PENDING */}
-          // Action buttons section —
           {isPending && (onApprove || onReject) && (
             <div className="flex gap-3 pt-2 border-t border-gray-100">
               {!rejectMode ? (

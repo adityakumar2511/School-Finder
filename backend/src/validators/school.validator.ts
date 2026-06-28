@@ -205,6 +205,7 @@ const schoolBodyFields = {
   classesOffered: stringArray,
   streamsOffered: stringArray,
   studentTeacherRatio: optionalStr,
+  academicCalendar: optionalTextStr,
 
   // ── Section 4: Admissions ───────────────────────────────────────────────
   admissionOpen: optionalBool,

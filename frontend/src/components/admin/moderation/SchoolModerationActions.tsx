@@ -73,17 +73,35 @@ export default function SchoolModerationActions({
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  type LoadingAction =
-  | "approve"
-  | "reject"
-  | "delete"
-  | "visibility"
-  | "featured"
-  | null;
+  const [fullSchool, setFullSchool] = useState<Record<string, unknown> | null>(null);
 
-const [loading, setLoading] = useState<LoadingAction>(null);
-const [isVisible, setIsVisible] = useState<boolean>(school.isVisible);
-const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
+  type LoadingAction =
+    | "approve"
+    | "reject"
+    | "delete"
+    | "visibility"
+    | "featured"
+    | "view"
+    | null;
+
+  const [loading, setLoading] = useState<LoadingAction>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(school.isVisible);
+  const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
+
+  async function handleViewOpen() {
+    setLoading("view");
+    try {
+      const res = await fetch(`/api/admin/schools/${school.id}`);
+      const data = await res.json();
+      const detail = data?.school ?? data?.data ?? null;
+      setFullSchool(detail ?? school);
+    } catch {
+      setFullSchool(school);
+    } finally {
+      setLoading(null);
+      setModalOpen(true);
+    }
+  }
 
   const canWrite =
     viewerAccessLevel === "READ_WRITE" || viewerAccessLevel === "FULL_ACCESS";
@@ -175,11 +193,18 @@ const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
         <Button
           size="sm"
           variant="outline"
-          onClick={() => setModalOpen(true)}
+          onClick={handleViewOpen}
+          disabled={loading === "view"}
           className="h-8 px-3 font-heading text-xs rounded-lg border-gray-200"
         >
-          <Eye className="h-3.5 w-3.5 mr-1" />
-          View
+          {loading === "view" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Eye className="h-3.5 w-3.5 mr-1" />
+              View
+            </>
+          )}
         </Button>
 
         {/* Edit school — READ_WRITE+ */}
@@ -327,14 +352,17 @@ const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
       </div>
 
       {/* School detail + reject modal */}
-      <SchoolDetailModal
-        school={school}
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onApprove={canWrite ? handleApprove : undefined}
-        onReject={canWrite ? handleReject : undefined}
-      />
-
+      {/* School detail + reject modal */}
+      {modalOpen && fullSchool && (
+        <SchoolDetailModal
+          school={fullSchool as Parameters<typeof SchoolDetailModal>[0]["school"]}
+          open={modalOpen}
+          onClose={() => { setModalOpen(false); setFullSchool(null); }}
+          onApprove={canWrite ? handleApprove : undefined}
+          onReject={canWrite ? handleReject : undefined}
+        />
+      )}
+      
       {/* Delete confirm dialog — only reachable when canDelete is true */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

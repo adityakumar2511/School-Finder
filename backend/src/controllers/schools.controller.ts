@@ -44,6 +44,13 @@ import {
 } from "../lib/queries/schools";
 import { sanitizeSchoolData } from "../lib/sanitize";
 
+// ── Transaction config (production-safe for Neon + pgbouncer) ─────────────────
+
+const TX_OPTIONS: Parameters<typeof prisma.$transaction>[1] = {
+  maxWait: 15000,   // 15s max wait for a connection from pool
+  timeout: 60000,   // 60s total transaction time
+};
+
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 
 const slugify = (name: string): string =>
@@ -101,10 +108,12 @@ function calculateDistanceKm(
   return earthRadiusKm * c;
 }
 
-// ── Related-model sync helpers ────────────────────────────────────────────────
+// ── Related-model sync helpers (batch-optimized) ──────────────────────────────
+
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 async function syncBoardResults(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: BoardResultInput[],
 ) {
@@ -114,33 +123,44 @@ async function syncBoardResults(
     where: { schoolId, id: { notIn: incomingIds } },
   });
 
-  for (const item of items) {
-    const data = {
-      year: item.year,
-      classLevel: item.classLevel,
-      passPercent: item.passPercent ?? null,
-      topperName: item.topperName ?? null,
-      topperScore: item.topperScore ?? null,
-    };
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
 
-    if (item.id) {
-      await tx.boardResult.update({
-        where: { id: item.id },
-        data,
-      });
-    } else {
-      await tx.boardResult.create({
-        data: {
-          schoolId,
-          ...data,
-        },
-      });
-    }
+  // Parallel updates
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.boardResult.update({
+          where: { id: item.id! },
+          data: {
+            year: item.year,
+            classLevel: item.classLevel,
+            passPercent: item.passPercent ?? null,
+            topperName: item.topperName ?? null,
+            topperScore: item.topperScore ?? null,
+          },
+        })
+      )
+    );
+  }
+
+  // Batch insert
+  if (toCreate.length > 0) {
+    await tx.boardResult.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        year: item.year,
+        classLevel: item.classLevel,
+        passPercent: item.passPercent ?? null,
+        topperName: item.topperName ?? null,
+        topperScore: item.topperScore ?? null,
+      })),
+    });
   }
 }
 
 async function syncScholarships(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: ScholarshipInput[],
 ) {
@@ -150,31 +170,38 @@ async function syncScholarships(
     where: { schoolId, id: { notIn: incomingIds } },
   });
 
-  for (const item of items) {
-    if (item.id) {
-      await tx.scholarship.update({
-        where: { id: item.id },
-        data: {
-          name: item.name,
-          eligibility: item.eligibility ?? null,
-          benefits: item.benefits ?? null,
-        },
-      });
-    } else {
-      await tx.scholarship.create({
-        data: {
-          schoolId,
-          name: item.name,
-          eligibility: item.eligibility ?? null,
-          benefits: item.benefits ?? null,
-        },
-      });
-    }
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.scholarship.update({
+          where: { id: item.id! },
+          data: {
+            name: item.name,
+            eligibility: item.eligibility ?? null,
+            benefits: item.benefits ?? null,
+          },
+        })
+      )
+    );
+  }
+
+  if (toCreate.length > 0) {
+    await tx.scholarship.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        name: item.name,
+        eligibility: item.eligibility ?? null,
+        benefits: item.benefits ?? null,
+      })),
+    });
   }
 }
 
 async function syncFAQs(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: FAQInput[],
 ) {
@@ -184,22 +211,33 @@ async function syncFAQs(
     where: { schoolId, id: { notIn: incomingIds } },
   });
 
-  for (const item of items) {
-    if (item.id) {
-      await tx.schoolFAQ.update({
-        where: { id: item.id },
-        data: { question: item.question, answer: item.answer },
-      });
-    } else {
-      await tx.schoolFAQ.create({
-        data: { schoolId, question: item.question, answer: item.answer },
-      });
-    }
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.schoolFAQ.update({
+          where: { id: item.id! },
+          data: { question: item.question, answer: item.answer },
+        })
+      )
+    );
+  }
+
+  if (toCreate.length > 0) {
+    await tx.schoolFAQ.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        question: item.question,
+        answer: item.answer,
+      })),
+    });
   }
 }
 
 async function syncDownloads(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: DownloadInput[],
 ) {
@@ -209,22 +247,33 @@ async function syncDownloads(
     where: { schoolId, id: { notIn: incomingIds } },
   });
 
-  for (const item of items) {
-    if (item.id) {
-      await tx.schoolDownload.update({
-        where: { id: item.id },
-        data: { label: item.label, url: item.url },
-      });
-    } else {
-      await tx.schoolDownload.create({
-        data: { schoolId, label: item.label, url: item.url },
-      });
-    }
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.schoolDownload.update({
+          where: { id: item.id! },
+          data: { label: item.label, url: item.url },
+        })
+      )
+    );
+  }
+
+  if (toCreate.length > 0) {
+    await tx.schoolDownload.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        label: item.label,
+        url: item.url,
+      })),
+    });
   }
 }
 
 async function syncGalleryImages(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: GalleryImageInput[],
 ) {
@@ -234,31 +283,38 @@ async function syncGalleryImages(
     where: { schoolId, id: { notIn: incomingIds } },
   });
 
-  for (const item of items) {
-    if (item.id) {
-      await tx.schoolImage.update({
-        where: { id: item.id },
-        data: {
-          url: item.url,
-          caption: item.caption ?? null,
-          category: item.category ?? null,
-        },
-      });
-    } else {
-      await tx.schoolImage.create({
-        data: {
-          schoolId,
-          url: item.url,
-          caption: item.caption ?? null,
-          category: item.category ?? null,
-        },
-      });
-    }
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.schoolImage.update({
+          where: { id: item.id! },
+          data: {
+            url: item.url,
+            caption: item.caption ?? null,
+            category: item.category ?? null,
+          },
+        })
+      )
+    );
+  }
+
+  if (toCreate.length > 0) {
+    await tx.schoolImage.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        url: item.url,
+        caption: item.caption ?? null,
+        category: item.category ?? null,
+      })),
+    });
   }
 }
 
 async function syncCustomFields(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: TxClient,
   schoolId: string,
   items: CustomFieldInput[],
   section?: string,
@@ -273,30 +329,39 @@ async function syncCustomFields(
     },
   });
 
-  for (const item of items) {
-    if (item.id) {
-      await tx.schoolCustomField.update({
-        where: { id: item.id },
-        data: {
-          section: item.section,
-          label: item.label,
-          value: item.value,
-          fieldType: item.fieldType,
-        },
-      });
-    } else {
-      await tx.schoolCustomField.create({
-        data: {
-          schoolId,
-          section: item.section,
-          label: item.label,
-          value: item.value,
-          fieldType: item.fieldType,
-        },
-      });
-    }
+  const toUpdate = items.filter((i) => i.id);
+  const toCreate = items.filter((i) => !i.id);
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((item) =>
+        tx.schoolCustomField.update({
+          where: { id: item.id! },
+          data: {
+            section: item.section,
+            label: item.label,
+            value: item.value,
+            fieldType: item.fieldType,
+          },
+        })
+      )
+    );
+  }
+
+  if (toCreate.length > 0) {
+    await tx.schoolCustomField.createMany({
+      data: toCreate.map((item) => ({
+        schoolId,
+        section: item.section,
+        label: item.label,
+        value: item.value,
+        fieldType: item.fieldType,
+      })),
+    });
   }
 }
+
+// ── Normalize helpers ─────────────────────────────────────────────────────────
 
 function normalizeCustomGroups(
   value: unknown,
@@ -343,10 +408,7 @@ function normalizeAdditionalPhones(
 
       if (!number && !label) return null;
 
-      return {
-        number,
-        label: label || "Other",
-      };
+      return { number, label: label || "Other" };
     })
     .filter((item): item is { number: string; label: string } => item !== null);
 
@@ -377,12 +439,7 @@ function normalizeAdmissionCoordinators(
 
       if (!name && !phone && !email && !designation) return null;
 
-      return {
-        name,
-        phone,
-        email,
-        designation,
-      };
+      return { name, phone, email, designation };
     })
     .filter(
       (
@@ -400,7 +457,9 @@ function normalizeAdmissionCoordinators(
     : undefined;
 }
 
-function normalizeSocialLinks(value: unknown): Prisma.InputJsonValue | undefined {
+function normalizeSocialLinks(
+  value: unknown,
+): Prisma.InputJsonValue | undefined {
   if (!Array.isArray(value)) return undefined;
 
   const cleaned = value
@@ -416,10 +475,7 @@ function normalizeSocialLinks(value: unknown): Prisma.InputJsonValue | undefined
 
       if (!platform && !url) return null;
 
-      return {
-        platform,
-        url,
-      };
+      return { platform, url };
     })
     .filter(
       (item): item is { platform: string; url: string } => item !== null,
@@ -463,17 +519,14 @@ function readInputField(
 
 function toTrimmedStringOrNull(value: unknown): string | null {
   if (typeof value !== "string") return null;
-
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
 function toIntOrNull(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
-
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue)) return null;
-
   return Math.trunc(numberValue);
 }
 
@@ -904,41 +957,41 @@ export const createSchool = async (req: AuthRequest, res: Response) => {
   );
 
   const school = await prisma.school.create({
-  data: {
-    name: data.name,
-    slug,
-    description: data.description ?? null,
-    address: data.address,
-    city: data.city,
-    state: data.state,
-    pincode: data.pincode ?? null,
-    latitude: data.latitude ?? null,
-    longitude: data.longitude ?? null,
-    board: data.board,
-    stateBoardName: data.board === "STATE_BOARD" ? stateBoardName : null,
-    schoolType: data.schoolType,
-    medium: data.medium,
-    mediumOther: data.medium === "OTHER" ? mediumOther : null,
-    classesFrom: data.classesFrom,
-    classesTo: data.classesTo,
-    phone: data.phone,
-    email: data.email ?? null,
-    website: data.website ?? null,
-    logoUrl: data.logoUrl ?? null,
-    coverImageUrl: data.coverImageUrl ?? null,
-    admissionFee: data.admissionFee ?? null,
-    tuitionFeeMonthly: data.tuitionFeeMonthly ?? null,
-    totalAnnualFee: data.totalAnnualFee ?? null,
-    transportFee: data.transportFee ?? null,
-    hostelFee: data.hostelFee ?? null,
-    totalStudents: data.totalStudents ?? null,
-    establishedYear: data.establishedYear ?? null,
-    status: "PENDING",
-    owner: {
-      connect: { id: req.user!.id },
+    data: {
+      name: data.name,
+      slug,
+      description: data.description ?? null,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      pincode: data.pincode ?? null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      board: data.board,
+      stateBoardName: data.board === "STATE_BOARD" ? stateBoardName : null,
+      schoolType: data.schoolType,
+      medium: data.medium,
+      mediumOther: data.medium === "OTHER" ? mediumOther : null,
+      classesFrom: data.classesFrom,
+      classesTo: data.classesTo,
+      phone: data.phone,
+      email: data.email ?? null,
+      website: data.website ?? null,
+      logoUrl: data.logoUrl ?? null,
+      coverImageUrl: data.coverImageUrl ?? null,
+      admissionFee: data.admissionFee ?? null,
+      tuitionFeeMonthly: data.tuitionFeeMonthly ?? null,
+      totalAnnualFee: data.totalAnnualFee ?? null,
+      transportFee: data.transportFee ?? null,
+      hostelFee: data.hostelFee ?? null,
+      totalStudents: data.totalStudents ?? null,
+      establishedYear: data.establishedYear ?? null,
+      status: "PENDING",
+      owner: {
+        connect: { id: req.user!.id },
+      },
     },
-  },
-});
+  });
 
   invalidateSchoolCache();
 
@@ -1004,6 +1057,8 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
     jsonFields.socialLinks = socialLinks;
   }
 
+  // All sync operations run in parallel outside transaction where possible,
+  // then commit atomically. This minimises time spent inside the transaction.
   const updated = await prisma.$transaction(async (tx) => {
     const school = await tx.school.update({
       where: { id },
@@ -1015,32 +1070,30 @@ export const updateSchool = async (req: AuthRequest, res: Response) => {
       } as Prisma.SchoolUpdateInput,
     });
 
-    if (data.boardResults !== undefined) {
-      await syncBoardResults(tx, id, data.boardResults);
-    }
-
-    if (data.scholarships !== undefined) {
-      await syncScholarships(tx, id, data.scholarships);
-    }
-
-    if (data.faqs !== undefined) {
-      await syncFAQs(tx, id, data.faqs);
-    }
-
-    if (data.downloads !== undefined) {
-      await syncDownloads(tx, id, data.downloads);
-    }
-
-    if (data.images !== undefined) {
-      await syncGalleryImages(tx, id, data.images);
-    }
-
-    if (data.customFields !== undefined) {
-      await syncCustomFields(tx, id, data.customFields);
-    }
+    // Run all independent sync operations in parallel inside the transaction
+    await Promise.all([
+      data.boardResults !== undefined
+        ? syncBoardResults(tx, id, data.boardResults)
+        : Promise.resolve(),
+      data.scholarships !== undefined
+        ? syncScholarships(tx, id, data.scholarships)
+        : Promise.resolve(),
+      data.faqs !== undefined
+        ? syncFAQs(tx, id, data.faqs)
+        : Promise.resolve(),
+      data.downloads !== undefined
+        ? syncDownloads(tx, id, data.downloads)
+        : Promise.resolve(),
+      data.images !== undefined
+        ? syncGalleryImages(tx, id, data.images)
+        : Promise.resolve(),
+      data.customFields !== undefined
+        ? syncCustomFields(tx, id, data.customFields)
+        : Promise.resolve(),
+    ]);
 
     return school;
-  });
+  }, TX_OPTIONS);
 
   invalidateSchoolCache();
 

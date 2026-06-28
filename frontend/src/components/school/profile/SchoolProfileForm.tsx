@@ -68,11 +68,10 @@ const faqSchema = z.object({
 });
 
 const galleryImageSchema = z.object({
+  id: z.string().optional(),
   url: z.string(),
   caption: z.string().optional(),
-  category: z
-    .enum(["campus", "classroom", "sports", "events", "other"])
-    .optional(),
+  category: z.string().optional(),
 });
 
 const downloadFileSchema = z.object({
@@ -446,6 +445,30 @@ function readAdmissionCoordinators(
 function mapSchoolToFormData(
   school: Record<string, unknown>,
 ): SchoolProfileFormData {
+  const rawCustomFields = Array.isArray(school.customFields)
+    ? (school.customFields as Array<{
+        id?: string;
+        section?: string;
+        label?: string;
+        value?: string;
+        fieldType?: string;
+      }>)
+    : [];
+
+  function getCustomFieldsForSection(section: string) {
+    return rawCustomFields
+      .filter((f) => f.section === section)
+      .map((f) => ({
+        label: f.label ?? "",
+        value: f.value ?? "",
+        fieldType: (f.fieldType ?? "text") as
+          | "text"
+          | "number"
+          | "date"
+          | "url"
+          | "richtext",
+      }));
+  }
   return {
     basicInfo: {
       schoolName: (school.name as string) || "",
@@ -474,20 +497,20 @@ function mapSchoolToFormData(
       coverImageUrl: (school.coverImageUrl as string) || "",
       classesOffered: (school.classesOffered as string[]) || [],
       languagesOffered: (school.languagesOffered as string[]) || [],
-      customFields: [],
+      customFields: getCustomFieldsForSection("basicInfo"),
     },
     about: {
       about: (school.description as string) || (school.about as string) || "",
       vision: (school.vision as string) || "",
       mission: (school.mission as string) || "",
       principalMessage: (school.principalMessage as string) || "",
-      customFields: [],
+      customFields: getCustomFieldsForSection("about"),
     },
     academics: {
       streamsOffered: (school.streamsOffered as string[]) || [],
       studentTeacherRatio: (school.studentTeacherRatio as string) || "",
       academicCalendar: (school.academicCalendar as string) || "",
-      customFields: [],
+      customFields: getCustomFieldsForSection("academics"),
     },
     admissions: {
       admissionOpen: (school.admissionOpen as boolean) || false,
@@ -496,7 +519,7 @@ function mapSchoolToFormData(
       ageCriteria: (school.ageCriteria as string) || "",
       requiredDocuments: (school.requiredDocuments as string) || "",
       admissionProcess: (school.admissionProcess as string) || "",
-      customFields: [],
+      customFields: getCustomFieldsForSection("admissions"),
     },
     fees: {
       feeMode: "simple",
@@ -507,19 +530,19 @@ function mapSchoolToFormData(
       class6to8Fee: toStringValue(school.class6to8Fee),
       class9to10Fee: toStringValue(school.class9to10Fee),
       class11to12Fee: toStringValue(school.class11to12Fee),
-      customFeeHeads: [],
+      customFeeHeads: getCustomFieldsForSection("fees"),
     },
     facilities: {
       items: (school.facilitiesList as string[]) || [],
       customGroups:
         (school.facilityCustomGroups as Record<string, string[]>) || {},
-      customFields: [],
+      customFields: getCustomFieldsForSection("facilities"),
     },
     sports: {
       items: (school.sportsList as string[]) || [],
       customGroups:
         (school.sportsCustomGroups as Record<string, string[]>) || {},
-      customFields: [],
+      customFields: getCustomFieldsForSection("sports"),
     },
     infrastructure: {
       campusArea: (school.campusArea as string) || "",
@@ -537,7 +560,7 @@ function mapSchoolToFormData(
     },
     programs: {
       items: (school.programsList as string[]) || [],
-      customFields: [],
+      customFields: getCustomFieldsForSection("programs"),
     },
     studentLife: {
       clubs:
@@ -545,7 +568,7 @@ function mapSchoolToFormData(
       culturalActivities: (school.culturalActivities as string) || "",
       annualEvents: (school.annualEvents as string) || "",
       educationalTours: (school.educationalTours as string) || "",
-      customFields: [],
+      customFields: getCustomFieldsForSection("studentLife"),
     },
     achievements: {
       academic: (school.academicAchievements as string) || "",
@@ -555,7 +578,7 @@ function mapSchoolToFormData(
         (school.awards as string) ||
         "",
       recognitions: (school.recognitions as string) || "",
-      customFields: [],
+      customFields: getCustomFieldsForSection("achievements"),
     },
     boardResults: {
       results: (
@@ -620,10 +643,24 @@ function mapSchoolToFormData(
 
         return entries;
       }),
-      customFields: [],
+      customFields: getCustomFieldsForSection("boardResults"),
     },
 
-    scholarships: { list: [] },
+    scholarships: {
+      list: Array.isArray(school.scholarships)
+        ? (
+            school.scholarships as Array<{
+              name?: string;
+              eligibility?: string;
+              benefits?: string;
+            }>
+          ).map((s) => ({
+            name: s.name ?? "",
+            eligibility: s.eligibility ?? "",
+            benefits: s.benefits ?? "",
+          }))
+        : [],
+    },
     hostel: {
       available: (school.hostelAvailable as boolean) || false,
       boys:
@@ -639,7 +676,7 @@ function mapSchoolToFormData(
         (school.hostelMess as boolean) ||
         (school.messAvailable as boolean) ||
         false,
-      customFields: [],
+      customFields: getCustomFieldsForSection("hostel"),
     },
     transport: {
       available: (school.transportAvailable as boolean) || false,
@@ -669,8 +706,33 @@ function mapSchoolToFormData(
         (school.visitorManagement as boolean) ||
         false,
     },
-    gallery: { images: [] },
-    downloads: { files: [] },
+    gallery: {
+      images: Array.isArray(school.images)
+        ? (
+            school.images as Array<{
+              id?: string;
+              url?: string;
+              caption?: string;
+              category?: string;
+            }>
+          ).map((img) => ({
+            id: img.id ?? undefined, // ← ADD id
+            url: img.url ?? "",
+            caption: img.caption ?? "",
+            category: img.category ?? "", // ← string, not enum
+          }))
+        : [],
+    },
+    downloads: {
+      files: Array.isArray(school.downloads)
+        ? (school.downloads as Array<{ label?: string; url?: string }>).map(
+            (d) => ({
+              label: d.label ?? "",
+              url: d.url ?? "",
+            }),
+          )
+        : [],
+    },
     contact: {
       phone: (school.phone as string) || "",
       whatsapp: (school.whatsapp as string) || "",
@@ -695,7 +757,16 @@ function mapSchoolToFormData(
       additionalPhones: readAdditionalPhones(school.additionalPhones),
       admissionCoordinators: readAdmissionCoordinators(school),
     },
-    faqs: { list: [] },
+    faqs: {
+      list: Array.isArray(school.faqs)
+        ? (school.faqs as Array<{ question?: string; answer?: string }>).map(
+            (f) => ({
+              question: f.question ?? "",
+              answer: f.answer ?? "",
+            }),
+          )
+        : [],
+    },
   };
 }
 
@@ -829,17 +900,17 @@ export default function SchoolProfileForm({
           schoolFormat: data.basicInfo.format || undefined,
           schoolType: data.basicInfo.genderType || undefined,
           board: data.basicInfo.board || undefined,
-          stateBoardName: data.basicInfo.stateBoardName || undefined, // ← ADD
+          stateBoardName: data.basicInfo.stateBoardName || undefined,
           medium: data.basicInfo.medium || undefined,
           mediumOther:
-            data.basicInfo.medium === "OTHER" // ← YE ADD KARO
+            data.basicInfo.medium === "OTHER"
               ? data.basicInfo.mediumOther || undefined
               : undefined,
           city: data.basicInfo.city || undefined,
           state: data.basicInfo.state || undefined,
           affiliationNumber: data.basicInfo.affiliationNumber || undefined,
-          recognitionNumber: data.basicInfo.recognitionNumber || undefined, // ← ADD THIS
-          affiliatedSince: data.basicInfo.affiliatedSince || undefined, // ← ADD THIS
+          recognitionNumber: data.basicInfo.recognitionNumber || undefined,
+          affiliatedSince: data.basicInfo.affiliatedSince || undefined,
           startTime: data.basicInfo.startTime || undefined,
           endTime: data.basicInfo.endTime || undefined,
           workingDays: data.basicInfo.workingDays || undefined,
@@ -857,7 +928,7 @@ export default function SchoolProfileForm({
 
           streamsOffered: data.academics.streamsOffered ?? [],
           studentTeacherRatio: data.academics.studentTeacherRatio || undefined,
-          academicCalendar: data.academics.academicCalendar || undefined, // ← ADD THIS
+          academicCalendar: data.academics.academicCalendar || undefined,
 
           admissionOpen: data.admissions.admissionOpen ?? false,
           admissionStartDate: data.admissions.startDate || undefined,
@@ -869,7 +940,7 @@ export default function SchoolProfileForm({
           averageAnnualFee: data.fees.averageAnnualFee
             ? Number(data.fees.averageAnnualFee)
             : undefined,
-          earlyChildhoodFee: data.fees.earlyChildhoodFee // ← ADD
+          earlyChildhoodFee: data.fees.earlyChildhoodFee
             ? Number(data.fees.earlyChildhoodFee)
             : undefined,
           prePrimaryFee: data.fees.prePrimaryFee
@@ -929,7 +1000,6 @@ export default function SchoolProfileForm({
 
           academicAchievements: data.achievements.academic || undefined,
           sportsAchievements: data.achievements.sports || undefined,
-          // awardsRecognitions: data.achievements.awards || undefined,
           awardsRecognitions:
             [data.achievements.awards, data.achievements.recognitions]
               .filter(Boolean)
@@ -957,13 +1027,11 @@ export default function SchoolProfileForm({
           website: data.contact.website || undefined,
           address: data.contact.address || undefined,
           mapUrl: data.contact.mapUrl || undefined,
-          //latitude: toNumberOrUndefined(data.contact.latitude),
-          //longitude: toNumberOrUndefined(data.contact.longitude),
           facebook: data.contact.facebook || undefined,
           instagram: data.contact.instagram || undefined,
           youtube: data.contact.youtube || undefined,
           linkedin: data.contact.linkedin || undefined,
-          socialLinks: (data.contact.socialLinks ?? []) // ← ADD
+          socialLinks: (data.contact.socialLinks ?? [])
             .filter((s) => s.platform?.trim() || s.url?.trim())
             .map((s) => ({
               platform: s.platform?.trim() || "",
@@ -990,8 +1058,6 @@ export default function SchoolProfileForm({
               designation: coordinator.designation?.trim() || "",
             })),
 
-          // Backward compatibility for current public/admin views that still read
-          // the old single coordinator fields.
           admissionCoordinatorName:
             data.contact.admissionCoordinators?.[0]?.name || undefined,
           admissionPhone:
@@ -1031,7 +1097,15 @@ export default function SchoolProfileForm({
               label: d.label,
               url: d.url,
             })),
-          // ── Section Custom Fields ─────────────────────────────────
+          images: (data.gallery.images ?? [])
+            .filter((img) => img.url?.trim())
+            .map((img) => ({
+              id: (img as { id?: string }).id,
+              url: img.url.trim(),
+              caption: img.caption?.trim() || undefined,
+              category: img.category?.trim() || undefined,
+            })),
+
           customFields: [
             ...(data.basicInfo.customFields ?? []).map((f) => ({
               section: "basicInfo",
@@ -1123,7 +1197,9 @@ export default function SchoolProfileForm({
           } else if (parsed.category === "auth") {
             setSaveError(parsed.message);
             setTimeout(() => {
-              window.location.href = "/school-login";
+              // ← YAHAN CHANGE KARO
+              const isAdmin = submitEndpoint.startsWith("/api/admin/");
+              window.location.href = isAdmin ? "/admin-login" : "/school-login";
             }, 2000);
           } else {
             setSaveError(parsed.message);

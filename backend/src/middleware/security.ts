@@ -105,9 +105,12 @@ function normaliseIp(req: Request): string {
   return raw;
 }
 
+// ── Public unauthenticated routes ─────────────────────────────────────────────
+// School listing, search, cities, nearby, school detail page
+// 500 users × ~4 requests each = 2000 in 15 min → 300 per IP is safe
 export const generalRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES_MS,
-  max: 100,
+  max: IS_DEV ? 10000 : 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -117,9 +120,27 @@ export const generalRateLimiter = rateLimit({
   },
 });
 
+// ── Authenticated school/admin mutations ──────────────────────────────────────
+// School profile save (22 sections), gallery, admin edit, approve/reject etc.
+// One admin saving full profile = up to 22 PATCH requests in one session
+// 500 req / 15 min per IP gives plenty of room without opening up to abuse
+export const authenticatedRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  max: IS_DEV ? 10000 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    code: "RATE_LIMITED",
+    message: "Too many requests. Please try again later.",
+  },
+});
+
+// ── Auth endpoints (login/register) ──────────────────────────────────────────
+// Strict — brute force protection
 export const authRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES_MS,
-  max: 10,
+  max: IS_DEV ? 100 : 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -129,13 +150,12 @@ export const authRateLimiter = rateLimit({
   },
 });
 
+// ── Forgot password ───────────────────────────────────────────────────────────
 export const forgotPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
-  // Production: 3 attempts/hour per IP+email. Development: 50 (effectively unlimited for testing).
   max: IS_DEV ? 50 : 3,
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting entirely in development so testing is never blocked.
   skip: () => IS_DEV,
   keyGenerator: (req) => {
     const ip = normaliseIp(req);
@@ -149,6 +169,7 @@ export const forgotPasswordRateLimiter = rateLimit({
   },
 });
 
+// ── Reset password ────────────────────────────────────────────────────────────
 export const resetPasswordRateLimiter = rateLimit({
   windowMs: ONE_HOUR_MS,
   max: IS_DEV ? 50 : 5,
@@ -167,6 +188,7 @@ export const resetPasswordRateLimiter = rateLimit({
   },
 });
 
+// ── OTP ───────────────────────────────────────────────────────────────────────
 export const otpRateLimiter = rateLimit({
   windowMs: TEN_MINUTES_MS,
   max: IS_DEV ? 50 : 3,
@@ -177,6 +199,24 @@ export const otpRateLimiter = rateLimit({
     success: false,
     code: "RATE_LIMITED",
     message: "Too many OTP requests. Please wait before requesting again.",
+  },
+});
+
+// ── Inquiry spam protection ───────────────────────────────────────────────────
+export const inquiryRateLimiter = rateLimit({
+  windowMs: ONE_HOUR_MS,
+  max: IS_DEV ? 100 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = normaliseIp(req);
+    const email = (req.body?.email ?? "").toLowerCase().trim();
+    return `inq-${ip}-${email}`;
+  },
+  message: {
+    success: false,
+    code: "RATE_LIMITED",
+    message: "Too many inquiry requests. Please try again later.",
   },
 });
 

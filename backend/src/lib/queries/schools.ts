@@ -347,6 +347,7 @@ export const schoolDetailSelect = {
   classesOffered: true,
   streamsOffered: true,
   studentTeacherRatio: true,
+  academicCalendar: true,
 
   // Admissions
   admissionOpen: true,

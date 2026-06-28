@@ -24,7 +24,7 @@ import {
   buildEducationalOrganizationJsonLd,
   buildBreadcrumbJsonLd,
 } from "@/lib/seo/seo";
-
+import GalleryLightbox from "@/components/public/schools/GalleryLightbox";
 const TrackSchoolView = dynamic(
   () => import("@/components/parent/TrackSchoolView"),
   { loading: () => null },
@@ -42,9 +42,7 @@ type BoardType =
   | "OTHER";
 
 type LegacyBoardType = BoardType | "UP_BOARD";
-
 type SchoolType = "BOYS" | "GIRLS" | "CO_ED";
-
 type MediumType = "HINDI" | "ENGLISH" | "BOTH" | "OTHER";
 
 interface SchoolImage {
@@ -57,15 +55,10 @@ interface SchoolImage {
 interface BoardResult {
   id: string;
   year: string;
-
-  // New backend fields
   classLevel?: string | null;
   passPercent?: string | null;
-
-  // Legacy fallback fields
   class10Pass?: string | null;
   class12Pass?: string | null;
-
   topperName: string | null;
   topperScore: string | null;
 }
@@ -127,7 +120,6 @@ interface SchoolDetail {
   status: string;
   ownerId: string;
 
-  // Core
   description: string | null;
   address: string;
   city: string;
@@ -148,11 +140,9 @@ interface SchoolDetail {
   logoUrl: string | null;
   coverImageUrl: string | null;
 
-  // Location coordinates
   latitude?: number | null;
   longitude?: number | null;
 
-  // Basic Info extras
   tagline: string | null;
   establishedYear: number | null;
   managementType: string | null;
@@ -168,18 +158,15 @@ interface SchoolDetail {
   endTime: string | null;
   workingDays: string | null;
 
-  // About
   vision: string | null;
   mission: string | null;
   principalMessage: string | null;
 
-  // Academics
   classesOffered: string[];
   streamsOffered: string[];
   studentTeacherRatio: string | null;
   academicCalendar: string | null;
 
-  // Admissions
   admissionOpen: boolean;
   admissionStartDate: string | null;
   admissionEndDate: string | null;
@@ -188,7 +175,6 @@ interface SchoolDetail {
   admissionProcess: string | null;
   admissionCoordinators: AdmissionCoordinator[] | null;
 
-  // Fees
   admissionFee: number | null;
   tuitionFeeMonthly: number | null;
   totalAnnualFee: number | null;
@@ -202,13 +188,11 @@ interface SchoolDetail {
   class9to10Fee: number | null;
   class11to12Fee: number | null;
 
-  // Facilities & Sports
   facilitiesList: string[];
   facilityCustomGroups: Record<string, string[]> | null;
   sportsList: string[];
   sportsCustomGroups: Record<string, string[]> | null;
 
-  // Infrastructure
   campusArea: string | null;
   totalClassrooms: number | null;
   totalLabs: number | null;
@@ -216,45 +200,37 @@ interface SchoolDetail {
   hostelCapacity: number | null;
   totalBuses: number | null;
 
-  // Faculty
   totalTeachers: number | null;
   qualifiedTeachers: number | null;
   trainingPrograms: string | null;
 
-  // Programs
   programsList: string[];
 
-  // Student Life
   clubsActivities: string | null;
   culturalActivities: string | null;
   annualEvents: string | null;
   educationalTours: string | null;
 
-  // Achievements
   academicAchievements: string | null;
   sportsAchievements: string | null;
   awardsRecognitions: string | null;
 
-  // Hostel
   hostelAvailable: boolean;
   hostelBoys: boolean;
   hostelGirls: boolean;
   hostelMess: boolean;
 
-  // Transport
   transportAvailable: boolean;
   transportAreas: string | null;
   gpsTracking: boolean;
   totalVehicles: string | null;
 
-  // Safety
   hasCCTV: boolean;
   hasGuards: boolean;
   hasMedicalRoom: boolean;
   hasFireSafety: boolean;
   hasVisitorMgmt: boolean;
 
-  // Contact extras
   whatsapp: string | null;
   mapUrl: string | null;
   facebook: string | null;
@@ -266,7 +242,6 @@ interface SchoolDetail {
   admissionPhone: string | null;
   admissionEmail: string | null;
 
-  // Relations
   owner: { name: string | null };
   images: SchoolImage[];
   facilities: Facility[];
@@ -347,13 +322,11 @@ function getBoardLabel(school: Pick<SchoolDetail, "board" | "stateBoardName">) {
       ? `${school.stateBoardName} Board`
       : "State Board";
   }
-
   return BOARD_LABEL[school.board] ?? school.board;
 }
 
 function decodeHtmlEntities(value: string) {
   let output = value;
-
   for (let i = 0; i < 5; i++) {
     const next = output
       .replace(/&amp;/g, "&")
@@ -363,11 +336,9 @@ function decodeHtmlEntities(value: string) {
       .replace(/&apos;/g, "'")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">");
-
     if (next === output) break;
     output = next;
   }
-
   return output;
 }
 
@@ -377,19 +348,13 @@ function getMediumLabel(
   if (typeof schoolOrMedium === "string") {
     return MEDIUM_LABEL[schoolOrMedium] ?? schoolOrMedium;
   }
-
   if (schoolOrMedium.medium === "OTHER") {
     return schoolOrMedium.mediumOther
       ? decodeHtmlEntities(schoolOrMedium.mediumOther)
       : "Other Medium";
   }
-
   return MEDIUM_LABEL[schoolOrMedium.medium] ?? schoolOrMedium.medium;
 }
-
-// function getMediumLabel(medium: string) {
-//   return MEDIUM_LABEL[medium] ?? medium;
-// }
 
 function fmtINR(amount: number) {
   return "₹" + amount.toLocaleString("en-IN");
@@ -438,7 +403,6 @@ function getMapEmbedUrl(school: SchoolDetail) {
   if (hasCoordinates(school)) {
     return `https://maps.google.com/maps?q=${school.latitude},${school.longitude}&z=15&output=embed`;
   }
-
   if (
     school.mapUrl &&
     (school.mapUrl.includes("/maps/embed") ||
@@ -446,17 +410,14 @@ function getMapEmbedUrl(school: SchoolDetail) {
   ) {
     return school.mapUrl;
   }
-
   return null;
 }
 
 function getDirectionsUrl(school: SchoolDetail) {
   if (school.mapUrl) return school.mapUrl;
-
   if (hasCoordinates(school)) {
     return `https://www.google.com/maps/search/?api=1&query=${school.latitude},${school.longitude}`;
   }
-
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     getSchoolAddressQuery(school),
   )}`;
@@ -469,11 +430,9 @@ function getSocialLinks(school: SchoolDetail): SocialLink[] {
     school.youtube ? { platform: "YouTube", url: school.youtube } : null,
     school.linkedin ? { platform: "LinkedIn", url: school.linkedin } : null,
   ];
-
   const dynamicLinks = Array.isArray(school.socialLinks)
     ? school.socialLinks.filter((item) => item?.platform && item?.url)
     : [];
-
   return [...fixedLinks.filter(Boolean), ...dynamicLinks] as SocialLink[];
 }
 
@@ -485,6 +444,16 @@ function getClassLevelLabel(classLevel?: string | null) {
   if (classLevel === "CLASS_12") return "Class 12";
   if (classLevel === "CLASS_10") return "Class 10";
   return classLevel || "—";
+}
+
+// ─── Custom field helper ───────────────────────────────────────────────────────
+
+function getSectionCustomFields(
+  customFields: CustomField[],
+  section: string,
+): CustomField[] {
+  if (!customFields?.length) return [];
+  return customFields.filter((f) => f.section === section);
 }
 
 // ─── Section visibility guards ────────────────────────────────────────────────
@@ -549,11 +518,15 @@ function hasFees(s: SchoolDetail) {
 }
 
 function hasFacilities(s: SchoolDetail) {
-  return !!(s.facilitiesList?.length || s.facilities?.length);
+  return !!(
+    s.facilitiesList?.length ||
+    s.facilities?.length ||
+    s.facilityCustomGroups
+  );
 }
 
 function hasSports(s: SchoolDetail) {
-  return !!s.sportsList?.length;
+  return !!(s.sportsList?.length || s.sportsCustomGroups);
 }
 
 function hasInfrastructure(s: SchoolDetail) {
@@ -630,7 +603,6 @@ export default async function SchoolDetailPage({
     const { ok, data } = await backendFetch<{
       schools?: Array<{ id: string }>;
     }>("/api/parent/favourites?page=1&limit=1000");
-
     initialFavourited = Boolean(
       ok && data?.schools?.some((item) => item.id === school.id),
     );
@@ -677,7 +649,6 @@ export default async function SchoolDetailPage({
   });
   const mapEmbedUrl = getMapEmbedUrl(school);
   const directionsUrl = getDirectionsUrl(school);
-
   const socialLinks = getSocialLinks(school);
   const hasSocialLinks = socialLinks.length > 0;
   const additionalPhones = Array.isArray(school.additionalPhones)
@@ -686,6 +657,23 @@ export default async function SchoolDetailPage({
   const admissionCoordinators = Array.isArray(school.admissionCoordinators)
     ? school.admissionCoordinators
     : [];
+
+  // Stats for hero bar
+  const heroStats = [
+    school.totalStudents
+      ? {
+          label: "Students",
+          value: school.totalStudents.toLocaleString("en-IN"),
+        }
+      : null,
+    school.totalTeachers
+      ? { label: "Teachers", value: String(school.totalTeachers) }
+      : null,
+    school.establishedYear
+      ? { label: "Est.", value: String(school.establishedYear) }
+      : null,
+    { label: "Classes", value: `${school.classesFrom}–${school.classesTo}` },
+  ].filter(Boolean) as { label: string; value: string }[];
 
   return (
     <div className="min-h-screen bg-gray-50 font-body">
@@ -700,11 +688,38 @@ export default async function SchoolDetailPage({
         />
       )}
 
-      {/* ── Hero Header ─────────────────────────────────────── */}
-      <div className="bg-hero-gradient text-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <div className="relative bg-hero-gradient text-white overflow-hidden">
+        {/* Cover image — full hero background */}
+        {school.coverImageUrl && (
+          <Image
+            src={
+              optimizeCloudinaryUrl(school.coverImageUrl, { width: 1200 }) ??
+              school.coverImageUrl
+            }
+            alt={`${school.name} cover`}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-center"
+          />
+        )}
+
+        {/* Overlay — dark gradient always present, stronger when image exists */}
+        <div
+          className={`absolute inset-0 ${
+            school.coverImageUrl
+              ? "bg-gradient-to-b from-blue-900/70 via-blue-900/80 to-blue-900/95"
+              : ""
+          }`}
+        />
+
+        {/* All hero content sits above overlay */}
+        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <div className="flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
+            {/* Logo */}
+            <div className="flex-shrink-0 w-20 h-20 rounded-2xl overflow-hidden bg-white/10 border-2 border-white/30 flex items-center justify-center shadow-lg">
               {optimizedLogoUrl ? (
                 <Image
                   src={optimizedLogoUrl}
@@ -725,6 +740,7 @@ export default async function SchoolDetailPage({
             </div>
 
             <div className="flex-1 min-w-0">
+              {/* Breadcrumb */}
               <nav className="flex items-center gap-2 text-blue-200 text-meta mb-2">
                 <Link href="/" className="hover:text-white transition-colors">
                   Home
@@ -751,7 +767,6 @@ export default async function SchoolDetailPage({
                     </p>
                   )}
                 </div>
-
                 <FavouriteButton
                   schoolId={school.id}
                   initialFavourited={initialFavourited}
@@ -763,29 +778,17 @@ export default async function SchoolDetailPage({
                 {school.pincode ? ` — ${school.pincode}` : ""}
               </p>
 
-              <div className="flex flex-wrap gap-2 mt-4">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 mt-3">
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
                   {getBoardLabel(school)}
                 </span>
-
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
                   {TYPE_LABEL[school.schoolType]}
                 </span>
-
                 <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
                   {getMediumLabel(school)}
                 </span>
-
-                <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
-                  Class {school.classesFrom}–{school.classesTo}
-                </span>
-
-                {school.establishedYear && (
-                  <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-label">
-                    Est. {school.establishedYear}
-                  </span>
-                )}
-
                 {school.admissionOpen && (
                   <span className="px-3 py-1 rounded-full bg-green-500/80 border border-green-400/40 text-white text-label">
                     Admissions Open
@@ -798,34 +801,44 @@ export default async function SchoolDetailPage({
               <InquiryModal schoolId={school.id} schoolName={school.name} />
             </div>
           </div>
+
+          {/* Stats bar */}
+          {heroStats.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-white/20 flex flex-wrap gap-6">
+              {heroStats.map((stat) => (
+                <div key={stat.label}>
+                  <p className="font-heading font-bold text-xl text-white leading-none">
+                    {stat.value}
+                  </p>
+                  <p className="font-body text-blue-200 text-meta mt-0.5">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Main Content ─────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Left — Main Sections ── */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6">
+          {/* About */}
           {hasAbout(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-4">
-                About
-              </h2>
-
+            <SectionCard title="About">
               <div className="space-y-4">
                 {school.description && (
                   <p className="font-body text-body text-gray-700 leading-relaxed whitespace-pre-line">
                     {school.description}
                   </p>
                 )}
-
                 {school.vision && (
                   <TextBlock label="Vision" value={school.vision} />
                 )}
-
                 {school.mission && (
                   <TextBlock label="Mission" value={school.mission} />
                 )}
-
                 {school.principalMessage && (
                   <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
                     <p className="font-heading font-semibold text-label text-blue-700 mb-1">
@@ -836,110 +849,96 @@ export default async function SchoolDetailPage({
                     </p>
                   </div>
                 )}
+                {/* About custom fields */}
+                {getSectionCustomFields(school.customFields, "about").map(
+                  (f) => (
+                    <TextBlock key={f.id} label={f.label} value={f.value} />
+                  ),
+                )}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Academic Details */}
           {hasAcademics(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Academic Details
-              </h2>
-
+            <SectionCard title="Academic Details">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <InfoTile label="Board" value={getBoardLabel(school)} />
-
                 <InfoTile
                   label="School Type"
                   value={TYPE_LABEL[school.schoolType]}
                 />
-
                 <InfoTile label="Medium" value={getMediumLabel(school)} />
-
                 <InfoTile
                   label="Classes"
                   value={`Class ${school.classesFrom} to ${school.classesTo}`}
                 />
-
                 {school.schoolCategory && (
                   <InfoTile label="Category" value={school.schoolCategory} />
                 )}
-
                 {school.totalStudents && (
                   <InfoTile
                     label="Total Students"
                     value={school.totalStudents.toLocaleString("en-IN")}
                   />
                 )}
-
                 {school.establishedYear && (
                   <InfoTile
                     label="Established"
                     value={String(school.establishedYear)}
                   />
                 )}
-
                 {school.studentTeacherRatio && (
                   <InfoTile
                     label="Student:Teacher Ratio"
                     value={school.studentTeacherRatio}
                   />
                 )}
-
                 {school.academicCalendar && (
                   <InfoTile
                     label="Academic Calendar"
                     value={school.academicCalendar}
                   />
                 )}
-
                 {school.managementType && (
                   <InfoTile label="Management" value={school.managementType} />
                 )}
-
                 {school.schoolFormat && (
                   <InfoTile label="Format" value={school.schoolFormat} />
                 )}
-
                 {school.affiliationNumber && (
                   <InfoTile
                     label="Affiliation No."
                     value={school.affiliationNumber}
                   />
                 )}
-
                 {school.recognitionNumber && (
                   <InfoTile
                     label="Recognition No."
                     value={school.recognitionNumber}
                   />
                 )}
-
                 {school.affiliatedSince && (
                   <InfoTile
                     label="Affiliated Since"
                     value={school.affiliatedSince}
                   />
                 )}
-
                 {school.uniformPolicy && (
                   <InfoTile
                     label="Uniform Policy"
                     value={school.uniformPolicy}
                   />
                 )}
-
                 {school.canteenAvailable && (
                   <InfoTile
                     label="Canteen / Tiffin"
                     value={school.canteenAvailable}
                   />
                 )}
-
                 {school.workingDays && (
                   <InfoTile label="Working Days" value={school.workingDays} />
                 )}
-
                 {(school.startTime || school.endTime) && (
                   <InfoTile
                     label="School Timings"
@@ -957,7 +956,6 @@ export default async function SchoolDetailPage({
                   color="blue"
                 />
               )}
-
               {school.streamsOffered?.length > 0 && (
                 <ChipGroup
                   title="Streams Offered"
@@ -965,7 +963,6 @@ export default async function SchoolDetailPage({
                   color="green"
                 />
               )}
-
               {school.languagesOffered?.length > 0 && (
                 <ChipGroup
                   title="Languages Offered"
@@ -973,22 +970,33 @@ export default async function SchoolDetailPage({
                   color="purple"
                 />
               )}
-            </section>
+
+              {/* Academics custom fields */}
+              {getSectionCustomFields(school.customFields, "academics").length >
+                0 && (
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(school.customFields, "academics").map(
+                    (f) => (
+                      <InfoTile key={f.id} label={f.label} value={f.value} />
+                    ),
+                  )}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Admissions */}
           {hasAdmissions(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <div className="flex items-center gap-3 mb-5">
-                <h2 className="font-heading font-bold text-h2 text-gray-800">
-                  Admissions
-                </h2>
-                {school.admissionOpen && (
+            <SectionCard
+              title="Admissions"
+              badge={
+                school.admissionOpen ? (
                   <span className="px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 text-meta font-medium">
                     Open
                   </span>
-                )}
-              </div>
-
+                ) : undefined
+              }
+            >
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
                 {school.admissionStartDate && (
                   <InfoTile
@@ -996,14 +1004,12 @@ export default async function SchoolDetailPage({
                     value={fmt(school.admissionStartDate) ?? ""}
                   />
                 )}
-
                 {school.admissionEndDate && (
                   <InfoTile
                     label="Last Date"
                     value={fmt(school.admissionEndDate) ?? ""}
                   />
                 )}
-
                 {school.ageCriteria && (
                   <InfoTile label="Age Criteria" value={school.ageCriteria} />
                 )}
@@ -1015,7 +1021,6 @@ export default async function SchoolDetailPage({
                   value={school.requiredDocuments}
                 />
               )}
-
               {school.admissionProcess && (
                 <div className="mt-4">
                   <TextBlock
@@ -1024,15 +1029,21 @@ export default async function SchoolDetailPage({
                   />
                 </div>
               )}
-            </section>
+
+              {/* Admissions custom fields */}
+              {getSectionCustomFields(school.customFields, "admissions").map(
+                (f) => (
+                  <div key={f.id} className="mt-4">
+                    <TextBlock label={f.label} value={f.value} />
+                  </div>
+                ),
+              )}
+            </SectionCard>
           )}
 
+          {/* Fee Structure */}
           {hasFees(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Fee Structure
-              </h2>
-
+            <SectionCard title="Fee Structure">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -1045,7 +1056,6 @@ export default async function SchoolDetailPage({
                       </th>
                     </tr>
                   </thead>
-
                   <tbody className="divide-y divide-gray-100">
                     {school.averageAnnualFee && (
                       <FeeRow
@@ -1054,63 +1064,54 @@ export default async function SchoolDetailPage({
                         highlight
                       />
                     )}
-
                     {school.earlyChildhoodFee && (
                       <FeeRow
                         label="Early Childhood / Play School"
                         amount={fmtINR(school.earlyChildhoodFee)}
                       />
                     )}
-
                     {school.prePrimaryFee && (
                       <FeeRow
                         label="Pre-Primary"
                         amount={fmtINR(school.prePrimaryFee)}
                       />
                     )}
-
                     {school.class1to5Fee && (
                       <FeeRow
                         label="Class 1–5"
                         amount={fmtINR(school.class1to5Fee)}
                       />
                     )}
-
                     {school.class6to8Fee && (
                       <FeeRow
                         label="Class 6–8"
                         amount={fmtINR(school.class6to8Fee)}
                       />
                     )}
-
                     {school.class9to10Fee && (
                       <FeeRow
                         label="Class 9–10"
                         amount={fmtINR(school.class9to10Fee)}
                       />
                     )}
-
                     {school.class11to12Fee && (
                       <FeeRow
                         label="Class 11–12"
                         amount={fmtINR(school.class11to12Fee)}
                       />
                     )}
-
                     {school.admissionFee && (
                       <FeeRow
                         label="Admission Fee (One-time)"
                         amount={fmtINR(school.admissionFee)}
                       />
                     )}
-
                     {school.tuitionFeeMonthly && (
                       <FeeRow
                         label="Tuition Fee (Monthly)"
                         amount={fmtINR(school.tuitionFeeMonthly)}
                       />
                     )}
-
                     {school.totalAnnualFee && !school.averageAnnualFee && (
                       <FeeRow
                         label="Total Annual Fee"
@@ -1118,14 +1119,12 @@ export default async function SchoolDetailPage({
                         highlight
                       />
                     )}
-
                     {school.transportFee && (
                       <FeeRow
                         label="Transport Fee (Monthly)"
                         amount={fmtINR(school.transportFee)}
                       />
                     )}
-
                     {school.hostelFee && (
                       <FeeRow
                         label="Hostel Fee (Monthly)"
@@ -1140,20 +1139,41 @@ export default async function SchoolDetailPage({
                 * Fees are approximate. Contact the school for confirmed
                 amounts.
               </p>
-            </section>
+
+              {/* Fee custom fields */}
+              {getSectionCustomFields(school.customFields, "fees").length >
+                0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="font-heading font-semibold text-label text-gray-500 mb-2">
+                    Additional Fee Details
+                  </p>
+                  {getSectionCustomFields(school.customFields, "fees").map(
+                    (f) => (
+                      <div
+                        key={f.id}
+                        className="flex justify-between py-2 border-b border-gray-100"
+                      >
+                        <span className="font-body text-body text-gray-700">
+                          {f.label}
+                        </span>
+                        <span className="font-heading font-semibold text-body text-gray-800">
+                          {f.value}
+                        </span>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Facilities */}
           {hasFacilities(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Facilities
-              </h2>
-
+            <SectionCard title="Facilities">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {school.facilitiesList?.map((name) => (
                   <FeatureCard key={name} label={name} color="blue" />
                 ))}
-
                 {school.facilities?.map(({ facility }) => (
                   <FeatureCard
                     key={facility.id}
@@ -1162,8 +1182,6 @@ export default async function SchoolDetailPage({
                     color="blue"
                   />
                 ))}
-
-                {/* Custom group items */}
                 {school.facilityCustomGroups &&
                   Object.values(school.facilityCustomGroups)
                     .flat()
@@ -1175,17 +1193,26 @@ export default async function SchoolDetailPage({
                       />
                     ))}
               </div>
-            </section>
+              {/* Facilities custom fields */}
+              {getSectionCustomFields(school.customFields, "facilities")
+                .length > 0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(
+                    school.customFields,
+                    "facilities",
+                  ).map((f) => (
+                    <InfoTile key={f.id} label={f.label} value={f.value} />
+                  ))}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Sports */}
           {hasSports(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Sports
-              </h2>
-
+            <SectionCard title="Sports">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {school.sportsList.map((name) => (
+                {school.sportsList?.map((name) => (
                   <FeatureCard key={name} label={name} color="green" />
                 ))}
                 {school.sportsCustomGroups &&
@@ -1199,15 +1226,23 @@ export default async function SchoolDetailPage({
                       />
                     ))}
               </div>
-            </section>
+              {/* Sports custom fields */}
+              {getSectionCustomFields(school.customFields, "sports").length >
+                0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(school.customFields, "sports").map(
+                    (f) => (
+                      <InfoTile key={f.id} label={f.label} value={f.value} />
+                    ),
+                  )}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Programs */}
           {hasPrograms(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Programs
-              </h2>
-
+            <SectionCard title="Programs">
               <div className="flex flex-wrap gap-2">
                 {school.programsList.map((p) => (
                   <span
@@ -1218,58 +1253,57 @@ export default async function SchoolDetailPage({
                   </span>
                 ))}
               </div>
-            </section>
+              {getSectionCustomFields(school.customFields, "programs").length >
+                0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(school.customFields, "programs").map(
+                    (f) => (
+                      <InfoTile key={f.id} label={f.label} value={f.value} />
+                    ),
+                  )}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Infrastructure */}
           {hasInfrastructure(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Infrastructure
-              </h2>
-
+            <SectionCard title="Infrastructure">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {school.campusArea && (
                   <InfoTile label="Campus Area" value={school.campusArea} />
                 )}
-
                 {school.totalClassrooms && (
                   <InfoTile
                     label="Classrooms"
                     value={String(school.totalClassrooms)}
                   />
                 )}
-
                 {school.totalLabs && (
                   <InfoTile label="Labs" value={String(school.totalLabs)} />
                 )}
-
                 {school.libraryBooks && (
                   <InfoTile
                     label="Library Books"
                     value={school.libraryBooks.toLocaleString("en-IN")}
                   />
                 )}
-
                 {school.hostelCapacity && (
                   <InfoTile
                     label="Hostel Capacity"
                     value={String(school.hostelCapacity)}
                   />
                 )}
-
                 {school.totalBuses && (
                   <InfoTile label="Buses" value={String(school.totalBuses)} />
                 )}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Faculty */}
           {hasFaculty(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Faculty
-              </h2>
-
+            <SectionCard title="Faculty">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                 {school.totalTeachers && (
                   <InfoTile
@@ -1277,14 +1311,12 @@ export default async function SchoolDetailPage({
                     value={String(school.totalTeachers)}
                   />
                 )}
-
                 {school.qualifiedTeachers && (
                   <InfoTile
                     label="Qualified Teachers"
                     value={String(school.qualifiedTeachers)}
                   />
                 )}
-
                 {school.totalTeachers && school.qualifiedTeachers && (
                   <InfoTile
                     label="Qualified %"
@@ -1295,22 +1327,18 @@ export default async function SchoolDetailPage({
                   />
                 )}
               </div>
-
               {school.trainingPrograms && (
                 <TextBlock
                   label="Training Programs"
                   value={school.trainingPrograms}
                 />
               )}
-            </section>
+            </SectionCard>
           )}
 
+          {/* Student Life */}
           {hasStudentLife(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Student Life
-              </h2>
-
+            <SectionCard title="Student Life">
               <div className="space-y-4">
                 {school.clubsActivities && (
                   <TextBlock
@@ -1318,37 +1346,36 @@ export default async function SchoolDetailPage({
                     value={school.clubsActivities}
                   />
                 )}
-
                 {school.culturalActivities && (
                   <TextBlock
                     label="Cultural Activities"
                     value={school.culturalActivities}
                   />
                 )}
-
                 {school.annualEvents && (
                   <TextBlock
                     label="Annual Events"
                     value={school.annualEvents}
                   />
                 )}
-
                 {school.educationalTours && (
                   <TextBlock
                     label="Educational Tours"
                     value={school.educationalTours}
                   />
                 )}
+                {getSectionCustomFields(school.customFields, "studentLife").map(
+                  (f) => (
+                    <TextBlock key={f.id} label={f.label} value={f.value} />
+                  ),
+                )}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Achievements */}
           {hasAchievements(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Achievements
-              </h2>
-
+            <SectionCard title="Achievements">
               <div className="space-y-4">
                 {school.academicAchievements && (
                   <TextBlock
@@ -1356,27 +1383,28 @@ export default async function SchoolDetailPage({
                     value={school.academicAchievements}
                   />
                 )}
-
                 {school.sportsAchievements && (
                   <TextBlock label="Sports" value={school.sportsAchievements} />
                 )}
-
                 {school.awardsRecognitions && (
                   <TextBlock
                     label="Awards & Recognitions"
                     value={school.awardsRecognitions}
                   />
                 )}
+                {getSectionCustomFields(
+                  school.customFields,
+                  "achievements",
+                ).map((f) => (
+                  <TextBlock key={f.id} label={f.label} value={f.value} />
+                ))}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Board Results */}
           {school.boardResults?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Board Results
-              </h2>
-
+            <SectionCard title="Board Results">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -1395,7 +1423,6 @@ export default async function SchoolDetailPage({
                       </th>
                     </tr>
                   </thead>
-
                   <tbody className="divide-y divide-gray-100">
                     {school.boardResults.map((r) => (
                       <tr key={r.id}>
@@ -1412,26 +1439,42 @@ export default async function SchoolDetailPage({
                             "—"}
                         </td>
                         <td className="py-3 font-body text-body text-gray-700">
-                          {r.topperName
-                            ? `${r.topperName}${
-                                r.topperScore ? ` (${r.topperScore})` : ""
-                              }`
-                            : "—"}
+                          {r.topperName ? (
+                            <span>
+                              {r.topperName}
+                              {r.topperScore && (
+                                <span className="ml-1.5 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-meta font-heading font-semibold">
+                                  {r.topperScore}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </section>
+              {/* Board Results custom fields */}
+              {getSectionCustomFields(school.customFields, "boardResults")
+                .length > 0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(
+                    school.customFields,
+                    "boardResults",
+                  ).map((f) => (
+                    <InfoTile key={f.id} label={f.label} value={f.value} />
+                  ))}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Scholarships */}
           {school.scholarships?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Scholarships
-              </h2>
-
+            <SectionCard title="Scholarships">
               <div className="space-y-4">
                 {school.scholarships.map((s) => (
                   <div
@@ -1441,14 +1484,12 @@ export default async function SchoolDetailPage({
                     <p className="font-heading font-semibold text-body text-gray-800 mb-1">
                       {s.name}
                     </p>
-
                     {s.eligibility && (
                       <p className="font-body text-body-sm text-gray-600 mb-1">
                         <span className="font-medium">Eligibility:</span>{" "}
                         {s.eligibility}
                       </p>
                     )}
-
                     {s.benefits && (
                       <p className="font-body text-body-sm text-gray-600">
                         <span className="font-medium">Benefits:</span>{" "}
@@ -1458,15 +1499,12 @@ export default async function SchoolDetailPage({
                   </div>
                 ))}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Hostel */}
           {hasHostel(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Hostel
-              </h2>
-
+            <SectionCard title="Hostel">
               <div className="flex flex-wrap gap-3">
                 {school.hostelBoys && <FeatureBadge label="Boys Hostel" />}
                 {school.hostelGirls && <FeatureBadge label="Girls Hostel" />}
@@ -1475,37 +1513,41 @@ export default async function SchoolDetailPage({
                   <FeatureBadge label={`Capacity: ${school.hostelCapacity}`} />
                 )}
               </div>
-            </section>
+              {/* Hostel custom fields */}
+              {getSectionCustomFields(school.customFields, "hostel").length >
+                0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {getSectionCustomFields(school.customFields, "hostel").map(
+                    (f) => (
+                      <InfoTile key={f.id} label={f.label} value={f.value} />
+                    ),
+                  )}
+                </div>
+              )}
+            </SectionCard>
           )}
 
+          {/* Transport */}
           {hasTransport(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Transport
-              </h2>
-
+            <SectionCard title="Transport">
               <div className="flex flex-wrap gap-3 mb-4">
                 {school.gpsTracking && <FeatureBadge label="GPS Tracking" />}
                 {school.totalVehicles && (
                   <FeatureBadge label={`${school.totalVehicles} Vehicles`} />
                 )}
               </div>
-
               {school.transportAreas && (
                 <TextBlock
                   label="Coverage Areas"
                   value={school.transportAreas}
                 />
               )}
-            </section>
+            </SectionCard>
           )}
 
+          {/* Safety */}
           {hasSafety(school) && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Safety & Security
-              </h2>
-
+            <SectionCard title="Safety & Security">
               <div className="flex flex-wrap gap-3">
                 {school.hasCCTV && <FeatureBadge label="CCTV Surveillance" />}
                 {school.hasGuards && <FeatureBadge label="Security Guards" />}
@@ -1515,57 +1557,22 @@ export default async function SchoolDetailPage({
                   <FeatureBadge label="Visitor Management" />
                 )}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* Gallery */}
           {school.images?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Photo Gallery
-              </h2>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {school.images.map((img) => {
-                  const galleryUrl = optimizeCloudinaryUrl(img.url, {
-                    width: 640,
-                  });
-
-                  return (
-                    <div
-                      key={img.id}
-                      className="relative aspect-video rounded-xl overflow-hidden bg-blue-50 border border-gray-100"
-                    >
-                      <Image
-                        src={galleryUrl ?? img.url}
-                        alt={img.caption || `${school.name} photo`}
-                        fill
-                        sizes="(max-width: 640px) 50vw, 33vw"
-                        loading="lazy"
-                        placeholder="blur"
-                        blurDataURL={IMAGE_BLUR_DATA_URL}
-                        className="object-cover hover:scale-105 transition-transform duration-300"
-                      />
-
-                      {img.caption && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
-                          <p className="text-white text-meta truncate">
-                            {img.caption}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+            <SectionCard title="Photo Gallery">
+              <GalleryLightbox
+                images={school.images}
+                schoolName={school.name}
+              />
+            </SectionCard>
           )}
 
+          {/* Downloads */}
           {school.downloads?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                Downloads
-              </h2>
-
+            <SectionCard title="Downloads">
               <div className="space-y-3">
                 {school.downloads.map((d) => (
                   <a
@@ -1596,15 +1603,12 @@ export default async function SchoolDetailPage({
                   </a>
                 ))}
               </div>
-            </section>
+            </SectionCard>
           )}
 
+          {/* FAQs */}
           {school.faqs?.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-              <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-                FAQs
-              </h2>
-
+            <SectionCard title="FAQs">
               <div className="space-y-4">
                 {school.faqs.map((faq) => (
                   <div
@@ -1620,299 +1624,240 @@ export default async function SchoolDetailPage({
                   </div>
                 ))}
               </div>
-            </section>
+            </SectionCard>
           )}
 
-         {school.customFields?.length > 0 && (
-  <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100">
-    <h2 className="font-heading font-bold text-h2 text-gray-800 mb-5">
-      Additional Information
-    </h2>
-
-    {/* Section-wise grouping */}
-    {(() => {
-      const SECTION_LABELS: Record<string, string> = {
-        basicInfo: "Basic Info",
-        about: "About",
-        academics: "Academics",
-        admissions: "Admissions",
-        fees: "Fee Details",
-        facilities: "Facilities",
-        sports: "Sports",
-        programs: "Programs",
-        studentLife: "Student Life",
-        achievements: "Achievements",
-        boardResults: "Board Results",
-        hostel: "Hostel",
-      };
-
-      const grouped = school.customFields.reduce<Record<string, CustomField[]>>(
-        (acc, field) => {
-          const key = field.section || "other";
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(field);
-          return acc;
-        },
-        {},
-      );
-
-      return Object.entries(grouped).map(([section, fields]) => (
-        <div key={section} className="mb-5 last:mb-0">
-          {Object.keys(grouped).length > 1 && (
-            <p className="font-heading text-label font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              {SECTION_LABELS[section] ?? section}
-            </p>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {fields.map((field) => (
-              <div
-                key={field.id}
-                className="bg-blue-50 rounded-xl p-3.5 border border-blue-200"
-              >
-                <p className="font-body text-meta text-gray-400 mb-1">
-                  {field.label}
-                </p>
-                <p className="font-heading font-semibold text-label text-gray-800">
-                  {field.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ));
-    })()}
-  </section>
-)}
-
+          {/* Nearby Schools */}
           <NearbySchoolsSection schools={nearbySchools} />
         </div>
 
         {/* ── Right Sidebar ── */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow-card p-6 border border-gray-100 sticky top-24">
-            <h3 className="font-heading font-semibold text-h3 text-gray-800 mb-4">
-              Contact
-            </h3>
-
-            <div className="space-y-3 mb-5">
-              <a
-                href={`tel:${school.phone}`}
-                className="flex items-center gap-3 group"
-              >
-                <ContactIcon icon="phone" />
-                <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
-                  {school.phone}
-                </span>
-              </a>
-
-              {additionalPhones.map((item, index) => {
-                const phone = getPhoneValue(item);
-                if (!phone) return null;
-
-                return (
-                  <a
-                    key={`${phone}-${index}`}
-                    href={`tel:${phone}`}
-                    className="flex items-center gap-3 group"
-                  >
-                    <ContactIcon icon="phone" />
-                    <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
-                      {item.label ? `${item.label}: ` : ""}
-                      {phone}
-                    </span>
-                  </a>
-                );
-              })}
-
-              {school.whatsapp && (
-                <a
-                  href={`https://wa.me/${school.whatsapp.replace(/\D/g, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 group"
-                >
-                  <ContactIcon icon="whatsapp" />
-                  <span className="font-body text-body text-green-600 group-hover:text-green-800 transition-colors">
-                    WhatsApp
-                  </span>
-                </a>
-              )}
-
-              {school.email && (
-                <a
-                  href={`mailto:${school.email}`}
-                  className="flex items-center gap-3 group"
-                >
-                  <ContactIcon icon="email" />
-                  <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors truncate">
-                    {school.email}
-                  </span>
-                </a>
-              )}
-
-              {school.website && (
-                <a
-                  href={school.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 group"
-                >
-                  <ContactIcon icon="website" />
-                  <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
-                    Visit Website
-                  </span>
-                </a>
-              )}
-
-              <div className="flex items-start gap-3">
-                <ContactIcon icon="address" />
-                <span className="font-body text-body text-gray-800 leading-relaxed">
-                  {school.address}, {school.city}, {school.state}
-                  {school.pincode ? ` — ${school.pincode}` : ""}
-                </span>
-              </div>
-
-              <a
-                href={directionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 group"
-              >
-                <ContactIcon icon="map" />
-                <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
-                  View on Map
-                </span>
-              </a>
+        <div className="space-y-5">
+          <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden sticky top-24">
+            {/* CTA Block */}
+            <div className="bg-blue-600 p-5 text-center">
+              <p className="font-heading font-bold text-white text-body mb-1">
+                Interested in this school?
+              </p>
+              <p className="font-body text-blue-200 text-meta mb-4">
+                Send a free inquiry — get a response within 24 hours.
+              </p>
+              <InquiryModal
+                schoolId={school.id}
+                schoolName={school.name}
+                fullWidth
+              />
             </div>
 
-            {mapEmbedUrl && (
-              <div className="mb-5 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
-                <iframe
-                  src={mapEmbedUrl}
-                  title={`${school.name} location map`}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="h-56 w-full border-0"
-                  allowFullScreen
-                />
-              </div>
-            )}
+            <div className="p-5">
+              <h3 className="font-heading font-semibold text-h3 text-gray-800 mb-4">
+                Contact
+              </h3>
 
-            {(school.admissionCoordinatorName ||
-              school.admissionPhone ||
-              school.admissionEmail) && (
-              <div className="border-t border-gray-100 pt-4 mb-5">
-                <p className="font-heading font-semibold text-label text-gray-500 mb-2">
-                  Admission Contact
-                </p>
+              <div className="space-y-3 mb-5">
+                <a
+                  href={`tel:${school.phone}`}
+                  className="flex items-center gap-3 group"
+                >
+                  <ContactIcon icon="phone" />
+                  <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
+                    {school.phone}
+                  </span>
+                </a>
 
-                {school.admissionCoordinatorName && (
-                  <p className="font-body text-body text-gray-800 mb-1">
-                    {school.admissionCoordinatorName}
-                  </p>
-                )}
-
-                {school.admissionPhone && (
-                  <a
-                    href={`tel:${school.admissionPhone}`}
-                    className="block font-body text-body text-blue-600 hover:text-blue-800 mb-1"
-                  >
-                    {school.admissionPhone}
-                  </a>
-                )}
-
-                {school.admissionEmail && (
-                  <a
-                    href={`mailto:${school.admissionEmail}`}
-                    className="block font-body text-body text-blue-600 hover:text-blue-800 truncate"
-                  >
-                    {school.admissionEmail}
-                  </a>
-                )}
-              </div>
-            )}
-
-            {admissionCoordinators.length > 0 && (
-              <div className="border-t border-gray-100 pt-4 mb-5">
-                <p className="font-heading font-semibold text-label text-gray-500 mb-2">
-                  Admission Coordinators
-                </p>
-
-                <div className="space-y-3">
-                  {admissionCoordinators.map((coordinator, index) => (
-                    <div
-                      key={`${coordinator.name}-${index}`}
-                      className="rounded-xl bg-blue-50 border border-blue-100 p-3"
+                {additionalPhones.map((item, index) => {
+                  const phone = getPhoneValue(item);
+                  if (!phone) return null;
+                  return (
+                    <a
+                      key={`${phone}-${index}`}
+                      href={`tel:${phone}`}
+                      className="flex items-center gap-3 group"
                     >
-                      {coordinator.name && (
-                        <p className="font-heading font-semibold text-body text-gray-800">
-                          {coordinator.name}
-                        </p>
-                      )}
+                      <ContactIcon icon="phone" />
+                      <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
+                        {item.label ? `${item.label}: ` : ""}
+                        {phone}
+                      </span>
+                    </a>
+                  );
+                })}
 
-                      {coordinator.designation && (
-                        <p className="font-body text-meta text-gray-500 mb-1">
-                          {coordinator.designation}
-                        </p>
-                      )}
+                {school.whatsapp && (
+                  <a
+                    href={`https://wa.me/${school.whatsapp.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 group"
+                  >
+                    <ContactIcon icon="whatsapp" />
+                    <span className="font-body text-body text-green-600 group-hover:text-green-800 transition-colors">
+                      WhatsApp
+                    </span>
+                  </a>
+                )}
 
-                      {coordinator.phone && (
-                        <a
-                          href={`tel:${coordinator.phone}`}
-                          className="block font-body text-label text-blue-600 hover:text-blue-800"
-                        >
-                          {coordinator.phone}
-                        </a>
-                      )}
+                {school.email && (
+                  <a
+                    href={`mailto:${school.email}`}
+                    className="flex items-center gap-3 group"
+                  >
+                    <ContactIcon icon="email" />
+                    <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors truncate">
+                      {school.email}
+                    </span>
+                  </a>
+                )}
 
-                      {coordinator.email && (
-                        <a
-                          href={`mailto:${coordinator.email}`}
-                          className="block font-body text-label text-blue-600 hover:text-blue-800 truncate"
-                        >
-                          {coordinator.email}
-                        </a>
-                      )}
-                    </div>
-                  ))}
+                {school.website && (
+                  <a
+                    href={school.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 group"
+                  >
+                    <ContactIcon icon="website" />
+                    <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
+                      Visit Website
+                    </span>
+                  </a>
+                )}
+
+                <div className="flex items-start gap-3">
+                  <ContactIcon icon="address" />
+                  <span className="font-body text-body text-gray-800 leading-relaxed">
+                    {school.address}, {school.city}, {school.state}
+                    {school.pincode ? ` — ${school.pincode}` : ""}
+                  </span>
                 </div>
+
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 group"
+                >
+                  <ContactIcon icon="map" />
+                  <span className="font-body text-body text-blue-600 group-hover:text-blue-800 transition-colors">
+                    View on Map
+                  </span>
+                </a>
               </div>
-            )}
 
-            {hasSocialLinks && (
-              <div className="border-t border-gray-100 pt-4 mb-5">
-                <p className="font-heading font-semibold text-label text-gray-500 mb-3">
-                  Follow Us
-                </p>
+              {/* {mapEmbedUrl && (
+                <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                  <iframe
+                    src={mapEmbedUrl}
+                    title={`${school.name} location map`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="h-48 w-full border-0"
+                    allowFullScreen
+                  />
+                </div>
+              )} */}
 
-                <div className="space-y-2">
-                  {socialLinks.map((link, index) => {
-                    if (!link.url) return null;
+              {(school.admissionCoordinatorName ||
+                school.admissionPhone ||
+                school.admissionEmail) && (
+                <div className="border-t border-gray-100 pt-4 mb-5">
+                  <p className="font-heading font-semibold text-label text-gray-500 mb-2">
+                    Admission Contact
+                  </p>
+                  {school.admissionCoordinatorName && (
+                    <p className="font-body text-body text-gray-800 mb-1">
+                      {school.admissionCoordinatorName}
+                    </p>
+                  )}
+                  {school.admissionPhone && (
+                    <a
+                      href={`tel:${school.admissionPhone}`}
+                      className="block font-body text-body text-blue-600 hover:text-blue-800 mb-1"
+                    >
+                      {school.admissionPhone}
+                    </a>
+                  )}
+                  {school.admissionEmail && (
+                    <a
+                      href={`mailto:${school.admissionEmail}`}
+                      className="block font-body text-body text-blue-600 hover:text-blue-800 truncate"
+                    >
+                      {school.admissionEmail}
+                    </a>
+                  )}
+                </div>
+              )}
 
-                    return (
-                      <a
-                        key={`${link.platform}-${index}`}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+              {admissionCoordinators.length > 0 && (
+                <div className="border-t border-gray-100 pt-4 mb-5">
+                  <p className="font-heading font-semibold text-label text-gray-500 mb-2">
+                    Admission Coordinators
+                  </p>
+                  <div className="space-y-3">
+                    {admissionCoordinators.map((coordinator, index) => (
+                      <div
+                        key={`${coordinator.name}-${index}`}
+                        className="rounded-xl bg-blue-50 border border-blue-100 p-3"
                       >
-                        <span className="font-body text-label">
-                          {link.platform || "Social Link"}
-                        </span>
-                        <span className="text-meta">Open</span>
-                      </a>
-                    );
-                  })}
+                        {coordinator.name && (
+                          <p className="font-heading font-semibold text-body text-gray-800">
+                            {coordinator.name}
+                          </p>
+                        )}
+                        {coordinator.designation && (
+                          <p className="font-body text-meta text-gray-500 mb-1">
+                            {coordinator.designation}
+                          </p>
+                        )}
+                        {coordinator.phone && (
+                          <a
+                            href={`tel:${coordinator.phone}`}
+                            className="block font-body text-label text-blue-600 hover:text-blue-800"
+                          >
+                            {coordinator.phone}
+                          </a>
+                        )}
+                        {coordinator.email && (
+                          <a
+                            href={`mailto:${coordinator.email}`}
+                            className="block font-body text-label text-blue-600 hover:text-blue-800 truncate"
+                          >
+                            {coordinator.email}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <InquiryModal
-              schoolId={school.id}
-              schoolName={school.name}
-              fullWidth
-            />
+              {hasSocialLinks && (
+                <div className="border-t border-gray-100 pt-4 mb-5">
+                  <p className="font-heading font-semibold text-label text-gray-500 mb-3">
+                    Follow Us
+                  </p>
+                  <div className="space-y-2">
+                    {socialLinks.map((link, index) => {
+                      if (!link.url) return null;
+                      return (
+                        <a
+                          key={`${link.platform}-${index}`}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                        >
+                          <span className="font-body text-label">
+                            {link.platform || "Social Link"}
+                          </span>
+                          <span className="text-meta">Open</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <Link
@@ -1940,6 +1885,30 @@ export default async function SchoolDetailPage({
   );
 }
 
+// ─── Section Card wrapper ──────────────────────────────────────────────────────
+
+function SectionCard({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white rounded-2xl shadow-card p-6 border border-gray-100 border-l-4 border-l-blue-500">
+      <div className="flex items-center gap-3 mb-5">
+        <h2 className="font-heading font-bold text-h2 text-gray-800">
+          {title}
+        </h2>
+        {badge}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
@@ -1956,7 +1925,6 @@ function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
             Other approved schools near this location.
           </p>
         </div>
-
         <Link
           href="/schools"
           className="text-sm font-heading font-semibold text-blue-600 hover:text-blue-800 whitespace-nowrap"
@@ -1990,7 +1958,12 @@ function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
                   />
                 ) : (
                   <span className="font-heading font-bold text-blue-600 text-sm">
-                    {getInitials(school.name)}
+                    {school.name
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((w: string) => w[0])
+                      .join("")
+                      .toUpperCase()}
                   </span>
                 )}
               </div>
@@ -1999,16 +1972,13 @@ function NearbySchoolsSection({ schools }: { schools: NearbySchool[] }) {
                 <h3 className="font-heading font-semibold text-body text-gray-800 line-clamp-2 group-hover:text-blue-700 transition-colors">
                   {school.name}
                 </h3>
-
                 <p className="font-body text-label text-gray-500 mt-1 truncate">
                   {school.city}, {school.state}
                 </p>
-
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className="px-2 py-0.5 rounded-full bg-white border border-gray-100 text-meta text-gray-600">
                     {BOARD_LABEL[school.board] ?? school.board}
                   </span>
-
                   {typeof school.distanceKm === "number" && (
                     <span className="px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-meta text-blue-700">
                       {school.distanceKm} km away
@@ -2096,7 +2066,6 @@ function FeatureCard({
     color === "green"
       ? "bg-green-50 border-green-200"
       : "bg-blue-50 border-blue-200";
-
   const dotCls = color === "green" ? "bg-green-400" : "bg-blue-400";
 
   return (

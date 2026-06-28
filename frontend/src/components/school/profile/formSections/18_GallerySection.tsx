@@ -27,7 +27,7 @@ export default function GallerySection({
   });
 
   function handleUploaded(url: string) {
-    append({ url, caption: "", category: "campus" });
+    append({ url, caption: "", category: "" });
   }
 
   return (
@@ -103,17 +103,12 @@ export default function GallerySection({
                         />
                       </FormField>
                       <FormField label="Category">
-                        <select
-                          className={selectClass}
-                          {...register(`gallery.images.${index}.category`)}
-                        >
-                          {CATEGORIES.map((cat) => (
-                            <option key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </option>
-                          ))}
-                        </select>
-                      </FormField>
+  <Input
+    placeholder="e.g. Campus, Classroom, Sports..."
+    className={inputClass}
+    {...register(`gallery.images.${index}.category`)}
+  />
+</FormField>
                     </div>
 
                     <Button
@@ -133,7 +128,7 @@ export default function GallerySection({
         </div>
       )}
 
-      {fields.length > 0 && (
+      {/* {fields.length > 0 && (
         <div className="flex flex-wrap gap-2 px-1">
           {CATEGORIES.map((cat) => {
             const count = fields.filter(
@@ -153,7 +148,7 @@ export default function GallerySection({
             );
           })}
         </div>
-      )}
+      )} */}
     </div>
   );
 }

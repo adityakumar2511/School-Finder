@@ -17,6 +17,10 @@ import {
 import { auth } from "../middleware/auth";
 import { requireRole } from "../middleware/roleCheck";
 import { validate } from "../middleware/validate";
+import {
+  generalRateLimiter,
+  authenticatedRateLimiter,
+} from "../middleware/security";
 
 import {
   createSchoolBodySchema,
@@ -27,20 +31,24 @@ import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
 
-router.get("/", asyncHandler(getSchools));
+// ── Public routes — generalRateLimiter (300/15min) ────────────────────────────
 
-// No frontend caller yet — kept for future search feature
-router.get("/search", asyncHandler(searchSchools));
+router.get("/", generalRateLimiter, asyncHandler(getSchools));
 
-router.get("/cities", asyncHandler(getCities));
+router.get("/search", generalRateLimiter, asyncHandler(searchSchools));
+
+router.get("/cities", generalRateLimiter, asyncHandler(getCities));
 
 // Important: keep /nearby before /:slug
-router.get("/nearby", asyncHandler(getNearbySchools));
+router.get("/nearby", generalRateLimiter, asyncHandler(getNearbySchools));
+
+// ── Authenticated routes — authenticatedRateLimiter (500/15min) ───────────────
 
 router.post(
   "/my-school/images",
   auth,
   requireRole("SCHOOL_ADMIN"),
+  authenticatedRateLimiter,
   asyncHandler(addSchoolImage),
 );
 
@@ -48,6 +56,7 @@ router.delete(
   "/images/:id",
   auth,
   requireRole("SCHOOL_ADMIN"),
+  authenticatedRateLimiter,
   asyncHandler(deleteSchoolImage),
 );
 
@@ -55,15 +64,22 @@ router.get(
   "/my-school",
   auth,
   requireRole("SCHOOL_ADMIN"),
+  authenticatedRateLimiter,
   asyncHandler(getMySchool),
 );
 
-router.get("/:slug", asyncHandler(getSchool));
+// ── Public detail — generalRateLimiter ────────────────────────────────────────
+// Must stay after /my-school and /nearby to avoid slug conflict
+
+router.get("/:slug", generalRateLimiter, asyncHandler(getSchool));
+
+// ── School mutations ──────────────────────────────────────────────────────────
 
 router.post(
   "/",
   auth,
   requireRole("SCHOOL_ADMIN"),
+  authenticatedRateLimiter,
   validate(createSchoolBodySchema),
   asyncHandler(createSchool),
 );
@@ -71,6 +87,7 @@ router.post(
 router.patch(
   "/:id",
   auth,
+  authenticatedRateLimiter,
   validate(updateSchoolBodySchema),
   asyncHandler(updateSchool),
 );
@@ -79,6 +96,7 @@ router.delete(
   "/:id",
   auth,
   requireRole("ADMIN"),
+  authenticatedRateLimiter,
   asyncHandler(deleteSchool),
 );
 
