@@ -9,7 +9,7 @@ export async function GET(
   const { id } = await context.params;
 
   return proxyToBackend(
-    `/api/schools/${id}`,
+    `/api/admin/schools/${id}`,   // ← was /api/schools/${id}
     { method: "GET" },
     { useAdminCookie: true },
   );

@@ -54,6 +54,7 @@ export type SchoolSearchRecord = Prisma.SchoolGetPayload<{
 }>;
 
 export const schoolListOrderBy = [
+  { featuredUntil: "desc" as const },
   { createdAt: "desc" as const },
   { id: "desc" as const },
 ];
@@ -185,9 +186,7 @@ const VALID_BOARD_FILTERS = new Set([
   "OTHER",
 ]);
 
-function normalizeBoardFilters(
-  board: string | string[] | undefined,
-): string[] {
+function normalizeBoardFilters(board: string | string[] | undefined): string[] {
   if (!board) return [];
 
   const values = Array.isArray(board) ? board : [board];
@@ -299,6 +298,11 @@ export const schoolDetailSelect = {
   status: true,
   isVisible: true,
   ownerId: true,
+
+  createdAt: true,
+  rejectionReason: true,
+  isFeatured: true,
+  featuredUntil: true,
 
   // Core
   description: true,
@@ -459,10 +463,7 @@ export const schoolDetailSelect = {
       topperName: true,
       topperScore: true,
     },
-    orderBy: [
-      { year: "desc" as const },
-      { classLevel: "asc" as const },
-    ],
+    orderBy: [{ year: "desc" as const }, { classLevel: "asc" as const }],
   },
   scholarships: {
     select: { id: true, name: true, eligibility: true, benefits: true },

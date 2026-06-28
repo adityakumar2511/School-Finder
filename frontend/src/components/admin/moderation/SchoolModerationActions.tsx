@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -43,7 +43,7 @@ type SchoolDetail = {
   website: string | null;
   description: string | null;
   status: SchoolStatus;
-  isVisible: boolean; // ← naya — §4
+  isVisible: boolean;
   isFeatured: boolean;
   featuredUntil: string | null;
   rejectionReason: string | null;
@@ -65,6 +65,15 @@ type Props = {
   viewerAccessLevel: AdminAccessLevel | null;
 };
 
+type LoadingAction =
+  | "approve"
+  | "reject"
+  | "delete"
+  | "visibility"
+  | "featured"
+  | "view"
+  | null;
+
 export default function SchoolModerationActions({
   school,
   currentStatus,
@@ -73,44 +82,45 @@ export default function SchoolModerationActions({
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Cache fetched detail — avoids re-fetch on every open
   const [fullSchool, setFullSchool] = useState<Record<string, unknown> | null>(null);
-
-  type LoadingAction =
-    | "approve"
-    | "reject"
-    | "delete"
-    | "visibility"
-    | "featured"
-    | "view"
-    | null;
-
   const [loading, setLoading] = useState<LoadingAction>(null);
   const [isVisible, setIsVisible] = useState<boolean>(school.isVisible);
   const [isFeatured, setIsFeatured] = useState<boolean>(school.isFeatured);
-
-  async function handleViewOpen() {
-    setLoading("view");
-    try {
-      const res = await fetch(`/api/admin/schools/${school.id}`);
-      const data = await res.json();
-      const detail = data?.school ?? data?.data ?? null;
-      setFullSchool(detail ?? school);
-    } catch {
-      setFullSchool(school);
-    } finally {
-      setLoading(null);
-      setModalOpen(true);
-    }
-  }
 
   const canWrite =
     viewerAccessLevel === "READ_WRITE" || viewerAccessLevel === "FULL_ACCESS";
   const canDelete = viewerAccessLevel === "FULL_ACCESS";
 
+  // Fetch once, cache in state — subsequent opens are instant
+  const handleViewOpen = useCallback(async () => {
+    if (fullSchool) {
+      // Already fetched — open instantly
+      setModalOpen(true);
+      return;
+    }
+    setLoading("view");
+    try {
+      const res = await fetch(`/api/admin/schools/${school.id}`);
+      if (!res.ok) throw new Error("fetch failed");
+      const data = await res.json();
+      const detail = data?.data ?? data?.school ?? null;
+      setFullSchool(detail ?? (school as unknown as Record<string, unknown>));
+    } catch {
+      // Fallback to list-level data so modal always opens
+      setFullSchool(school as unknown as Record<string, unknown>);
+    } finally {
+      setLoading(null);
+      setModalOpen(true);
+    }
+  }, [fullSchool, school]);
+
   async function handleApprove(id: string) {
     setLoading("approve");
     try {
       await fetch(`/api/admin/schools/${id}/approve`, { method: "PATCH" });
+      // Invalidate cache so re-open shows updated status
+      setFullSchool(null);
       router.refresh();
     } finally {
       setLoading(null);
@@ -125,6 +135,7 @@ export default function SchoolModerationActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
       });
+      setFullSchool(null);
       router.refresh();
     } finally {
       setLoading(null);
@@ -142,11 +153,10 @@ export default function SchoolModerationActions({
     }
   }
 
-  // §4 — toggle public listing visibility, independent of approve/reject status
   async function handleToggleVisibility() {
     const next = !isVisible;
     setLoading("visibility");
-    setIsVisible(next); // optimistic
+    setIsVisible(next);
     try {
       const res = await fetch(`/api/admin/schools/${school.id}/visibility`, {
         method: "PATCH",
@@ -154,8 +164,9 @@ export default function SchoolModerationActions({
         body: JSON.stringify({ isVisible: next }),
       });
       if (!res.ok) {
-        setIsVisible(!next); // revert on failure
+        setIsVisible(!next);
       } else {
+        setFullSchool(null); // invalidate cache
         router.refresh();
       }
     } catch {
@@ -164,6 +175,7 @@ export default function SchoolModerationActions({
       setLoading(null);
     }
   }
+
   async function handleToggleFeatured() {
     const next = !isFeatured;
     setLoading("featured");
@@ -177,8 +189,12 @@ export default function SchoolModerationActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ featured: next, featuredUntil }),
       });
-      if (!res.ok) setIsFeatured(!next);
-      else router.refresh();
+      if (!res.ok) {
+        setIsFeatured(!next);
+      } else {
+        setFullSchool(null); // invalidate cache
+        router.refresh();
+      }
     } catch {
       setIsFeatured(!next);
     } finally {
@@ -189,7 +205,7 @@ export default function SchoolModerationActions({
   return (
     <>
       <div className="flex items-center gap-2 flex-wrap">
-        {/* View detail modal — always visible */}
+        {/* View — always visible, cached after first fetch */}
         <Button
           size="sm"
           variant="outline"
@@ -207,7 +223,7 @@ export default function SchoolModerationActions({
           )}
         </Button>
 
-        {/* Edit school — READ_WRITE+ */}
+        {/* Edit — READ_WRITE+ */}
         {canWrite && (
           <Button
             asChild
@@ -222,7 +238,7 @@ export default function SchoolModerationActions({
           </Button>
         )}
 
-        {/* View inquiries for this school — always visible */}
+        {/* Inquiries — always visible */}
         <Button
           asChild
           size="sm"
@@ -235,7 +251,7 @@ export default function SchoolModerationActions({
           </Link>
         </Button>
 
-        {/* List/Unlist — §4, READ_WRITE+, independent of approve/reject */}
+        {/* List / Unlist — READ_WRITE+ */}
         {canWrite && (
           <Button
             size="sm"
@@ -264,7 +280,7 @@ export default function SchoolModerationActions({
           </Button>
         )}
 
-        {/* Feature / Unfeature — §4, READ_WRITE+, only for APPROVED schools */}
+        {/* Feature / Unfeature — READ_WRITE+, APPROVED only */}
         {canWrite && currentStatus === "APPROVED" && (
           <Button
             size="sm"
@@ -293,7 +309,7 @@ export default function SchoolModerationActions({
           </Button>
         )}
 
-        {/* Approve / Reject — READ_WRITE+, only for PENDING */}
+        {/* Approve / Reject — READ_WRITE+, PENDING only */}
         {currentStatus === "PENDING" && canWrite && (
           <>
             <Button
@@ -311,14 +327,15 @@ export default function SchoolModerationActions({
                 </>
               )}
             </Button>
+            {/* Reject — fetches full school first so modal has all data */}
             <Button
               size="sm"
               disabled={loading !== null}
-              onClick={() => setModalOpen(true)}
+              onClick={handleViewOpen}
               variant="outline"
               className="h-8 px-3 border-red-200 text-red-600 hover:bg-red-50 font-heading text-xs rounded-lg"
             >
-              {loading === "reject" ? (
+              {loading === "view" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <>
@@ -351,19 +368,18 @@ export default function SchoolModerationActions({
         )}
       </div>
 
-      {/* School detail + reject modal */}
-      {/* School detail + reject modal */}
+      {/* Detail modal — only mount when data is ready */}
       {modalOpen && fullSchool && (
         <SchoolDetailModal
           school={fullSchool as Parameters<typeof SchoolDetailModal>[0]["school"]}
           open={modalOpen}
-          onClose={() => { setModalOpen(false); setFullSchool(null); }}
+          onClose={() => setModalOpen(false)}
           onApprove={canWrite ? handleApprove : undefined}
           onReject={canWrite ? handleReject : undefined}
         />
       )}
-      
-      {/* Delete confirm dialog — only reachable when canDelete is true */}
+
+      {/* Delete confirm */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>

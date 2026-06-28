@@ -21,7 +21,11 @@ import {
   invalidateSchoolCache,
   withCache,
 } from "../lib/cache";
-import { adminSchoolListSelect, buildAdminSchoolWhere, schoolDetailSelect  } from "../lib/queries/schools";
+import {
+  adminSchoolListSelect,
+  buildAdminSchoolWhere,
+  schoolDetailSelect,
+} from "../lib/queries/schools";
 import type { AddAdminInput } from "../validators/auth.validator";
 
 // ── Audit log helper ───────────────────────────────────────────────────────────
@@ -129,6 +133,11 @@ export const getAdminSchools = async (req: AuthRequest, res: Response) => {
       where,
       skip,
       take: limit,
+      // orderBy: [
+      //   { isFeatured: "desc" },
+      //   { featuredUntil: "desc" },
+      //   { createdAt: "desc" },
+      // ],
       orderBy: { createdAt: "desc" },
       select: adminSchoolListSelect,
     }),
@@ -149,7 +158,7 @@ export const getAdminStates = async (_req: AuthRequest, res: Response) => {
       select: { state: true },
       distinct: ["state"],
       orderBy: { state: "asc" },
-    })
+    }),
   );
 
   res.json({ data: states.map((s) => s.state).filter(Boolean) });
@@ -159,7 +168,9 @@ export const getAdminStates = async (_req: AuthRequest, res: Response) => {
 export const getAdminCities = async (req: AuthRequest, res: Response) => {
   const state = (req.query.state as string | undefined)?.trim();
 
-  const cacheKey = buildCacheKey("admin:schools:cities", { state: state || "" });
+  const cacheKey = buildCacheKey("admin:schools:cities", {
+    state: state || "",
+  });
 
   const cities = await withCache(cacheKey, CACHE_TTL.SCHOOL_LIST, () =>
     prisma.school.findMany({
@@ -170,7 +181,7 @@ export const getAdminCities = async (req: AuthRequest, res: Response) => {
       select: { city: true },
       distinct: ["city"],
       orderBy: { city: "asc" },
-    })
+    }),
   );
 
   res.json({ data: cities.map((c) => c.city).filter(Boolean) });
@@ -268,7 +279,7 @@ export const getAdminUsers = async (req: AuthRequest, res: Response) => {
         phone: true,
         createdAt: true,
         adminAccessLevel: true,
-        isSuperAdmin: true,  // ← yeh add karo
+        isSuperAdmin: true, // ← yeh add karo
       },
     }),
     prisma.user.count({ where }),
@@ -363,18 +374,28 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   }
 
   if (target.role === "SCHOOL_ADMIN" && role === "PARENT") {
-    throw Errors.BadRequest("SCHOOL_ADMIN accounts cannot be converted to PARENT");
+    throw Errors.BadRequest(
+      "SCHOOL_ADMIN accounts cannot be converted to PARENT",
+    );
   }
 
   if (target.role === "PARENT" && role === "SCHOOL_ADMIN") {
-    throw Errors.BadRequest("PARENT accounts cannot be converted to SCHOOL_ADMIN");
+    throw Errors.BadRequest(
+      "PARENT accounts cannot be converted to SCHOOL_ADMIN",
+    );
   }
 
   if (target.role !== "ADMIN" && role === "ADMIN") {
-    throw Errors.BadRequest("Use the Add Admin flow to grant administrator access");
+    throw Errors.BadRequest(
+      "Use the Add Admin flow to grant administrator access",
+    );
   }
 
-  if (target.id === req.user!.id && target.role === "ADMIN" && role !== "ADMIN") {
+  if (
+    target.id === req.user!.id &&
+    target.role === "ADMIN" &&
+    role !== "ADMIN"
+  ) {
     throw Errors.Forbidden("You cannot demote your own admin account");
   }
 
@@ -432,7 +453,13 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
 
   const target = await prisma.user.findUnique({
     where: { id: targetId },
-    select: { id: true, role: true, email: true, isSuperAdmin: true, phone: true },
+    select: {
+      id: true,
+      role: true,
+      email: true,
+      isSuperAdmin: true,
+      phone: true,
+    },
   });
 
   if (!target) {
@@ -594,7 +621,7 @@ export const addSchoolDirect = async (req: AuthRequest, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(
       passwordToHash,
-      parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
+      parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
     );
 
     owner = await prisma.user.create({
@@ -718,6 +745,7 @@ export const getAdminSchoolById = async (req: AuthRequest, res: Response) => {
     where: { id },
     select: {
       ...schoolDetailSelect,
+      owner: { select: { name: true, email: true } }, // override — email add
       customFields: true,
       boardResults: { orderBy: { year: "desc" } },
       scholarships: true,
@@ -833,7 +861,10 @@ export const addAdminDirect = async (req: AuthRequest, res: Response) => {
 // PATCH /api/admin/schools/:id/visibility — §4
 // Body: { isVisible?: boolean } — agar diya hai to explicit set karta hai,
 // nahi diya to current value flip karta hai.
-export const toggleSchoolVisibility = async (req: AuthRequest, res: Response) => {
+export const toggleSchoolVisibility = async (
+  req: AuthRequest,
+  res: Response,
+) => {
   const id = String(req.params.id).trim();
   const { isVisible } = req.body as { isVisible?: boolean };
 
@@ -874,8 +905,6 @@ export const toggleSchoolVisibility = async (req: AuthRequest, res: Response) =>
   });
 };
 
-
-
 // POST /api/admin/approve (legacy)
 export const approveSchool = async (req: AuthRequest, res: Response) => {
   const { schoolId } = req.body;
@@ -900,7 +929,6 @@ export const rejectSchool = async (req: AuthRequest, res: Response) => {
   req.body = { reason };
   return rejectSchoolById(req, res);
 };
-
 
 // PATCH /api/admin/schools/:id/featured
 export const setSchoolFeatured = async (req: AuthRequest, res: Response) => {

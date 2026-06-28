@@ -1,1054 +1,1054 @@
-# SchoolFinder — Backend Documentation
-
-> Last updated: June 27, 2026
-> Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry
-> Default port: `4000`
-> Repository path: `backend/`
-> Schema owner: `backend/prisma/schema.prisma`
-
-The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
-
-Future-only modules such as Blog CMS, Razorpay payment verification, direct WhatsApp routing, reviews, and real AI recommendations are documented separately in `Future-Features.md`.
-
----
-
-## Table of Contents
-
-1. [Architecture Overview](#1-architecture-overview)
-2. [Tech Stack](#2-tech-stack)
-3. [Folder Structure](#3-folder-structure)
-4. [Request Lifecycle](#4-request-lifecycle)
-5. [Authentication and Authorization](#5-authentication-and-authorization)
-6. [API Endpoints](#6-api-endpoints)
-7. [Controllers](#7-controllers)
-8. [Middleware](#8-middleware)
-9. [Validation Layer](#9-validation-layer)
-10. [Database Schema](#10-database-schema)
-11. [School Query Layer](#11-school-query-layer)
-12. [Inquiry and Lead System](#12-inquiry-and-lead-system)
-13. [Spam Protection](#13-spam-protection)
-14. [Featured Listings](#14-featured-listings)
-15. [Nearby Schools](#15-nearby-schools)
-16. [Contact Submissions](#16-contact-submissions)
-17. [Caching](#17-caching)
-18. [Error Handling and Sentry](#18-error-handling-and-sentry)
-19. [File Storage](#19-file-storage)
-20. [Environment Variables](#20-environment-variables)
-21. [Deployment](#21-deployment)
-22. [Current Backend Features](#22-current-backend-features)
-
----
-
-## 1. Architecture Overview
-
-```txt
-Client / Next.js frontend
-    │
-    │ HTTPS + Bearer JWT / admin cookie proxy
-    ▼
-Express API
-    ├── Security middleware
-    ├── Rate limiters
-    ├── JWT auth middleware
-    ├── Role + admin access guards
-    ├── Zod validation + sanitization
-    ├── Controllers
-    ├── Prisma query layer
-    ├── Cache helpers
-    ├── Sentry error capture
-    └── PostgreSQL/Neon
-```
-
-### Backend responsibilities
-
-| Area | Responsibility |
-|---|---|
-| Auth | Parent, school admin, platform admin login/register/reset/OTP |
-| Authorization | Role checks, admin access levels, super admin protection |
-| Schools | Public listing, detail, filters, coordinates, nearby, featured ordering, and full 22-section profile persistence |
-| School admin | Own school profile CRUD, custom profile sections, gallery URLs, inquiry status updates |
-| Parents | Profile, favourites, sent inquiries |
-| Admin | Stats, moderation, users, add school/parent/admin, visibility, featured |
-| Contact | Contact page submissions saved to DB |
-| Monitoring | Sentry capture for unexpected errors/crashes |
-
----
-
-## 2. Tech Stack
-
-| Technology | Purpose |
-|---|---|
-| Express.js 5 | HTTP API |
-| TypeScript | Type safety |
-| Prisma 5 | ORM and migrations |
-| PostgreSQL / Neon | Database |
-| JWT | API authentication |
-| bcryptjs | Password hashing |
-| Zod | Request validation |
-| Helmet | Security headers |
-| express-rate-limit | Rate limiting |
-| compression | Response compression |
-| Brevo | Password reset OTP email |
-| Fast2SMS | Phone OTP SMS |
-| Sentry Node SDK | Error monitoring |
-
----
-
-## 3. Folder Structure
-
-```txt
-backend/
-├── .env
-├── .env.example
-├── .gitignore
-├── Backend.md
-├── package-lock.json
-├── package.json
-├── render.yaml
-├── tsconfig.json
-├── prisma/
-│   ├── schema.prisma                 # Single source of truth for DB schema
-│   └── migrations/
-│       ├── ...                       # Existing migration folders
-│       ├── add_admin_access_level/
-│       ├── add_super_admin_visibility_audit/
-│       ├── add_contact_submission/
-│       ├── add_featured_fields/
-│       ├── add_inquiry_lead_statuses/
-│       ├── add_school_coordinates/
-│       ├── sync_school_profile_manual_columns/       # Languages, recognition, uniform, canteen, custom groups
-│       ├── add_contact_json_fields/                  # admissionCoordinators + additionalPhones
-│       └── add_medium_board_fee_social_fields/       # mediumOther, stateBoardName, earlyChildhoodFee, socialLinks
-├── generated/
-│   └── prisma/                       # Generated Prisma client, gitignored
-└── src/
-    ├── server.ts                     # Entry point, Sentry init, route mounts, health checks
-    ├── config/
-    │   └── production.ts             # Startup env validation
-    ├── routes/
-    │   ├── auth.routes.ts            # Auth/register/login/reset/OTP routes
-    │   ├── schools.routes.ts         # Public school APIs + nearby endpoint
-    │   ├── admin.routes.ts           # Admin moderation/users/featured/visibility routes
-    │   ├── inquiry.routes.ts         # Parent inquiry + lead status routes
-    │   ├── favourite.routes.ts       # Legacy favourites API with deprecation header
-    │   ├── parent.routes.ts          # Preferred parent profile/favourite/inquiry routes
-    │   └── contact.routes.ts         # Contact form submission route
-    ├── controllers/
-    │   ├── auth.controller.ts        # Register/login/logout/reset/OTP/me/google-sync
-    │   ├── schools.controller.ts     # Listing/detail/update/gallery/nearby logic
-    │   ├── admin.controller.ts       # Stats/moderation/users/visibility/featured/direct create
-    │   ├── inquiry.controller.ts     # Inquiry create/list/status/monthly lead stats
-    │   ├── favourite.controller.ts   # Legacy favourite handlers
-    │   ├── parent.controller.ts      # Parent profile/favourites/inquiries
-    │   └── contact.controller.ts     # ContactSubmission DB save
-    ├── middleware/
-    │   ├── auth.ts                   # JWT verification + blacklist guard
-    │   ├── roleCheck.ts              # requireRole, requireAdminLevel, super admin block
-    │   ├── security.ts               # Helmet, CORS, global/auth/contact/inquiry rate limits
-    │   ├── validate.ts               # Zod validation + sanitize
-    │   ├── bruteForce.ts             # Login throttling
-    │   └── errorHandler.ts           # Standard errors + Sentry capture
-    ├── validators/
-    │   ├── auth.validator.ts         # Auth/admin/user validation and role transition guard
-    │   ├── school.validator.ts       # 22-section school profile + custom groups/contact JSON + featured/coordinates validation + mediumOther
-    │   ├── inquiry.validator.ts      # Inquiry create/status validation + spam fields
-    │   └── contact.validator.ts      # Contact form validation: name/email/phone/message
-    ├── lib/
-    │   ├── prisma.ts                 # DB client + SSL pool
-    │   ├── cache.ts                  # In-memory TTL cache + invalidation
-    │   ├── mailer.ts                 # Brevo OTP email via raw https
-    │   ├── otp.ts                    # OTP generate/verify + Fast2SMS
-    │   ├── tokenBlacklist.ts         # JWT jti blacklist + cleanup interval
-    │   ├── favourites.ts             # Shared favourite logic
-    │   ├── pagination.ts             # Page/limit helpers
-    │   ├── sanitize.ts               # HTML stripping from request bodies
-    │   ├── account-status.ts         # Disabled account sentinel helpers
-    │   └── queries/
-    │       └── schools.ts            # Public/admin selects, filters, mappers, profile JSON fields, featured/coordinate fields
-    ├── utils/
-    │   ├── AppError.ts               # Typed error factory
-    │   └── asyncHandler.ts           # Async route wrapper
-    └── scripts/
-        ├── seed-admin.ts             # Initial admin seeder
-        └── seed-super-admin.ts       # One-time super admin flag setter
-```
-
-### Folder Responsibility Map
-
-| Folder / File | Responsibility |
-|---|---|
-| `src/server.ts` | Express app setup, Sentry setup, health/ready routes, route mounting, process error hooks |
-| `src/routes/` | HTTP route definitions only; business logic stays in controllers |
-| `src/controllers/` | Business logic, Prisma writes, audit logs, cache invalidation |
-| `src/middleware/` | Security, auth, role/admin-level gates, validation wrapper, error pipeline |
-| `src/validators/` | Zod schemas for body/query validation |
-| `src/lib/queries/schools.ts` | Central school select/filter/mapper layer for public/admin/profile/featured/nearby data |
-| `src/lib/cache.ts` | In-memory cache for public school data, city/state/board lists, admin stats |
-| `src/lib/prisma.ts` | Prisma client and Neon/Postgres connection configuration |
-| `prisma/schema.prisma` | Database models/enums: User, School, Inquiry, Favourite, ContactSubmission, AdminAuditLog, etc. |
-| `prisma/migrations/` | Versioned database changes for access levels, contact, featured, inquiry status, coordinates |
-
----
-
-## 4. Request Lifecycle
-
-```txt
-HTTP Request
-    │
-    ▼
-Security middleware + CORS + Helmet
-    │
-    ▼
-JSON parser + compression
-    │
-    ▼
-Global and route-specific rate limiters
-    │
-    ▼
-Auth / role / admin-level guards if protected
-    │
-    ▼
-Zod validation + sanitization
-    │
-    ▼
-Controller
-    │
-    ├── Prisma / query helpers
-    ├── Cache helper
-    ├── Audit log where required
-    └── Response
-```
-
-Error flow:
-
-```txt
-Controller error → asyncHandler → errorHandler → Sentry if unhandled → clean JSON response
-```
-
----
-
-## 5. Authentication and Authorization
-
-### Roles
-
-```txt
-PARENT
-SCHOOL_ADMIN
-ADMIN
-```
-
-### Admin access levels
-
-```txt
-READ_ONLY
-READ_WRITE
-FULL_ACCESS
-```
-
-### JWT payload
-
-```txt
-id
-role
-email
-jti
-adminAccessLevel  // ADMIN only
-isSuperAdmin      // ADMIN only
-```
-
-### Super admin rules
-
-- Only one super admin can exist.
-- Super admin is created through seed script / DB path only.
-- Add-admin API cannot create super admin.
-- Super admin cannot be deleted.
-- Super admin role/status/access cannot be modified through APIs.
-- Backend always re-checks DB; frontend session is only UX gating.
-
-### Admin permission map
-
-| Level | Can do |
-|---|---|
-| READ_ONLY | View stats, schools, users, inquiries |
-| READ_WRITE | READ_ONLY + approve/reject, add school/parent, list/unlist, featured toggle |
-| FULL_ACCESS | Everything + delete, role/status changes, add admin |
-
----
-
-## 6. API Endpoints
-
-### Health
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | DB health check |
-| GET | `/ready` | Readiness check |
-
-### Auth — `/api/auth`
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/register-parent` | Register parent |
-| POST | `/register-school` | Register school admin + pending school |
-| POST | `/login` | Role-aware login |
-| POST | `/logout` | Blacklist JWT jti |
-| GET | `/me` | Current user |
-| PATCH | `/me` | Update current user |
-| POST | `/forgot-password` | Send email OTP |
-| POST | `/verify-reset-otp` | Verify reset OTP |
-| POST | `/reset-password` | Reset password |
-| POST | `/send-otp` | Send phone OTP |
-| POST | `/verify-otp` | Verify phone OTP |
-| POST | `/google-sync` | Sync Google parent user |
-
-### Schools — `/api/schools`
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/` | Public school list with filters and featured ordering |
-| GET | `/search` | Public search endpoint |
-| GET | `/cities` | Approved + visible distinct cities, optional state filter |
-| GET | `/nearby` | Nearby schools by coordinates |
-| GET | `/my-school` | School admin own school |
-| POST | `/my-school/images` | Add gallery image URL |
-| DELETE | `/images/:id` | Delete gallery image |
-| GET | `/:slug` | Public school detail |
-| POST | `/` | Create school |
-| PATCH | `/:id` | Update school |
-| DELETE | `/:id` | Delete school |
-
-### Admin — `/api/admin`
-
-| Method | Path | Min Level | Purpose |
-|---|---|---|---|
-| GET | `/stats` | READ_ONLY | Dashboard stats |
-| GET | `/schools` | READ_ONLY | Paginated school list |
-| GET | `/schools/states` | READ_ONLY | Distinct states for admin filter |
-| GET | `/schools/cities` | READ_ONLY | Distinct cities for admin filter |
-| GET | `/users` | READ_ONLY | Paginated users by role |
-| GET | `/inquiries` | READ_ONLY | Cross-school inquiries |
-| GET | `/check-owner` | READ_ONLY | Email/owner duplicate check |
-| PATCH | `/schools/:id/approve` | READ_WRITE | Approve school |
-| PATCH | `/schools/:id/reject` | READ_WRITE | Reject school |
-| PATCH | `/schools/:id/visibility` | READ_WRITE | Toggle public visibility |
-| PATCH | `/schools/:id/featured` | READ_WRITE | Mark/unmark featured |
-| POST | `/add-school` | READ_WRITE | Add approved school |
-| POST | `/add-parent` | READ_WRITE | Add parent |
-| POST | `/add-admin` | FULL_ACCESS | Add admin |
-| PATCH | `/schools/:id` | FULL_ACCESS | Edit school |
-| DELETE | `/schools/:id` | FULL_ACCESS | Delete school |
-| DELETE | `/users/:id` | FULL_ACCESS | Delete user |
-| PATCH | `/users/:id/role` | FULL_ACCESS | Update user role |
-| PATCH | `/users/:id/status` | FULL_ACCESS | Enable/disable user |
-
-### Inquiries — `/api/inquiries`
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| POST | `/` | PARENT | Create inquiry with spam protection |
-| GET | `/my` | PARENT | Parent sent inquiries |
-| GET | `/school/:schoolId` | SCHOOL_ADMIN/ADMIN | School inquiries |
-| PATCH | `/:id/status` | SCHOOL_ADMIN/ADMIN | Update lead status |
-
-### Parent — `/api/parent`
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/profile` | Parent profile |
-| PATCH | `/profile` | Update parent profile |
-| GET | `/favourites` | Saved schools |
-| POST | `/favourites` | Add favourite |
-| DELETE | `/favourites` | Remove favourite |
-| GET | `/inquiries` | Parent inquiries |
-
-### Contact — `/api/contact`
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/` | Save contact form submission |
-
----
-
-## 7. Controllers
-
-| Controller | Responsibility |
-|---|---|
-| `auth.controller.ts` | Register, login, logout, OTP, password reset, Google sync, profile |
-| `schools.controller.ts` | Public list/detail/search/cities/nearby, school CRUD, gallery URLs |
-| `admin.controller.ts` | Stats, moderation, users, direct add flows, visibility, featured, audit logs |
-| `inquiry.controller.ts` | Inquiry creation, lead status, parent/school/admin inquiry lists |
-| `parent.controller.ts` | Parent profile, favourites, inquiries |
-| `favourite.controller.ts` | Legacy favourite route support |
-| `contact.controller.ts` | Contact form DB save |
-
----
-
-## 8. Middleware
-
-| Middleware | Purpose |
-|---|---|
-| `applySecurityMiddleware` | Helmet, CORS, method guard |
-| `generalRateLimiter` | Global request limit |
-| `authRateLimiter` | Auth endpoint limit |
-| `forgotPasswordRateLimiter` | Forgot password limit |
-| `resetPasswordRateLimiter` | Reset password limit |
-| `otpRateLimiter` | OTP limit |
-| `inquiryRateLimiter` | Inquiry spam protection |
-| `auth` | JWT verification |
-| `requireRole` | Role guard |
-| `requireAdminLevel` | Admin permission guard |
-| `blockIfSuperAdminTarget` | Protect super admin account |
-| `validate` | Zod validation |
-| `bruteForceGuard` | Login brute-force protection |
-| `errorHandler` | Standard error response + Sentry capture |
-| `notFoundHandler` | 404 handler |
-
----
-
-## 9. Validation Layer
-
-Validators:
-
-```txt
-backend/src/validators/auth.validator.ts
-backend/src/validators/school.validator.ts
-backend/src/validators/inquiry.validator.ts
-backend/src/validators/contact.validator.ts
-```
-
-Important validation:
-
-- Email format.
-- Password strength.
-- Admin access level.
-- Role transition rules.
-- School profile 22-section fields.
-- Indian school categories, classes offered, languages offered, timings, recognition, affiliation, uniform, canteen, and profile metadata.
-- Facilities/sports custom group maps for reload-safe custom checkbox placement.
-- Admission coordinator JSON array and additional phone JSON array.
-- Board result model using `classLevel` + `passPercent`.
-- `mediumOther` string field — saved when `medium === "OTHER"`, cleared otherwise (handled in `buildManualSchoolFields` in controller).
-- `stateBoardName` string field — saved when `board === "STATE_BOARD"`, cleared otherwise.
-- `socialLinks` JSON array — array of `{ platform, url }` objects.
-- `earlyChildhoodFee` integer field — fee for Daycare/Toddler/Play Group/Pre-Nursery group.
-- Latitude range: `-90` to `90`.
-- Longitude range: `-180` to `180`.
-- Inquiry honeypot/spam fields.
-- Contact form fields.
-
-### Key validator notes
-
-`mediumOther` is NOT in the Zod `schoolBodyFields` object — it is intentionally bypassed via `buildManualSchoolFields` in `schools.controller.ts` which reads it directly from `rawBody`. This avoids Zod stripping the field since `MediumType` enum only accepts known values.
-
-`auth.validator.ts` — `registerSchoolSchema` medium enum includes `"OTHER"` to match the full `MediumType` enum in schema.
-
-Validation error response:
-
-```json
-{
-  "success": false,
-  "code": "VALIDATION_ERROR",
-  "message": "Validation failed",
-  "errors": {
-    "email": ["Invalid email"]
+  # SchoolFinder — Backend Documentation
+
+  > Last updated: June 27, 2026
+  > Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry
+  > Default port: `4000`
+  > Repository path: `backend/`
+  > Schema owner: `backend/prisma/schema.prisma`
+
+  The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
+
+  Future-only modules such as Blog CMS, Razorpay payment verification, direct WhatsApp routing, reviews, and real AI recommendations are documented separately in `Future-Features.md`.
+
+  ---
+
+  ## Table of Contents
+
+  1. [Architecture Overview](#1-architecture-overview)
+  2. [Tech Stack](#2-tech-stack)
+  3. [Folder Structure](#3-folder-structure)
+  4. [Request Lifecycle](#4-request-lifecycle)
+  5. [Authentication and Authorization](#5-authentication-and-authorization)
+  6. [API Endpoints](#6-api-endpoints)
+  7. [Controllers](#7-controllers)
+  8. [Middleware](#8-middleware)
+  9. [Validation Layer](#9-validation-layer)
+  10. [Database Schema](#10-database-schema)
+  11. [School Query Layer](#11-school-query-layer)
+  12. [Inquiry and Lead System](#12-inquiry-and-lead-system)
+  13. [Spam Protection](#13-spam-protection)
+  14. [Featured Listings](#14-featured-listings)
+  15. [Nearby Schools](#15-nearby-schools)
+  16. [Contact Submissions](#16-contact-submissions)
+  17. [Caching](#17-caching)
+  18. [Error Handling and Sentry](#18-error-handling-and-sentry)
+  19. [File Storage](#19-file-storage)
+  20. [Environment Variables](#20-environment-variables)
+  21. [Deployment](#21-deployment)
+  22. [Current Backend Features](#22-current-backend-features)
+
+  ---
+
+  ## 1. Architecture Overview
+
+  ```txt
+  Client / Next.js frontend
+      │
+      │ HTTPS + Bearer JWT / admin cookie proxy
+      ▼
+  Express API
+      ├── Security middleware
+      ├── Rate limiters
+      ├── JWT auth middleware
+      ├── Role + admin access guards
+      ├── Zod validation + sanitization
+      ├── Controllers
+      ├── Prisma query layer
+      ├── Cache helpers
+      ├── Sentry error capture
+      └── PostgreSQL/Neon
+  ```
+
+  ### Backend responsibilities
+
+  | Area | Responsibility |
+  |---|---|
+  | Auth | Parent, school admin, platform admin login/register/reset/OTP |
+  | Authorization | Role checks, admin access levels, super admin protection |
+  | Schools | Public listing, detail, filters, coordinates, nearby, featured ordering, and full 22-section profile persistence |
+  | School admin | Own school profile CRUD, custom profile sections, gallery URLs, inquiry status updates |
+  | Parents | Profile, favourites, sent inquiries |
+  | Admin | Stats, moderation, users, add school/parent/admin, visibility, featured |
+  | Contact | Contact page submissions saved to DB |
+  | Monitoring | Sentry capture for unexpected errors/crashes |
+
+  ---
+
+  ## 2. Tech Stack
+
+  | Technology | Purpose |
+  |---|---|
+  | Express.js 5 | HTTP API |
+  | TypeScript | Type safety |
+  | Prisma 5 | ORM and migrations |
+  | PostgreSQL / Neon | Database |
+  | JWT | API authentication |
+  | bcryptjs | Password hashing |
+  | Zod | Request validation |
+  | Helmet | Security headers |
+  | express-rate-limit | Rate limiting |
+  | compression | Response compression |
+  | Brevo | Password reset OTP email |
+  | Fast2SMS | Phone OTP SMS |
+  | Sentry Node SDK | Error monitoring |
+
+  ---
+
+  ## 3. Folder Structure
+
+  ```txt
+  backend/
+  ├── .env
+  ├── .env.example
+  ├── .gitignore
+  ├── Backend.md
+  ├── package-lock.json
+  ├── package.json
+  ├── render.yaml
+  ├── tsconfig.json
+  ├── prisma/
+  │   ├── schema.prisma                 # Single source of truth for DB schema
+  │   └── migrations/
+  │       ├── ...                       # Existing migration folders
+  │       ├── add_admin_access_level/
+  │       ├── add_super_admin_visibility_audit/
+  │       ├── add_contact_submission/
+  │       ├── add_featured_fields/
+  │       ├── add_inquiry_lead_statuses/
+  │       ├── add_school_coordinates/
+  │       ├── sync_school_profile_manual_columns/       # Languages, recognition, uniform, canteen, custom groups
+  │       ├── add_contact_json_fields/                  # admissionCoordinators + additionalPhones
+  │       └── add_medium_board_fee_social_fields/       # mediumOther, stateBoardName, earlyChildhoodFee, socialLinks
+  ├── generated/
+  │   └── prisma/                       # Generated Prisma client, gitignored
+  └── src/
+      ├── server.ts                     # Entry point, Sentry init, route mounts, health checks
+      ├── config/
+      │   └── production.ts             # Startup env validation
+      ├── routes/
+      │   ├── auth.routes.ts            # Auth/register/login/reset/OTP routes
+      │   ├── schools.routes.ts         # Public school APIs + nearby endpoint
+      │   ├── admin.routes.ts           # Admin moderation/users/featured/visibility routes
+      │   ├── inquiry.routes.ts         # Parent inquiry + lead status routes
+      │   ├── favourite.routes.ts       # Legacy favourites API with deprecation header
+      │   ├── parent.routes.ts          # Preferred parent profile/favourite/inquiry routes
+      │   └── contact.routes.ts         # Contact form submission route
+      ├── controllers/
+      │   ├── auth.controller.ts        # Register/login/logout/reset/OTP/me/google-sync
+      │   ├── schools.controller.ts     # Listing/detail/update/gallery/nearby logic
+      │   ├── admin.controller.ts       # Stats/moderation/users/visibility/featured/direct create
+      │   ├── inquiry.controller.ts     # Inquiry create/list/status/monthly lead stats
+      │   ├── favourite.controller.ts   # Legacy favourite handlers
+      │   ├── parent.controller.ts      # Parent profile/favourites/inquiries
+      │   └── contact.controller.ts     # ContactSubmission DB save
+      ├── middleware/
+      │   ├── auth.ts                   # JWT verification + blacklist guard
+      │   ├── roleCheck.ts              # requireRole, requireAdminLevel, super admin block
+      │   ├── security.ts               # Helmet, CORS, global/auth/contact/inquiry rate limits
+      │   ├── validate.ts               # Zod validation + sanitize
+      │   ├── bruteForce.ts             # Login throttling
+      │   └── errorHandler.ts           # Standard errors + Sentry capture
+      ├── validators/
+      │   ├── auth.validator.ts         # Auth/admin/user validation and role transition guard
+      │   ├── school.validator.ts       # 22-section school profile + custom groups/contact JSON + featured/coordinates validation + mediumOther
+      │   ├── inquiry.validator.ts      # Inquiry create/status validation + spam fields
+      │   └── contact.validator.ts      # Contact form validation: name/email/phone/message
+      ├── lib/
+      │   ├── prisma.ts                 # DB client + SSL pool
+      │   ├── cache.ts                  # In-memory TTL cache + invalidation
+      │   ├── mailer.ts                 # Brevo OTP email via raw https
+      │   ├── otp.ts                    # OTP generate/verify + Fast2SMS
+      │   ├── tokenBlacklist.ts         # JWT jti blacklist + cleanup interval
+      │   ├── favourites.ts             # Shared favourite logic
+      │   ├── pagination.ts             # Page/limit helpers
+      │   ├── sanitize.ts               # HTML stripping from request bodies
+      │   ├── account-status.ts         # Disabled account sentinel helpers
+      │   └── queries/
+      │       └── schools.ts            # Public/admin selects, filters, mappers, profile JSON fields, featured/coordinate fields
+      ├── utils/
+      │   ├── AppError.ts               # Typed error factory
+      │   └── asyncHandler.ts           # Async route wrapper
+      └── scripts/
+          ├── seed-admin.ts             # Initial admin seeder
+          └── seed-super-admin.ts       # One-time super admin flag setter
+  ```
+
+  ### Folder Responsibility Map
+
+  | Folder / File | Responsibility |
+  |---|---|
+  | `src/server.ts` | Express app setup, Sentry setup, health/ready routes, route mounting, process error hooks |
+  | `src/routes/` | HTTP route definitions only; business logic stays in controllers |
+  | `src/controllers/` | Business logic, Prisma writes, audit logs, cache invalidation |
+  | `src/middleware/` | Security, auth, role/admin-level gates, validation wrapper, error pipeline |
+  | `src/validators/` | Zod schemas for body/query validation |
+  | `src/lib/queries/schools.ts` | Central school select/filter/mapper layer for public/admin/profile/featured/nearby data |
+  | `src/lib/cache.ts` | In-memory cache for public school data, city/state/board lists, admin stats |
+  | `src/lib/prisma.ts` | Prisma client and Neon/Postgres connection configuration |
+  | `prisma/schema.prisma` | Database models/enums: User, School, Inquiry, Favourite, ContactSubmission, AdminAuditLog, etc. |
+  | `prisma/migrations/` | Versioned database changes for access levels, contact, featured, inquiry status, coordinates |
+
+  ---
+
+  ## 4. Request Lifecycle
+
+  ```txt
+  HTTP Request
+      │
+      ▼
+  Security middleware + CORS + Helmet
+      │
+      ▼
+  JSON parser + compression
+      │
+      ▼
+  Global and route-specific rate limiters
+      │
+      ▼
+  Auth / role / admin-level guards if protected
+      │
+      ▼
+  Zod validation + sanitization
+      │
+      ▼
+  Controller
+      │
+      ├── Prisma / query helpers
+      ├── Cache helper
+      ├── Audit log where required
+      └── Response
+  ```
+
+  Error flow:
+
+  ```txt
+  Controller error → asyncHandler → errorHandler → Sentry if unhandled → clean JSON response
+  ```
+
+  ---
+
+  ## 5. Authentication and Authorization
+
+  ### Roles
+
+  ```txt
+  PARENT
+  SCHOOL_ADMIN
+  ADMIN
+  ```
+
+  ### Admin access levels
+
+  ```txt
+  READ_ONLY
+  READ_WRITE
+  FULL_ACCESS
+  ```
+
+  ### JWT payload
+
+  ```txt
+  id
+  role
+  email
+  jti
+  adminAccessLevel  // ADMIN only
+  isSuperAdmin      // ADMIN only
+  ```
+
+  ### Super admin rules
+
+  - Only one super admin can exist.
+  - Super admin is created through seed script / DB path only.
+  - Add-admin API cannot create super admin.
+  - Super admin cannot be deleted.
+  - Super admin role/status/access cannot be modified through APIs.
+  - Backend always re-checks DB; frontend session is only UX gating.
+
+  ### Admin permission map
+
+  | Level | Can do |
+  |---|---|
+  | READ_ONLY | View stats, schools, users, inquiries |
+  | READ_WRITE | READ_ONLY + approve/reject, add school/parent, list/unlist, featured toggle |
+  | FULL_ACCESS | Everything + delete, role/status changes, add admin |
+
+  ---
+
+  ## 6. API Endpoints
+
+  ### Health
+
+  | Method | Path | Purpose |
+  |---|---|---|
+  | GET | `/health` | DB health check |
+  | GET | `/ready` | Readiness check |
+
+  ### Auth — `/api/auth`
+
+  | Method | Path | Purpose |
+  |---|---|---|
+  | POST | `/register-parent` | Register parent |
+  | POST | `/register-school` | Register school admin + pending school |
+  | POST | `/login` | Role-aware login |
+  | POST | `/logout` | Blacklist JWT jti |
+  | GET | `/me` | Current user |
+  | PATCH | `/me` | Update current user |
+  | POST | `/forgot-password` | Send email OTP |
+  | POST | `/verify-reset-otp` | Verify reset OTP |
+  | POST | `/reset-password` | Reset password |
+  | POST | `/send-otp` | Send phone OTP |
+  | POST | `/verify-otp` | Verify phone OTP |
+  | POST | `/google-sync` | Sync Google parent user |
+
+  ### Schools — `/api/schools`
+
+  | Method | Path | Purpose |
+  |---|---|---|
+  | GET | `/` | Public school list with filters and featured ordering |
+  | GET | `/search` | Public search endpoint |
+  | GET | `/cities` | Approved + visible distinct cities, optional state filter |
+  | GET | `/nearby` | Nearby schools by coordinates |
+  | GET | `/my-school` | School admin own school |
+  | POST | `/my-school/images` | Add gallery image URL |
+  | DELETE | `/images/:id` | Delete gallery image |
+  | GET | `/:slug` | Public school detail |
+  | POST | `/` | Create school |
+  | PATCH | `/:id` | Update school |
+  | DELETE | `/:id` | Delete school |
+
+  ### Admin — `/api/admin`
+
+  | Method | Path | Min Level | Purpose |
+  |---|---|---|---|
+  | GET | `/stats` | READ_ONLY | Dashboard stats |
+  | GET | `/schools` | READ_ONLY | Paginated school list |
+  | GET | `/schools/states` | READ_ONLY | Distinct states for admin filter |
+  | GET | `/schools/cities` | READ_ONLY | Distinct cities for admin filter |
+  | GET | `/users` | READ_ONLY | Paginated users by role |
+  | GET | `/inquiries` | READ_ONLY | Cross-school inquiries |
+  | GET | `/check-owner` | READ_ONLY | Email/owner duplicate check |
+  | PATCH | `/schools/:id/approve` | READ_WRITE | Approve school |
+  | PATCH | `/schools/:id/reject` | READ_WRITE | Reject school |
+  | PATCH | `/schools/:id/visibility` | READ_WRITE | Toggle public visibility |
+  | PATCH | `/schools/:id/featured` | READ_WRITE | Mark/unmark featured |
+  | POST | `/add-school` | READ_WRITE | Add approved school |
+  | POST | `/add-parent` | READ_WRITE | Add parent |
+  | POST | `/add-admin` | FULL_ACCESS | Add admin |
+  | PATCH | `/schools/:id` | FULL_ACCESS | Edit school |
+  | DELETE | `/schools/:id` | FULL_ACCESS | Delete school |
+  | DELETE | `/users/:id` | FULL_ACCESS | Delete user |
+  | PATCH | `/users/:id/role` | FULL_ACCESS | Update user role |
+  | PATCH | `/users/:id/status` | FULL_ACCESS | Enable/disable user |
+
+  ### Inquiries — `/api/inquiries`
+
+  | Method | Path | Auth | Purpose |
+  |---|---|---|---|
+  | POST | `/` | PARENT | Create inquiry with spam protection |
+  | GET | `/my` | PARENT | Parent sent inquiries |
+  | GET | `/school/:schoolId` | SCHOOL_ADMIN/ADMIN | School inquiries |
+  | PATCH | `/:id/status` | SCHOOL_ADMIN/ADMIN | Update lead status |
+
+  ### Parent — `/api/parent`
+
+  | Method | Path | Purpose |
+  |---|---|---|
+  | GET | `/profile` | Parent profile |
+  | PATCH | `/profile` | Update parent profile |
+  | GET | `/favourites` | Saved schools |
+  | POST | `/favourites` | Add favourite |
+  | DELETE | `/favourites` | Remove favourite |
+  | GET | `/inquiries` | Parent inquiries |
+
+  ### Contact — `/api/contact`
+
+  | Method | Path | Purpose |
+  |---|---|---|
+  | POST | `/` | Save contact form submission |
+
+  ---
+
+  ## 7. Controllers
+
+  | Controller | Responsibility |
+  |---|---|
+  | `auth.controller.ts` | Register, login, logout, OTP, password reset, Google sync, profile |
+  | `schools.controller.ts` | Public list/detail/search/cities/nearby, school CRUD, gallery URLs |
+  | `admin.controller.ts` | Stats, moderation, users, direct add flows, visibility, featured, audit logs |
+  | `inquiry.controller.ts` | Inquiry creation, lead status, parent/school/admin inquiry lists |
+  | `parent.controller.ts` | Parent profile, favourites, inquiries |
+  | `favourite.controller.ts` | Legacy favourite route support |
+  | `contact.controller.ts` | Contact form DB save |
+
+  ---
+
+  ## 8. Middleware
+
+  | Middleware | Purpose |
+  |---|---|
+  | `applySecurityMiddleware` | Helmet, CORS, method guard |
+  | `generalRateLimiter` | Global request limit |
+  | `authRateLimiter` | Auth endpoint limit |
+  | `forgotPasswordRateLimiter` | Forgot password limit |
+  | `resetPasswordRateLimiter` | Reset password limit |
+  | `otpRateLimiter` | OTP limit |
+  | `inquiryRateLimiter` | Inquiry spam protection |
+  | `auth` | JWT verification |
+  | `requireRole` | Role guard |
+  | `requireAdminLevel` | Admin permission guard |
+  | `blockIfSuperAdminTarget` | Protect super admin account |
+  | `validate` | Zod validation |
+  | `bruteForceGuard` | Login brute-force protection |
+  | `errorHandler` | Standard error response + Sentry capture |
+  | `notFoundHandler` | 404 handler |
+
+  ---
+
+  ## 9. Validation Layer
+
+  Validators:
+
+  ```txt
+  backend/src/validators/auth.validator.ts
+  backend/src/validators/school.validator.ts
+  backend/src/validators/inquiry.validator.ts
+  backend/src/validators/contact.validator.ts
+  ```
+
+  Important validation:
+
+  - Email format.
+  - Password strength.
+  - Admin access level.
+  - Role transition rules.
+  - School profile 22-section fields.
+  - Indian school categories, classes offered, languages offered, timings, recognition, affiliation, uniform, canteen, and profile metadata.
+  - Facilities/sports custom group maps for reload-safe custom checkbox placement.
+  - Admission coordinator JSON array and additional phone JSON array.
+  - Board result model using `classLevel` + `passPercent`.
+  - `mediumOther` string field — saved when `medium === "OTHER"`, cleared otherwise (handled in `buildManualSchoolFields` in controller).
+  - `stateBoardName` string field — saved when `board === "STATE_BOARD"`, cleared otherwise.
+  - `socialLinks` JSON array — array of `{ platform, url }` objects.
+  - `earlyChildhoodFee` integer field — fee for Daycare/Toddler/Play Group/Pre-Nursery group.
+  - Latitude range: `-90` to `90`.
+  - Longitude range: `-180` to `180`.
+  - Inquiry honeypot/spam fields.
+  - Contact form fields.
+
+  ### Key validator notes
+
+  `mediumOther` is NOT in the Zod `schoolBodyFields` object — it is intentionally bypassed via `buildManualSchoolFields` in `schools.controller.ts` which reads it directly from `rawBody`. This avoids Zod stripping the field since `MediumType` enum only accepts known values.
+
+  `auth.validator.ts` — `registerSchoolSchema` medium enum includes `"OTHER"` to match the full `MediumType` enum in schema.
+
+  Validation error response:
+
+  ```json
+  {
+    "success": false,
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "errors": {
+      "email": ["Invalid email"]
+    }
   }
-}
-```
+  ```
 
----
+  ---
 
-## 10. Database Schema
+  ## 10. Database Schema
 
-### Enums
+  ### Enums
 
-| Enum | Values |
-|---|---|
-| `Role` | PARENT, SCHOOL_ADMIN, ADMIN |
-| `AdminAccessLevel` | READ_ONLY, READ_WRITE, FULL_ACCESS |
-| `SchoolStatus` | DRAFT, PENDING, APPROVED, REJECTED |
-| `BoardType` | CBSE, ICSE, IB, IGCSE, NIOS, STATE_BOARD, OTHER |
-| `SchoolType` | BOYS, GIRLS, CO_ED |
-| `MediumType` | HINDI, ENGLISH, BOTH, OTHER |
-| `InquiryStatus` | NEW, CONTACTED, INTERESTED, CONVERTED, CLOSED |
+  | Enum | Values |
+  |---|---|
+  | `Role` | PARENT, SCHOOL_ADMIN, ADMIN |
+  | `AdminAccessLevel` | READ_ONLY, READ_WRITE, FULL_ACCESS |
+  | `SchoolStatus` | DRAFT, PENDING, APPROVED, REJECTED |
+  | `BoardType` | CBSE, ICSE, IB, IGCSE, NIOS, STATE_BOARD, OTHER |
+  | `SchoolType` | BOYS, GIRLS, CO_ED |
+  | `MediumType` | HINDI, ENGLISH, BOTH, OTHER |
+  | `InquiryStatus` | NEW, CONTACTED, INTERESTED, CONVERTED, CLOSED |
 
-### Main models
+  ### Main models
 
-| Model | Purpose |
-|---|---|
-| `User` | Auth users and role data |
-| `School` | School listing/profile data |
-| `SchoolImage` | Gallery image URLs |
-| `BoardResult` | Board results section |
-| `Scholarship` | Scholarships section |
-| `SchoolFAQ` | FAQ section |
-| `SchoolDownload` | Downloads section |
-| `SchoolCustomField` | Custom section fields |
-| `Inquiry` | Parent-to-school leads |
-| `Favourite` | Parent saved schools |
-| `ContactSubmission` | Contact page submissions |
-| `AdminAuditLog` | Admin action audit trail |
+  | Model | Purpose |
+  |---|---|
+  | `User` | Auth users and role data |
+  | `School` | School listing/profile data |
+  | `SchoolImage` | Gallery image URLs |
+  | `BoardResult` | Board results section |
+  | `Scholarship` | Scholarships section |
+  | `SchoolFAQ` | FAQ section |
+  | `SchoolDownload` | Downloads section |
+  | `SchoolCustomField` | Custom section fields |
+  | `Inquiry` | Parent-to-school leads |
+  | `Favourite` | Parent saved schools |
+  | `ContactSubmission` | Contact page submissions |
+  | `AdminAuditLog` | Admin action audit trail |
 
-### Important `School` fields
+  ### Important `School` fields
 
-```txt
-id
-name
-slug
-address
-city
-state
-pincode
-board
-stateBoardName        ← stores selected state board name when board = STATE_BOARD
-schoolType
-medium
-mediumOther           ← stores custom medium text when medium = OTHER
-classesFrom
-classesTo
-classesOffered
-schoolCategory
-schoolFormat
-phone
-email
-website
-logoUrl
-coverImageUrl
-description
-status
-isVisible
-isFeatured
-featuredUntil
-latitude
-longitude
-ownerId
-createdAt
-updatedAt
-```
+  ```txt
+  id
+  name
+  slug
+  address
+  city
+  state
+  pincode
+  board
+  stateBoardName        ← stores selected state board name when board = STATE_BOARD
+  schoolType
+  medium
+  mediumOther           ← stores custom medium text when medium = OTHER
+  classesFrom
+  classesTo
+  classesOffered
+  schoolCategory
+  schoolFormat
+  phone
+  email
+  website
+  logoUrl
+  coverImageUrl
+  description
+  status
+  isVisible
+  isFeatured
+  featuredUntil
+  latitude
+  longitude
+  ownerId
+  createdAt
+  updatedAt
+  ```
 
-### School profile fields added / synced
+  ### School profile fields added / synced
 
-```txt
-languagesOffered
-recognitionNumber
-affiliatedSince
-uniformPolicy
-canteenAvailable
-startTime
-endTime
-workingDays
-studentTeacherRatio
-totalStudents
-establishedYear
-affiliationNumber
-mediumOther
-stateBoardName
-earlyChildhoodFee
-socialLinks
-```
+  ```txt
+  languagesOffered
+  recognitionNumber
+  affiliatedSince
+  uniformPolicy
+  canteenAvailable
+  startTime
+  endTime
+  workingDays
+  studentTeacherRatio
+  totalStudents
+  establishedYear
+  affiliationNumber
+  mediumOther
+  stateBoardName
+  earlyChildhoodFee
+  socialLinks
+  ```
 
-### Reload-safe custom group fields
+  ### Reload-safe custom group fields
 
-```txt
-facilityCustomGroups Json?
-sportsCustomGroups Json?
-```
+  ```txt
+  facilityCustomGroups Json?
+  sportsCustomGroups Json?
+  ```
 
-These fields preserve the exact subsection/group where custom Facilities and Sports items were added.
+  These fields preserve the exact subsection/group where custom Facilities and Sports items were added.
 
-Example:
+  Example:
 
-```json
-{
-  "facilityCustomGroups": {
-    "Classrooms & Labs": ["AI Lab"],
-    "Health & Safety": ["Emergency Exit Training"]
-  },
-  "sportsCustomGroups": {
-    "Outdoor Sports": ["Pickleball"],
-    "Indoor Sports": ["E-Sports"]
+  ```json
+  {
+    "facilityCustomGroups": {
+      "Classrooms & Labs": ["AI Lab"],
+      "Health & Safety": ["Emergency Exit Training"]
+    },
+    "sportsCustomGroups": {
+      "Outdoor Sports": ["Pickleball"],
+      "Indoor Sports": ["E-Sports"]
+    }
   }
-}
-```
-
-### Admission and contact JSON fields
-
-```txt
-admissionCoordinators Json?
-additionalPhones Json?
-socialLinks Json?
-```
-
-`admissionCoordinators` stores repeatable coordinator rows from the frontend. The first coordinator is also copied into the legacy single fields for backward compatibility:
-
-```txt
-admissionCoordinatorName
-admissionPhone
-admissionEmail
-```
-
-`additionalPhones` stores repeatable labelled phone numbers from the contact section.
-
-`socialLinks` stores dynamic social media links as `{ platform: string, url: string }[]`.
-
-### Fee structure fields
-
-```txt
-averageAnnualFee Int?       ← simple mode: one average fee
-earlyChildhoodFee Int?      ← Daycare / Toddler / Play Group / Pre-Nursery
-prePrimaryFee Int?          ← Nursery – UKG
-class1to5Fee Int?
-class6to8Fee Int?
-class9to10Fee Int?
-class11to12Fee Int?
-```
-
-### BoardResult fields
-
-```txt
-id
-schoolId
-year
-classLevel        ← "CLASS_10" | "CLASS_12"
-passPercent
-topperName
-topperScore
-```
+  ```
+
+  ### Admission and contact JSON fields
+
+  ```txt
+  admissionCoordinators Json?
+  additionalPhones Json?
+  socialLinks Json?
+  ```
+
+  `admissionCoordinators` stores repeatable coordinator rows from the frontend. The first coordinator is also copied into the legacy single fields for backward compatibility:
+
+  ```txt
+  admissionCoordinatorName
+  admissionPhone
+  admissionEmail
+  ```
+
+  `additionalPhones` stores repeatable labelled phone numbers from the contact section.
+
+  `socialLinks` stores dynamic social media links as `{ platform: string, url: string }[]`.
+
+  ### Fee structure fields
+
+  ```txt
+  averageAnnualFee Int?       ← simple mode: one average fee
+  earlyChildhoodFee Int?      ← Daycare / Toddler / Play Group / Pre-Nursery
+  prePrimaryFee Int?          ← Nursery – UKG
+  class1to5Fee Int?
+  class6to8Fee Int?
+  class9to10Fee Int?
+  class11to12Fee Int?
+  ```
+
+  ### BoardResult fields
+
+  ```txt
+  id
+  schoolId
+  year
+  classLevel        ← "CLASS_10" | "CLASS_12"
+  passPercent
+  topperName
+  topperScore
+  ```
 
-### ContactSubmission fields
+  ### ContactSubmission fields
 
-```txt
-id
-name
-email
-phone
-message
-createdAt
-```
-
-### Featured listing fields
+  ```txt
+  id
+  name
+  email
+  phone
+  message
+  createdAt
+  ```
 
-```txt
-School.isFeatured Boolean @default(false)
-School.featuredUntil DateTime?
-```
+  ### Featured listing fields
 
-### Coordinate fields
+  ```txt
+  School.isFeatured Boolean @default(false)
+  School.featuredUntil DateTime?
+  ```
 
-```txt
-School.latitude Float?
-School.longitude Float?
-@@index([latitude, longitude])
-```
+  ### Coordinate fields
 
-### Inquiry status values
+  ```txt
+  School.latitude Float?
+  School.longitude Float?
+  @@index([latitude, longitude])
+  ```
 
-```txt
-NEW
-CONTACTED
-INTERESTED
-CONVERTED
-CLOSED
-```
+  ### Inquiry status values
 
----
+  ```txt
+  NEW
+  CONTACTED
+  INTERESTED
+  CONVERTED
+  CLOSED
+  ```
 
-## 11. School Query Layer
+  ---
 
-Main file:
+  ## 11. School Query Layer
 
-```txt
-backend/src/lib/queries/schools.ts
-```
+  Main file:
 
-Supports:
+  ```txt
+  backend/src/lib/queries/schools.ts
+  ```
 
-- Public school select — includes `stateBoardName`, `mediumOther`.
-- Public detail select — all 22-section fields including `mediumOther`, `stateBoardName`, `earlyChildhoodFee`, `socialLinks`.
-- Admin school list select (`adminSchoolListSelect`) — includes `stateBoardName`, `mediumOther`.
-- Full school profile fields for school/admin edit flows.
-- Facilities and sports custom group JSON fields.
-- Admission coordinator and additional phone JSON fields.
-- Social links JSON field.
-- Board result `classLevel/passPercent` fields.
-- Featured fields.
-- Coordinates.
-- `isVisible` public filter.
-- `APPROVED` public status filtering.
-- City/state/board filters — `UP_BOARD` normalised to `STATE_BOARD` in filter layer.
-- Search filter.
-- Featured-only filter.
-- Mapper functions for list item output — `mapSchoolListItem` exposes `stateBoardName` and `mediumOther`.
+  Supports:
 
-Public listing ordering:
+  - Public school select — includes `stateBoardName`, `mediumOther`.
+  - Public detail select — all 22-section fields including `mediumOther`, `stateBoardName`, `earlyChildhoodFee`, `socialLinks`.
+  - Admin school list select (`adminSchoolListSelect`) — includes `stateBoardName`, `mediumOther`.
+  - Full school profile fields for school/admin edit flows.
+  - Facilities and sports custom group JSON fields.
+  - Admission coordinator and additional phone JSON fields.
+  - Social links JSON field.
+  - Board result `classLevel/passPercent` fields.
+  - Featured fields.
+  - Coordinates.
+  - `isVisible` public filter.
+  - `APPROVED` public status filtering.
+  - City/state/board filters — `UP_BOARD` normalised to `STATE_BOARD` in filter layer.
+  - Search filter.
+  - Featured-only filter.
+  - Mapper functions for list item output — `mapSchoolListItem` exposes `stateBoardName` and `mediumOther`.
 
-```txt
-featured active schools first → newest schools next
-```
+  Public listing ordering:
 
----
+  ```txt
+  featured active schools first → newest schools next
+  ```
 
-## 12. Inquiry and Lead System
+  ---
 
-Inquiry is the platform lead object.
+  ## 12. Inquiry and Lead System
 
-### Status flow
+  Inquiry is the platform lead object.
 
-```txt
-NEW → CONTACTED → INTERESTED → CONVERTED → CLOSED
-```
+  ### Status flow
 
-### Implemented behaviour
+  ```txt
+  NEW → CONTACTED → INTERESTED → CONVERTED → CLOSED
+  ```
 
-- Parent creates inquiry.
-- School admin sees inquiries for own school.
-- Admin sees cross-school inquiries.
-- School/admin can update status.
-- Parent can see submitted inquiry status.
-- School dashboard can show monthly lead count.
+  ### Implemented behaviour
 
----
+  - Parent creates inquiry.
+  - School admin sees inquiries for own school.
+  - Admin sees cross-school inquiries.
+  - School/admin can update status.
+  - Parent can see submitted inquiry status.
+  - School dashboard can show monthly lead count.
 
-## 13. Spam Protection
+  ---
 
-Implemented on inquiry creation:
+  ## 13. Spam Protection
 
-- Duplicate inquiry protection by parent/email/phone + school.
-- Phone/email rate limiting.
-- IP rate limiting.
-- Honeypot hidden field protection.
-- Multi-school inquiries remain allowed.
+  Implemented on inquiry creation:
 
-Business rule:
+  - Duplicate inquiry protection by parent/email/phone + school.
+  - Phone/email rate limiting.
+  - IP rate limiting.
+  - Honeypot hidden field protection.
+  - Multi-school inquiries remain allowed.
 
-```txt
-Same parent → same school → repeated spam blocked/limited
-Same parent → different schools → allowed
-```
+  Business rule:
 
----
+  ```txt
+  Same parent → same school → repeated spam blocked/limited
+  Same parent → different schools → allowed
+  ```
 
-## 14. Featured Listings
+  ---
 
-### Admin API
+  ## 14. Featured Listings
 
-```txt
-PATCH /api/admin/schools/:id/featured
-```
+  ### Admin API
 
-### Rules
+  ```txt
+  PATCH /api/admin/schools/:id/featured
+  ```
 
-- Minimum admin level: `READ_WRITE`.
-- Only approved schools can be featured.
-- Pending/rejected schools cannot be featured.
-- Featured status can be manually removed.
-- Featured duration controlled by `featuredUntil`.
-- Audit log entry created.
-- School cache invalidated.
+  ### Rules
 
-### Public behaviour
+  - Minimum admin level: `READ_WRITE`.
+  - Only approved schools can be featured.
+  - Pending/rejected schools cannot be featured.
+  - Featured status can be manually removed.
+  - Featured duration controlled by `featuredUntil`.
+  - Audit log entry created.
+  - School cache invalidated.
 
-- Featured schools appear first in public listing.
-- `featured=true` filter returns active featured schools only.
-- Expired featured schools are excluded from featured-only public output.
+  ### Public behaviour
 
----
+  - Featured schools appear first in public listing.
+  - `featured=true` filter returns active featured schools only.
+  - Expired featured schools are excluded from featured-only public output.
 
-## 15. Nearby Schools
+  ---
 
-### API
+  ## 15. Nearby Schools
 
-```txt
-GET /api/schools/nearby?lat=&lng=&radius=&limit=&excludeId=
-```
+  ### API
 
-### Query params
+  ```txt
+  GET /api/schools/nearby?lat=&lng=&radius=&limit=&excludeId=
+  ```
 
-| Param | Rule |
-|---|---|
-| `lat` | Required, `-90` to `90` |
-| `lng` | Required, `-180` to `180` |
-| `radius` | Optional, default 10 km, min 1, max 100 |
-| `limit` | Optional, default 10, max 50 |
-| `excludeId` | Optional current school exclusion |
+  ### Query params
 
-### Behaviour
+  | Param | Rule |
+  |---|---|
+  | `lat` | Required, `-90` to `90` |
+  | `lng` | Required, `-180` to `180` |
+  | `radius` | Optional, default 10 km, min 1, max 100 |
+  | `limit` | Optional, default 10, max 50 |
+  | `excludeId` | Optional current school exclusion |
 
-- Only approved schools.
-- Only visible schools.
-- Only schools with coordinates.
-- Uses bounding-box prefilter.
-- Calculates Haversine distance.
-- Returns `distanceKm`.
-- Sorts nearest first.
+  ### Behaviour
 
----
+  - Only approved schools.
+  - Only visible schools.
+  - Only schools with coordinates.
+  - Uses bounding-box prefilter.
+  - Calculates Haversine distance.
+  - Returns `distanceKm`.
+  - Sorts nearest first.
 
-## 16. Contact Submissions
+  ---
 
-### API
+  ## 16. Contact Submissions
 
-```txt
-POST /api/contact
-```
+  ### API
 
-### Request body
+  ```txt
+  POST /api/contact
+  ```
 
-```json
-{
-  "name": "Parent Name",
-  "email": "parent@example.com",
-  "phone": "9876543210",
-  "message": "I want to know more about schools."
-}
-```
+  ### Request body
 
-### Behaviour
+  ```json
+  {
+    "name": "Parent Name",
+    "email": "parent@example.com",
+    "phone": "9876543210",
+    "message": "I want to know more about schools."
+  }
+  ```
 
-- Request is rate-limited.
-- Input is validated and sanitized.
-- Submission is saved in `ContactSubmission`.
-- Frontend handles EmailJS and Google Sheets webhook after/alongside DB save.
+  ### Behaviour
 
----
+  - Request is rate-limited.
+  - Input is validated and sanitized.
+  - Submission is saved in `ContactSubmission`.
+  - Frontend handles EmailJS and Google Sheets webhook after/alongside DB save.
 
-## 17. Caching
+  ---
 
-Backend uses in-memory TTL cache.
+  ## 17. Caching
 
-| Data | TTL | Invalidated on |
-|---|---:|---|
-| School list/search | 60s | School mutation, visibility, featured update |
-| School detail | 300s | School update/delete/visibility/featured update |
-| Cities | 60s | School mutation, visibility update |
-| Admin stats | 30s | School moderation/create |
+  Backend uses in-memory TTL cache.
 
-Not cached:
+  | Data | TTL | Invalidated on |
+  |---|---:|---|
+  | School list/search | 60s | School mutation, visibility, featured update |
+  | School detail | 300s | School update/delete/visibility/featured update |
+  | Cities | 60s | School mutation, visibility update |
+  | Admin stats | 30s | School moderation/create |
 
-- Auth.
-- Contact submissions.
-- Inquiries.
-- Favourites.
-- User lists.
+  Not cached:
 
----
+  - Auth.
+  - Contact submissions.
+  - Inquiries.
+  - Favourites.
+  - User lists.
 
-## 18. Error Handling and Sentry
+  ---
 
-### Standard error response
+  ## 18. Error Handling and Sentry
 
-```json
-{
-  "success": false,
-  "code": "NOT_FOUND",
-  "message": "Resource not found"
-}
-```
+  ### Standard error response
 
-### Handled error types
+  ```json
+  {
+    "success": false,
+    "code": "NOT_FOUND",
+    "message": "Resource not found"
+  }
+  ```
 
-- AppError.
-- Zod validation.
-- Prisma known errors.
-- JWT errors.
-- Malformed JSON.
-- Rate limit errors.
-- Duplicate/conflict errors.
+  ### Handled error types
 
-### Sentry integration
+  - AppError.
+  - Zod validation.
+  - Prisma known errors.
+  - JWT errors.
+  - Malformed JSON.
+  - Rate limit errors.
+  - Duplicate/conflict errors.
 
-Implemented in:
+  ### Sentry integration
 
-```txt
-backend/src/server.ts
-backend/src/middleware/errorHandler.ts
-```
+  Implemented in:
 
-Captured:
+  ```txt
+  backend/src/server.ts
+  backend/src/middleware/errorHandler.ts
+  ```
 
-- Unknown controller errors.
-- Server startup errors.
-- Health check DB failures.
-- Unhandled promise rejections.
-- Uncaught exceptions.
+  Captured:
 
-Sensitive data cleanup:
+  - Unknown controller errors.
+  - Server startup errors.
+  - Health check DB failures.
+  - Unhandled promise rejections.
+  - Uncaught exceptions.
 
-```txt
-authorization
-Authorization
-cookie
-Cookie
-```
+  Sensitive data cleanup:
 
-Safe behaviour:
+  ```txt
+  authorization
+  Authorization
+  cookie
+  Cookie
+  ```
 
-- If `SENTRY_DSN` is blank, backend does not crash.
-- Known operational errors still return clean JSON and are not treated as unexpected crashes.
+  Safe behaviour:
 
----
+  - If `SENTRY_DSN` is blank, backend does not crash.
+  - Known operational errors still return clean JSON and are not treated as unexpected crashes.
 
-## 19. File Storage
+  ---
 
-Backend does not upload files directly.
+  ## 19. File Storage
 
-Flow:
+  Backend does not upload files directly.
 
-```txt
-Frontend /api/upload → Cloudinary → URL saved in backend
-```
+  Flow:
 
-Stored URL fields:
+  ```txt
+  Frontend /api/upload → Cloudinary → URL saved in backend
+  ```
 
-```txt
-School.logoUrl
-School.coverImageUrl
-SchoolImage.url
-SchoolDownload.url
-```
+  Stored URL fields:
 
-Backend receives URL strings only.
+  ```txt
+  School.logoUrl
+  School.coverImageUrl
+  SchoolImage.url
+  SchoolDownload.url
+  ```
 
----
+  Backend receives URL strings only.
 
-## 20. Environment Variables
+  ---
 
-```env
-NODE_ENV=
-PORT=
-DATABASE_URL=
-JWT_SECRET=
-JWT_EXPIRES_IN=
-FRONTEND_URL=
-BREVO_API_KEY=
-EMAIL_FROM=
-FAST2SMS_API_KEY=
-ADMIN_EMAIL=
-ADMIN_PASSWORD=
-SUPER_ADMIN_EMAIL=
-BCRYPT_ROUNDS=
-TRUST_PROXY=
-SENTRY_DSN=
-```
+  ## 20. Environment Variables
 
-Important:
+  ```env
+  NODE_ENV=
+  PORT=
+  DATABASE_URL=
+  JWT_SECRET=
+  JWT_EXPIRES_IN=
+  FRONTEND_URL=
+  BREVO_API_KEY=
+  EMAIL_FROM=
+  FAST2SMS_API_KEY=
+  ADMIN_EMAIL=
+  ADMIN_PASSWORD=
+  SUPER_ADMIN_EMAIL=
+  BCRYPT_ROUNDS=
+  TRUST_PROXY=
+  SENTRY_DSN=
+  ```
 
-- `JWT_SECRET` must match frontend.
-- `DATABASE_URL` must be Neon/PostgreSQL connection string.
-- `FRONTEND_URL` controls CORS.
-- `SENTRY_DSN` is optional locally.
+  Important:
 
----
+  - `JWT_SECRET` must match frontend.
+  - `DATABASE_URL` must be Neon/PostgreSQL connection string.
+  - `FRONTEND_URL` controls CORS.
+  - `SENTRY_DSN` is optional locally.
 
-## 21. Deployment
+  ---
 
-### Local development
+  ## 21. Deployment
 
-```bash
-cd backend
-npm install
-cp .env.example .env
-npx prisma generate
-npm run migrate:dev
-npm run dev
-```
+  ### Local development
 
-API:
+  ```bash
+  cd backend
+  npm install
+  cp .env.example .env
+  npx prisma generate
+  npm run migrate:dev
+  npm run dev
+  ```
 
-```txt
-http://localhost:4000
-```
+  API:
 
-Health:
+  ```txt
+  http://localhost:4000
+  ```
 
-```txt
-GET http://localhost:4000/health
-```
+  Health:
 
-### Build
+  ```txt
+  GET http://localhost:4000/health
+  ```
 
-```bash
-npm run build
-npm start
-```
+  ### Build
 
-### Render
+  ```bash
+  npm run build
+  npm start
+  ```
 
-Typical Render config:
+  ### Render
 
-```yaml
-buildCommand: npm ci && npx prisma generate && npm run build
-preDeployCommand: npx prisma migrate deploy
-startCommand: npm start
-healthCheckPath: /health
-```
+  Typical Render config:
 
----
+  ```yaml
+  buildCommand: npm ci && npx prisma generate && npm run build
+  preDeployCommand: npx prisma migrate deploy
+  startCommand: npm start
+  healthCheckPath: /health
+  ```
 
-## 22. Current Backend Features
+  ---
 
-### Auth
+  ## 22. Current Backend Features
 
-- Parent registration/login.
-- School admin registration/login.
-- Admin login.
-- Google parent sync.
-- Forgot/reset password by email OTP.
-- Phone OTP endpoints.
-- JWT logout blacklist.
-- Disabled account sentinel.
+  ### Auth
 
-### Schools
+  - Parent registration/login.
+  - School admin registration/login.
+  - Admin login.
+  - Google parent sync.
+  - Forgot/reset password by email OTP.
+  - Phone OTP endpoints.
+  - JWT logout blacklist.
+  - Disabled account sentinel.
 
-- Public listing/detail/search/cities.
-- City/state/board filters — UP_BOARD normalised to STATE_BOARD.
-- SEO-friendly data support.
-- Full school profile update.
-- School profile backend sync for languages, categories, classes, timings, recognition, affiliation, uniform policy, canteen, student-teacher ratio, total students, facilities, sports, programs, streams, board results, admissions, and contact data.
-- Reload-safe Facilities/Sports custom group persistence with JSON maps.
-- Multiple admission coordinators stored in `admissionCoordinators` JSON with legacy first-coordinator fallback.
-- Additional labelled phone numbers stored in `additionalPhones` JSON.
-- Dynamic social media links stored in `socialLinks` JSON as `{ platform, url }[]`.
-- Medium "Other" custom text stored in `mediumOther` — set when `medium = OTHER`, cleared otherwise.
-- State board name stored in `stateBoardName` — set when `board = STATE_BOARD`, cleared otherwise.
-- Grade-wise fee fields: `earlyChildhoodFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee`.
-- Gallery URL management.
-- Visibility toggle.
-- Featured listing support.
-- Coordinates and map data.
-- Nearby schools API.
+  ### Schools
 
-### Inquiries/leads
+  - Public listing/detail/search/cities.
+  - City/state/board filters — UP_BOARD normalised to STATE_BOARD.
+  - SEO-friendly data support.
+  - Full school profile update.
+  - School profile backend sync for languages, categories, classes, timings, recognition, affiliation, uniform policy, canteen, student-teacher ratio, total students, facilities, sports, programs, streams, board results, admissions, and contact data.
+  - Reload-safe Facilities/Sports custom group persistence with JSON maps.
+  - Multiple admission coordinators stored in `admissionCoordinators` JSON with legacy first-coordinator fallback.
+  - Additional labelled phone numbers stored in `additionalPhones` JSON.
+  - Dynamic social media links stored in `socialLinks` JSON as `{ platform, url }[]`.
+  - Medium "Other" custom text stored in `mediumOther` — set when `medium = OTHER`, cleared otherwise.
+  - State board name stored in `stateBoardName` — set when `board = STATE_BOARD`, cleared otherwise.
+  - Grade-wise fee fields: `earlyChildhoodFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee`.
+  - Gallery URL management.
+  - Visibility toggle.
+  - Featured listing support.
+  - Coordinates and map data.
+  - Nearby schools API.
 
-- Inquiry creation.
-- Duplicate/rate-limit/honeypot spam protection.
-- Status workflow: NEW → CONTACTED → INTERESTED → CONVERTED → CLOSED.
-- Parent inquiry history.
-- School inquiry management.
-- Admin inquiry monitoring.
-- Monthly lead stat support.
+  ### Inquiries/leads
 
-### Admin
+  - Inquiry creation.
+  - Duplicate/rate-limit/honeypot spam protection.
+  - Status workflow: NEW → CONTACTED → INTERESTED → CONVERTED → CLOSED.
+  - Parent inquiry history.
+  - School inquiry management.
+  - Admin inquiry monitoring.
+  - Monthly lead stat support.
 
-- Stats.
-- School moderation.
-- Add school.
-- Add parent.
-- Add admin.
-- User management.
-- Delete school/user.
-- Role/status update protections.
-- Super admin protection.
-- Admin audit logs.
-- Admin school list exposes `stateBoardName` for display in board column.
+  ### Admin
 
-### Contact
+  - Stats.
+  - School moderation.
+  - Add school.
+  - Add parent.
+  - Add admin.
+  - User management.
+  - Delete school/user.
+  - Role/status update protections.
+  - Super admin protection.
+  - Admin audit logs.
+  - Admin school list exposes `stateBoardName` for display in board column.
 
-- Contact form DB submissions.
-- Rate-limited contact endpoint.
+  ### Contact
 
-### Reliability
+  - Contact form DB submissions.
+  - Rate-limited contact endpoint.
 
-- Central error handler.
-- Sentry monitoring.
-- Startup/env validation.
-- Health checks.
+  ### Reliability
+
+  - Central error handler.
+  - Sentry monitoring.
+  - Startup/env validation.
+  - Health checks.

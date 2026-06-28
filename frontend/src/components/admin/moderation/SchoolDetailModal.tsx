@@ -28,8 +28,16 @@ import {
   Bus,
   Home,
   Star,
+  Images,
 } from "lucide-react";
 import type { SchoolStatus } from "@/lib/types/database";
+
+type GalleryImage = {
+  id: string;
+  url: string;
+  caption?: string | null;
+  category?: string | null;
+};
 
 type SchoolDetail = {
   id: string;
@@ -110,6 +118,7 @@ type SchoolDetail = {
   admissionEndDate?: string | null;
   logoUrl: string | null;
   coverImageUrl?: string | null;
+  images?: GalleryImage[];
   owner: { name: string | null; email: string };
   createdAt: string;
 };
@@ -122,7 +131,13 @@ type Props = {
   onReject?: (id: string, reason: string) => Promise<void>;
 };
 
-type Tab = "overview" | "academics" | "fees" | "facilities" | "infrastructure";
+type Tab =
+  | "overview"
+  | "academics"
+  | "fees"
+  | "facilities"
+  | "infrastructure"
+  | "gallery";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -130,6 +145,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "fees", label: "Fees" },
   { key: "facilities", label: "Facilities" },
   { key: "infrastructure", label: "Infrastructure" },
+  { key: "gallery", label: "Gallery" },
 ];
 
 function InfoRow({ label, value }: { label: string; value: string | number }) {
@@ -143,7 +159,13 @@ function InfoRow({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function ChipList({ items, color = "blue" }: { items: string[]; color?: "blue" | "green" | "purple" }) {
+function ChipList({
+  items,
+  color = "blue",
+}: {
+  items: string[];
+  color?: "blue" | "green" | "purple";
+}) {
   if (!items?.length) return null;
   const cls =
     color === "green"
@@ -154,7 +176,10 @@ function ChipList({ items, color = "blue" }: { items: string[]; color?: "blue" |
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((item) => (
-        <span key={item} className={`px-2 py-0.5 rounded-full border text-xs ${cls}`}>
+        <span
+          key={item}
+          className={`px-2 py-0.5 rounded-full border text-xs ${cls}`}
+        >
           {item}
         </span>
       ))}
@@ -213,7 +238,9 @@ export default function SchoolDetailModal({
 
   function getBoardLabel() {
     if (school.board === "STATE_BOARD") {
-      return school.stateBoardName ? `${school.stateBoardName} Board` : "State Board";
+      return school.stateBoardName
+        ? `${school.stateBoardName} Board`
+        : "State Board";
     }
     return school.board.replace(/_/g, " ");
   }
@@ -222,6 +249,8 @@ export default function SchoolDetailModal({
     if (school.medium === "OTHER") return school.mediumOther || "Other";
     return school.medium.replace(/_/g, " ");
   }
+
+  const galleryImages = school.images ?? [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -233,7 +262,7 @@ export default function SchoolDetailModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-1">
-          {/* Header — logo + owner */}
+          {/* Header */}
           <div className="flex items-center gap-4">
             {school.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -249,23 +278,32 @@ export default function SchoolDetailModal({
             )}
             <div className="min-w-0">
               {school.tagline && (
-                <p className="font-body text-xs text-gray-400 italic mb-0.5">{school.tagline}</p>
+                <p className="font-body text-xs text-gray-400 italic mb-0.5">
+                  {school.tagline}
+                </p>
               )}
               <p className="font-body text-sm text-gray-500">
-                Owner: <span className="text-gray-800 font-medium">{school.owner.name ?? "—"}</span>{" "}
+                Owner:{" "}
+                <span className="text-gray-800 font-medium">
+                  {school.owner.name ?? "—"}
+                </span>{" "}
                 · {school.owner.email}
               </p>
               <p className="font-body text-xs text-gray-400">
                 Registered:{" "}
-                {new Date(school.createdAt).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {school.createdAt
+                  ? new Date(school.createdAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
               </p>
               <div className="flex gap-2 mt-1.5">
                 {school.isVisible !== undefined && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full border ${school.isVisible ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full border ${school.isVisible ? "bg-green-50 border-green-200 text-green-700" : "bg-gray-50 border-gray-200 text-gray-500"}`}
+                  >
                     {school.isVisible ? "Listed" : "Unlisted"}
                   </span>
                 )}
@@ -278,14 +316,32 @@ export default function SchoolDetailModal({
             </div>
           </div>
 
+          {/* Cover image */}
+          {school.coverImageUrl && (
+            <div className="rounded-xl overflow-hidden border border-gray-100 h-36">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={school.coverImageUrl}
+                alt={`${school.name} cover`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+
           {/* Academic badges */}
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{getBoardLabel()}</Badge>
-            <Badge variant="secondary">{school.schoolType.replace(/_/g, " ")}</Badge>
+            <Badge variant="secondary">
+              {school.schoolType.replace(/_/g, " ")}
+            </Badge>
             <Badge variant="secondary">{getMediumLabel()}</Badge>
-            <Badge variant="secondary">Class {school.classesFrom}–{school.classesTo}</Badge>
+            <Badge variant="secondary">
+              Class {school.classesFrom}–{school.classesTo}
+            </Badge>
             {school.admissionOpen && (
-              <Badge className="bg-green-100 text-green-700 border-green-200">Admissions Open</Badge>
+              <Badge className="bg-green-100 text-green-700 border-green-200">
+                Admissions Open
+              </Badge>
             )}
           </div>
 
@@ -302,6 +358,11 @@ export default function SchoolDetailModal({
                 }`}
               >
                 {tab.label}
+                {tab.key === "gallery" && galleryImages.length > 0 && (
+                  <span className="ml-1 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">
+                    {galleryImages.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -309,7 +370,6 @@ export default function SchoolDetailModal({
           {/* Tab: Overview */}
           {activeTab === "overview" && (
             <div className="space-y-4">
-              {/* Location + contact */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="flex items-start gap-2">
                   <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
@@ -320,12 +380,16 @@ export default function SchoolDetailModal({
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-gray-400 shrink-0" />
-                  <p className="font-body text-sm text-gray-700">{school.phone}</p>
+                  <p className="font-body text-sm text-gray-700">
+                    {school.phone}
+                  </p>
                 </div>
                 {school.email && (
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-gray-400 shrink-0" />
-                    <p className="font-body text-sm text-gray-700">{school.email}</p>
+                    <p className="font-body text-sm text-gray-700">
+                      {school.email}
+                    </p>
                   </div>
                 )}
                 {school.website && (
@@ -343,53 +407,68 @@ export default function SchoolDetailModal({
                 )}
               </div>
 
-              {/* Quick stats */}
               <div className="flex flex-wrap gap-4">
                 {school.establishedYear && (
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4 text-gray-400" />
-                    <p className="font-body text-sm text-gray-700">Est. {school.establishedYear}</p>
+                    <p className="font-body text-sm text-gray-700">
+                      Est. {school.establishedYear}
+                    </p>
                   </div>
                 )}
                 {school.totalStudents && (
                   <div className="flex items-center gap-1.5">
                     <Users className="h-4 w-4 text-gray-400" />
-                    <p className="font-body text-sm text-gray-700">{school.totalStudents} students</p>
+                    <p className="font-body text-sm text-gray-700">
+                      {school.totalStudents} students
+                    </p>
                   </div>
                 )}
                 {school.totalTeachers && (
                   <div className="flex items-center gap-1.5">
                     <GraduationCap className="h-4 w-4 text-gray-400" />
-                    <p className="font-body text-sm text-gray-700">{school.totalTeachers} teachers</p>
+                    <p className="font-body text-sm text-gray-700">
+                      {school.totalTeachers} teachers
+                    </p>
                   </div>
                 )}
               </div>
 
-              {/* Description */}
               {school.description && (
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="font-body text-sm text-gray-700 leading-relaxed">{school.description}</p>
+                  <p className="font-body text-sm text-gray-700 leading-relaxed">
+                    {school.description}
+                  </p>
                 </div>
               )}
-
               {school.vision && (
                 <div>
-                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">Vision</p>
-                  <p className="font-body text-sm text-gray-700">{school.vision}</p>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">
+                    Vision
+                  </p>
+                  <p className="font-body text-sm text-gray-700">
+                    {school.vision}
+                  </p>
                 </div>
               )}
               {school.mission && (
                 <div>
-                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">Mission</p>
-                  <p className="font-body text-sm text-gray-700">{school.mission}</p>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-1">
+                    Mission
+                  </p>
+                  <p className="font-body text-sm text-gray-700">
+                    {school.mission}
+                  </p>
                 </div>
               )}
-
-              {/* Rejection reason */}
               {school.rejectionReason && school.status === "REJECTED" && (
                 <div className="p-3 bg-red-50 rounded-xl border border-red-200">
-                  <p className="font-heading font-semibold text-xs text-red-700 mb-1">Previous rejection reason</p>
-                  <p className="font-body text-sm text-red-700">{school.rejectionReason}</p>
+                  <p className="font-heading font-semibold text-xs text-red-700 mb-1">
+                    Previous rejection reason
+                  </p>
+                  <p className="font-body text-sm text-red-700">
+                    {school.rejectionReason}
+                  </p>
                 </div>
               )}
             </div>
@@ -399,20 +478,60 @@ export default function SchoolDetailModal({
           {activeTab === "academics" && (
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-xl p-3 space-y-0">
-                {school.schoolCategory && <InfoRow label="Category" value={school.schoolCategory} />}
-                {school.schoolFormat && <InfoRow label="Format" value={school.schoolFormat} />}
-                {school.managementType && <InfoRow label="Management" value={school.managementType} />}
-                {school.affiliationNumber && <InfoRow label="Affiliation No." value={school.affiliationNumber} />}
-                {school.recognitionNumber && <InfoRow label="Recognition No." value={school.recognitionNumber} />}
-                {school.affiliatedSince && <InfoRow label="Affiliated Since" value={school.affiliatedSince} />}
-                {school.studentTeacherRatio && <InfoRow label="Student:Teacher Ratio" value={school.studentTeacherRatio} />}
-                {school.uniformPolicy && <InfoRow label="Uniform Policy" value={school.uniformPolicy} />}
-                {school.canteenAvailable && <InfoRow label="Canteen / Tiffin" value={school.canteenAvailable} />}
-                {school.workingDays && <InfoRow label="Working Days" value={school.workingDays} />}
+                {school.schoolCategory && (
+                  <InfoRow label="Category" value={school.schoolCategory} />
+                )}
+                {school.schoolFormat && (
+                  <InfoRow label="Format" value={school.schoolFormat} />
+                )}
+                {school.managementType && (
+                  <InfoRow label="Management" value={school.managementType} />
+                )}
+                {school.affiliationNumber && (
+                  <InfoRow
+                    label="Affiliation No."
+                    value={school.affiliationNumber}
+                  />
+                )}
+                {school.recognitionNumber && (
+                  <InfoRow
+                    label="Recognition No."
+                    value={school.recognitionNumber}
+                  />
+                )}
+                {school.affiliatedSince && (
+                  <InfoRow
+                    label="Affiliated Since"
+                    value={school.affiliatedSince}
+                  />
+                )}
+                {school.studentTeacherRatio && (
+                  <InfoRow
+                    label="Student:Teacher Ratio"
+                    value={school.studentTeacherRatio}
+                  />
+                )}
+                {school.uniformPolicy && (
+                  <InfoRow
+                    label="Uniform Policy"
+                    value={school.uniformPolicy}
+                  />
+                )}
+                {school.canteenAvailable && (
+                  <InfoRow
+                    label="Canteen / Tiffin"
+                    value={school.canteenAvailable}
+                  />
+                )}
+                {school.workingDays && (
+                  <InfoRow label="Working Days" value={school.workingDays} />
+                )}
                 {(school.startTime || school.endTime) && (
                   <InfoRow
                     label="Timings"
-                    value={[school.startTime, school.endTime].filter(Boolean).join(" – ")}
+                    value={[school.startTime, school.endTime]
+                      .filter(Boolean)
+                      .join(" – ")}
                   />
                 )}
                 {school.qualifiedTeachers && school.totalTeachers && (
@@ -422,35 +541,49 @@ export default function SchoolDetailModal({
                   />
                 )}
               </div>
-
               {school.classesOffered?.length ? (
                 <div>
-                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Classes Offered</p>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">
+                    Classes Offered
+                  </p>
                   <ChipList items={school.classesOffered} color="blue" />
                 </div>
               ) : null}
-
               {school.streamsOffered?.length ? (
                 <div>
-                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Streams</p>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">
+                    Streams
+                  </p>
                   <ChipList items={school.streamsOffered} color="green" />
                 </div>
               ) : null}
-
               {school.languagesOffered?.length ? (
                 <div>
-                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">Languages</p>
+                  <p className="font-heading font-semibold text-xs text-gray-500 mb-2">
+                    Languages
+                  </p>
                   <ChipList items={school.languagesOffered} color="purple" />
                 </div>
               ) : null}
-
               {school.admissionStartDate && (
                 <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <p className="font-heading font-semibold text-xs text-blue-700 mb-1">Admission Window</p>
+                  <p className="font-heading font-semibold text-xs text-blue-700 mb-1">
+                    Admission Window
+                  </p>
                   <p className="font-body text-sm text-blue-800">
-                    {new Date(school.admissionStartDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(school.admissionStartDate).toLocaleDateString(
+                      "en-IN",
+                      { day: "numeric", month: "short", year: "numeric" },
+                    )}
                     {school.admissionEndDate && (
-                      <> → {new Date(school.admissionEndDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</>
+                      <>
+                        {" "}
+                        →{" "}
+                        {new Date(school.admissionEndDate).toLocaleDateString(
+                          "en-IN",
+                          { day: "numeric", month: "short", year: "numeric" },
+                        )}
+                      </>
                     )}
                   </p>
                 </div>
@@ -463,38 +596,64 @@ export default function SchoolDetailModal({
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
                 <GraduationCap className="h-4 w-4 text-blue-500" />
-                <p className="font-heading font-semibold text-sm text-gray-700">Fee Structure</p>
+                <p className="font-heading font-semibold text-sm text-gray-700">
+                  Fee Structure
+                </p>
               </div>
               {[
                 { label: "Average Annual Fee", value: school.averageAnnualFee },
-                { label: "Early Childhood / Play School", value: school.earlyChildhoodFee },
+                {
+                  label: "Early Childhood / Play School",
+                  value: school.earlyChildhoodFee,
+                },
                 { label: "Pre-Primary", value: school.prePrimaryFee },
                 { label: "Class 1–5", value: school.class1to5Fee },
                 { label: "Class 6–8", value: school.class6to8Fee },
                 { label: "Class 9–10", value: school.class9to10Fee },
                 { label: "Class 11–12", value: school.class11to12Fee },
-                { label: "Admission Fee (One-time)", value: school.admissionFee },
+                {
+                  label: "Admission Fee (One-time)",
+                  value: school.admissionFee,
+                },
                 { label: "Monthly Tuition", value: school.tuitionFeeMonthly },
                 { label: "Total Annual Fee", value: school.totalAnnualFee },
-                { label: "Transport Fee (Monthly)", value: school.transportFee },
+                {
+                  label: "Transport Fee (Monthly)",
+                  value: school.transportFee,
+                },
                 { label: "Hostel Fee (Monthly)", value: school.hostelFee },
               ]
                 .filter((f) => f.value)
                 .map((f) => (
-                  <div key={f.label} className="flex justify-between items-center px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
-                    <span className="font-body text-xs text-gray-600">{f.label}</span>
+                  <div
+                    key={f.label}
+                    className="flex justify-between items-center px-3 py-2 bg-blue-50 rounded-xl border border-blue-100"
+                  >
+                    <span className="font-body text-xs text-gray-600">
+                      {f.label}
+                    </span>
                     <span className="font-heading font-bold text-sm text-blue-800">
                       ₹{f.value?.toLocaleString("en-IN")}
                     </span>
                   </div>
                 ))}
               {![
-                school.averageAnnualFee, school.earlyChildhoodFee, school.prePrimaryFee,
-                school.class1to5Fee, school.class6to8Fee, school.class9to10Fee,
-                school.class11to12Fee, school.admissionFee, school.tuitionFeeMonthly,
-                school.totalAnnualFee, school.transportFee, school.hostelFee,
+                school.averageAnnualFee,
+                school.earlyChildhoodFee,
+                school.prePrimaryFee,
+                school.class1to5Fee,
+                school.class6to8Fee,
+                school.class9to10Fee,
+                school.class11to12Fee,
+                school.admissionFee,
+                school.tuitionFeeMonthly,
+                school.totalAnnualFee,
+                school.transportFee,
+                school.hostelFee,
               ].some(Boolean) && (
-                <p className="font-body text-sm text-gray-400 text-center py-4">No fee details added yet.</p>
+                <p className="font-body text-sm text-gray-400 text-center py-4">
+                  No fee details added yet.
+                </p>
               )}
             </div>
           )}
@@ -510,7 +669,6 @@ export default function SchoolDetailModal({
                   <ChipList items={school.facilitiesList} color="blue" />
                 </div>
               ) : null}
-
               {school.sportsList?.length ? (
                 <div>
                   <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
@@ -519,7 +677,6 @@ export default function SchoolDetailModal({
                   <ChipList items={school.sportsList} color="green" />
                 </div>
               ) : null}
-
               {school.programsList?.length ? (
                 <div>
                   <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
@@ -528,25 +685,45 @@ export default function SchoolDetailModal({
                   <ChipList items={school.programsList} color="purple" />
                 </div>
               ) : null}
-
-              {/* Safety */}
-              {(school.hasCCTV || school.hasGuards || school.hasMedicalRoom || school.hasFireSafety) && (
+              {(school.hasCCTV ||
+                school.hasGuards ||
+                school.hasMedicalRoom ||
+                school.hasFireSafety) && (
                 <div>
                   <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
                     <Shield className="w-3.5 h-3.5" /> Safety
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {school.hasCCTV && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">CCTV</span>}
-                    {school.hasGuards && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Security Guards</span>}
-                    {school.hasMedicalRoom && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Medical Room</span>}
-                    {school.hasFireSafety && <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">Fire Safety</span>}
+                    {school.hasCCTV && (
+                      <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">
+                        CCTV
+                      </span>
+                    )}
+                    {school.hasGuards && (
+                      <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">
+                        Security Guards
+                      </span>
+                    )}
+                    {school.hasMedicalRoom && (
+                      <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">
+                        Medical Room
+                      </span>
+                    )}
+                    {school.hasFireSafety && (
+                      <span className="px-2 py-0.5 rounded-full border border-green-200 bg-green-50 text-green-700 text-xs">
+                        Fire Safety
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
-
-              {!school.facilitiesList?.length && !school.sportsList?.length && !school.programsList?.length && (
-                <p className="font-body text-sm text-gray-400 text-center py-4">No facility details added yet.</p>
-              )}
+              {!school.facilitiesList?.length &&
+                !school.sportsList?.length &&
+                !school.programsList?.length && (
+                  <p className="font-body text-sm text-gray-400 text-center py-4">
+                    No facility details added yet.
+                  </p>
+                )}
             </div>
           )}
 
@@ -554,38 +731,114 @@ export default function SchoolDetailModal({
           {activeTab === "infrastructure" && (
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-xl p-3 space-y-0">
-                {school.campusArea && <InfoRow label="Campus Area" value={school.campusArea} />}
-                {school.totalClassrooms && <InfoRow label="Classrooms" value={school.totalClassrooms} />}
-                {school.totalLabs && <InfoRow label="Labs" value={school.totalLabs} />}
-                {school.libraryBooks && <InfoRow label="Library Books" value={school.libraryBooks.toLocaleString("en-IN")} />}
+                {school.campusArea && (
+                  <InfoRow label="Campus Area" value={school.campusArea} />
+                )}
+                {school.totalClassrooms && (
+                  <InfoRow label="Classrooms" value={school.totalClassrooms} />
+                )}
+                {school.totalLabs && (
+                  <InfoRow label="Labs" value={school.totalLabs} />
+                )}
+                {school.libraryBooks && (
+                  <InfoRow
+                    label="Library Books"
+                    value={school.libraryBooks.toLocaleString("en-IN")}
+                  />
+                )}
               </div>
-
               {school.hostelAvailable && (
                 <div>
                   <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
                     <Home className="w-3.5 h-3.5" /> Hostel
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {school.hostelBoys && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">Boys Hostel</span>}
-                    {school.hostelGirls && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">Girls Hostel</span>}
+                    {school.hostelBoys && (
+                      <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">
+                        Boys Hostel
+                      </span>
+                    )}
+                    {school.hostelGirls && (
+                      <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">
+                        Girls Hostel
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
-
               {school.transportAvailable && (
                 <div>
                   <p className="font-heading font-semibold text-xs text-gray-500 mb-2 flex items-center gap-1.5">
                     <Bus className="w-3.5 h-3.5" /> Transport
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {school.gpsTracking && <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">GPS Tracking</span>}
-                    {school.transportAreas && <p className="font-body text-sm text-gray-700 w-full mt-1">{school.transportAreas}</p>}
+                    {school.gpsTracking && (
+                      <span className="px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 text-xs">
+                        GPS Tracking
+                      </span>
+                    )}
+                    {school.transportAreas && (
+                      <p className="font-body text-sm text-gray-700 w-full mt-1">
+                        {school.transportAreas}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
+              {!school.campusArea &&
+                !school.totalClassrooms &&
+                !school.totalLabs &&
+                !school.libraryBooks &&
+                !school.hostelAvailable &&
+                !school.transportAvailable && (
+                  <p className="font-body text-sm text-gray-400 text-center py-4">
+                    No infrastructure details added yet.
+                  </p>
+                )}
+            </div>
+          )}
 
-              {!school.campusArea && !school.totalClassrooms && !school.totalLabs && !school.libraryBooks && !school.hostelAvailable && !school.transportAvailable && (
-                <p className="font-body text-sm text-gray-400 text-center py-4">No infrastructure details added yet.</p>
+          {/* Tab: Gallery */}
+          {activeTab === "gallery" && (
+            <div className="space-y-3">
+              {galleryImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
+                  <Images className="w-8 h-8" />
+                  <p className="font-body text-sm">
+                    No gallery images uploaded yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {galleryImages.map((img) => (
+                    <div
+                      key={img.id}
+                      className="group relative rounded-xl overflow-hidden border border-gray-100 aspect-square bg-gray-50"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.url}
+                        alt={img.caption ?? "Gallery image"}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        loading="lazy"
+                      />
+                      {(img.caption || img.category) && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1">
+                          {img.caption && (
+                            <p className="text-white text-xs truncate">
+                              {img.caption}
+                            </p>
+                          )}
+                          {img.category && (
+                            <p className="text-white/70 text-[10px] truncate">
+                              {img.category}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -612,7 +865,7 @@ export default function SchoolDetailModal({
             </div>
           )}
 
-          {/* Action buttons — only for PENDING */}
+          {/* Action buttons */}
           {isPending && (onApprove || onReject) && (
             <div className="flex gap-3 pt-2 border-t border-gray-100">
               {!rejectMode ? (
