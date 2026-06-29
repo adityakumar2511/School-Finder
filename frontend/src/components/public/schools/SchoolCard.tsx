@@ -30,6 +30,7 @@ export interface SchoolCardProps {
   schoolType: "BOYS" | "GIRLS" | "CO_ED";
   medium: "HINDI" | "ENGLISH" | "BOTH" | "OTHER";
   mediumOther?: string | null;
+  managementType?: string | null;
   classesFrom: number;
   classesTo: number;
   classesOffered?: string[] | null;

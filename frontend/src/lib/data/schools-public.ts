@@ -246,3 +246,44 @@ export async function fetchSchoolDetailClient(
     return null;
   }
 }
+
+
+
+/**
+ * Fetch approved + visible schools for homepage browse section.
+ * Used to derive dynamic states/cities/boards/management types and render school cards.
+ */
+export async function fetchHomeBrowseSchools(
+  limit = 1000,
+): Promise<SchoolCardProps[]> {
+  const { schools } = await fetchSchoolList(
+    { limit: String(limit) },
+    { revalidate: 3600 },
+  );
+
+  return schools;
+}
+
+export async function fetchAllStates(): Promise<string[]> {
+  const schools = await fetchHomeBrowseSchools(1000);
+
+  return Array.from(
+    new Set(
+      schools
+        .map((school) => school.state)
+        .filter((state): state is string => Boolean(state)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+export async function fetchAllCitiesFromSchools(): Promise<string[]> {
+  const schools = await fetchHomeBrowseSchools(1000);
+
+  return Array.from(
+    new Set(
+      schools
+        .map((school) => school.city)
+        .filter((city): city is string => Boolean(city)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}

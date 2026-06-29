@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 
-const SITE_NAME = "SchoolFinder";
+const SITE_NAME = "Lakshya One";
 
 export const siteConfig = {
   name: SITE_NAME,
-  title: "SchoolFinder — Find the Best Schools Near You",
+  title: "Lakshya One — Find and Compare Schools Near You",
   description:
-    "Discover and compare CBSE, ICSE, and state board schools across India. Browse listings, view fees, and contact schools directly.",
+    "Lakshya One helps parents discover, compare, and connect with schools while helping schools build a trusted digital presence online.",
   keywords: [
     "schools near me",
     "CBSE schools",
     "ICSE schools",
+    "state board schools",
     "school admission",
-    "best schools India",
-    "school finder",
+    "best schools in Prayagraj",
+    "school comparison",
     "compare schools",
+    "school listing platform",
+    "Lakshya One",
   ],
   locale: "en_IN",
-  twitterHandle: "@schoolfinder",
+  twitterHandle: "@lakshyaone",
 };
 
 export function getSiteUrl(): string {
@@ -97,6 +100,10 @@ export const rootMetadata: Metadata = {
 const BOARD_LABEL: Record<string, string> = {
   CBSE: "CBSE",
   ICSE: "ICSE",
+  IB: "IB",
+  IGCSE: "IGCSE",
+  NIOS: "NIOS",
+  STATE_BOARD: "State Board",
   UP_BOARD: "UP Board",
   OTHER: "Board-affiliated",
 };
@@ -119,10 +126,12 @@ export type SchoolSeoInput = {
 
 export function buildSchoolMetadata(school: SchoolSeoInput): Metadata {
   const boardLabel = BOARD_LABEL[school.board] ?? school.board;
+
   const title = `${school.name} — ${boardLabel} School in ${school.city}`;
+
   const description =
     school.description?.slice(0, 160) ||
-    `${school.name} is a ${boardLabel} school in ${school.city}, ${school.state}. Classes ${school.classesFrom} to ${school.classesTo}. View fees, facilities, and contact details on SchoolFinder.`;
+    `${school.name} is a ${boardLabel} school in ${school.city}, ${school.state}. Classes ${school.classesFrom} to ${school.classesTo}. View fees, facilities, and contact details on Lakshya One.`;
 
   return buildPageMetadata({
     title,
@@ -133,16 +142,19 @@ export function buildSchoolMetadata(school: SchoolSeoInput): Metadata {
       `${school.name} ${school.city}`,
       `${boardLabel} school ${school.city}`,
       `schools in ${school.city}`,
+      `best schools in ${school.city}`,
       "school admission",
+      "Lakshya One",
     ],
     image: school.logoUrl,
   });
 }
 
 export function buildEducationalOrganizationJsonLd(
-  school: SchoolSeoInput
+  school: SchoolSeoInput,
 ): Record<string, unknown> {
   const siteUrl = getSiteUrl();
+  const boardLabel = BOARD_LABEL[school.board] ?? school.board;
 
   return {
     "@context": "https://schema.org",
@@ -151,7 +163,7 @@ export function buildEducationalOrganizationJsonLd(
     url: `${siteUrl}/schools/${school.slug}`,
     description:
       school.description ||
-      `${school.name} — ${BOARD_LABEL[school.board] ?? school.board} school in ${school.city}`,
+      `${school.name} — ${boardLabel} school in ${school.city}`,
     image: school.logoUrl ?? undefined,
     telephone: school.phone,
     address: {
@@ -162,14 +174,12 @@ export function buildEducationalOrganizationJsonLd(
       postalCode: school.pincode ?? undefined,
       addressCountry: "IN",
     },
-    ...(school.website
-      ? { sameAs: [school.website] }
-      : {}),
+    ...(school.website ? { sameAs: [school.website] } : {}),
   };
 }
 
 export function buildBreadcrumbJsonLd(
-  items: Array<{ name: string; path: string }>
+  items: Array<{ name: string; path: string }>,
 ): Record<string, unknown> {
   const siteUrl = getSiteUrl();
 

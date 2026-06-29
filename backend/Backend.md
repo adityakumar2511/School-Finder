@@ -1,14 +1,25 @@
-  # SchoolFinder — Backend Documentation
+  # Lakshya One — Backend Documentation
 
-  > Last updated: June 27, 2026
+  > Last updated: June 30, 2026
   > Stack: Express.js 5 · TypeScript · Prisma 5 · PostgreSQL/Neon · JWT · Brevo · Fast2SMS · Sentry
   > Default port: `4000`
   > Repository path: `backend/`
   > Schema owner: `backend/prisma/schema.prisma`
 
-  The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, admin moderation, and operational error monitoring.
+  The backend is a stateless REST API and the single source of truth for authentication, authorization, school data, advanced 22-section school profile data, inquiries/leads, contact submissions, featured listing control, nearby-school discovery, homepage browse filter data, admin moderation, and operational error monitoring.
 
   Future-only modules such as Blog CMS, Razorpay payment verification, direct WhatsApp routing, reviews, and real AI recommendations are documented separately in `Future-Features.md`.
+
+  ### Recent documentation update — June 30, 2026
+
+  This documentation now includes the latest homepage browse/API sync notes:
+
+  - The public school list response must expose `managementType` for the homepage Management Type dropdown.
+  - The public school list filter layer supports the `managementType` query parameter when routed from frontend filters.
+  - `mapSchoolListItem` returns `managementType` along with board, state, city, medium, fee, location, featured, and facilities-count data.
+  - Controller cache keys should include `managementType` when public list filtering is used, so filtered results are cached separately.
+  - The About page is frontend-only static content and does not require any backend route, model, controller, or API changes.
+
 
   ---
 
@@ -65,7 +76,7 @@
   |---|---|
   | Auth | Parent, school admin, platform admin login/register/reset/OTP |
   | Authorization | Role checks, admin access levels, super admin protection |
-  | Schools | Public listing, detail, filters, coordinates, nearby, featured ordering, and full 22-section profile persistence |
+  | Schools | Public listing, detail, filters including `managementType`, coordinates, nearby, featured ordering, homepage browse data, and full 22-section profile persistence |
   | School admin | Own school profile CRUD, custom profile sections, gallery URLs, inquiry status updates |
   | Parents | Profile, favourites, sent inquiries |
   | Admin | Stats, moderation, users, add school/parent/admin, visibility, featured |
@@ -305,7 +316,7 @@
 
   | Method | Path | Purpose |
   |---|---|---|
-  | GET | `/` | Public school list with filters and featured ordering |
+  | GET | `/` | Public school list with filters, `managementType`, and featured ordering |
   | GET | `/search` | Public search endpoint |
   | GET | `/cities` | Approved + visible distinct cities, optional state filter |
   | GET | `/nearby` | Nearby schools by coordinates |
@@ -507,6 +518,7 @@
   classesTo
   classesOffered
   schoolCategory
+  managementType        ← used by homepage Management Type filter and public list payload
   schoolFormat
   phone
   email
@@ -539,6 +551,7 @@
   studentTeacherRatio
   totalStudents
   establishedYear
+  managementType
   affiliationNumber
   mediumOther
   stateBoardName
@@ -662,9 +675,9 @@
 
   Supports:
 
-  - Public school select — includes `stateBoardName`, `mediumOther`.
+  - Public school select — includes `stateBoardName`, `mediumOther`, and `managementType`.
   - Public detail select — all 22-section fields including `mediumOther`, `stateBoardName`, `earlyChildhoodFee`, `socialLinks`.
-  - Admin school list select (`adminSchoolListSelect`) — includes `stateBoardName`, `mediumOther`.
+  - Admin school list select (`adminSchoolListSelect`) — includes `stateBoardName`, `mediumOther`, and `managementType`.
   - Full school profile fields for school/admin edit flows.
   - Facilities and sports custom group JSON fields.
   - Admission coordinator and additional phone JSON fields.
@@ -675,9 +688,10 @@
   - `isVisible` public filter.
   - `APPROVED` public status filtering.
   - City/state/board filters — `UP_BOARD` normalised to `STATE_BOARD` in filter layer.
+  - Management Type filter via `managementType` query param for homepage/listing integration.
   - Search filter.
   - Featured-only filter.
-  - Mapper functions for list item output — `mapSchoolListItem` exposes `stateBoardName` and `mediumOther`.
+  - Mapper functions for list item output — `mapSchoolListItem` exposes `stateBoardName`, `mediumOther`, and `managementType`.
 
   Public listing ordering:
 
@@ -818,9 +832,12 @@
   | Data | TTL | Invalidated on |
   |---|---:|---|
   | School list/search | 60s | School mutation, visibility, featured update |
+  | Homepage browse list/filter data | 60s | School mutation, visibility, featured update |
   | School detail | 300s | School update/delete/visibility/featured update |
   | Cities | 60s | School mutation, visibility update |
   | Admin stats | 30s | School moderation/create |
+
+  Public school list cache keys should include all active filters, including `managementType`, to avoid reusing stale or mismatched filtered results.
 
   Not cached:
 
@@ -1000,7 +1017,8 @@
   ### Schools
 
   - Public listing/detail/search/cities.
-  - City/state/board filters — UP_BOARD normalised to STATE_BOARD.
+  - Public school list exposes `managementType` for homepage browse filters.
+  - City/state/board/managementType filters — UP_BOARD normalised to STATE_BOARD.
   - SEO-friendly data support.
   - Full school profile update.
   - School profile backend sync for languages, categories, classes, timings, recognition, affiliation, uniform policy, canteen, student-teacher ratio, total students, facilities, sports, programs, streams, board results, admissions, and contact data.
@@ -1010,6 +1028,7 @@
   - Dynamic social media links stored in `socialLinks` JSON as `{ platform, url }[]`.
   - Medium "Other" custom text stored in `mediumOther` — set when `medium = OTHER`, cleared otherwise.
   - State board name stored in `stateBoardName` — set when `board = STATE_BOARD`, cleared otherwise.
+  - Management type stored in `managementType` and exposed in public/admin school list responses.
   - Grade-wise fee fields: `earlyChildhoodFee`, `prePrimaryFee`, `class1to5Fee`, `class6to8Fee`, `class9to10Fee`, `class11to12Fee`.
   - Gallery URL management.
   - Visibility toggle.
@@ -1040,6 +1059,12 @@
   - Super admin protection.
   - Admin audit logs.
   - Admin school list exposes `stateBoardName` for display in board column.
+  - Admin school list exposes `managementType` for school ownership/management context.
+
+  ### Static frontend pages
+
+  - About page is frontend-only and does not require backend API, database model, controller, or route changes.
+  - Homepage content sections are frontend-composed; only the dynamic browse/featured school data uses existing public school APIs.
 
   ### Contact
 

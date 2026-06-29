@@ -12,6 +12,7 @@ export const schoolListSelect = {
   schoolType: true,
   medium: true,
   mediumOther: true,
+  managementType: true,
   classesFrom: true,
   classesTo: true,
   classesOffered: true,
@@ -129,6 +130,7 @@ export function mapSchoolListItem(
     schoolType,
     medium,
     mediumOther,
+    managementType,
     classesFrom,
     classesTo,
     classesOffered,
@@ -151,6 +153,7 @@ export function mapSchoolListItem(
     schoolType,
     medium,
     mediumOther,
+    managementType,
     classesFrom,
     classesTo,
     classesOffered,
@@ -213,6 +216,7 @@ export function buildSchoolListWhere(filters: {
   schoolType?: string;
   medium?: string;
   schoolCategory?: string;
+  managementType?: string;
   featured?: string;
 }): Prisma.SchoolWhereInput {
   const where: Prisma.SchoolWhereInput = {
@@ -251,6 +255,13 @@ export function buildSchoolListWhere(filters: {
   if (filters.schoolCategory) {
     where.schoolCategory = {
       contains: filters.schoolCategory,
+      mode: "insensitive",
+    };
+  }
+
+  if (filters.managementType) {
+    where.managementType = {
+      contains: filters.managementType,
       mode: "insensitive",
     };
   }
@@ -510,6 +521,7 @@ export const adminSchoolListSelect = {
   schoolType: true,
   medium: true,
   mediumOther: true,
+  managementType: true,
   classesFrom: true,
   classesTo: true,
   phone: true,

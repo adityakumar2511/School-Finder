@@ -1,14 +1,27 @@
-# SchoolSetu — Frontend Documentation
+# Lakshya One — Frontend Documentation
 
-> Last updated: June 27, 2026  
+> Last updated: June 30, 2026  
 > Stack: Next.js 14 App Router · TypeScript · Tailwind CSS · NextAuth v5 · Cloudinary · Sentry  
 > Default port: `3000`  
 > Repository path: `frontend/`  
 > Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
-The frontend is a role-separated Next.js application for public school discovery, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
+The frontend is a role-separated Next.js application for public school discovery, redesigned Lakshya One homepage, animated About page, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
+
+### Recent documentation update — June 30, 2026
+
+This documentation now includes the latest public marketing-page updates:
+
+- The homepage has been expanded from a simple hero/stats/featured layout into a full Lakshya One landing page.
+- The homepage now includes search, dynamic browse filters, featured schools, value sections, city availability, parent/school sections, testimonials, FAQs, static blog-preview cards, and a final CTA.
+- `HomeBrowse` uses public school data and derives State, City, Board, and Management Type filter options dynamically from approved visible schools.
+- `HomeBrowseClient` shows 6 school cards initially and loads 6 more on each `View More` click to avoid rendering too many cards at once.
+- `SchoolCard` layout is expected to use equal-height card styling when used inside homepage grids.
+- The About page is now a composed Lakshya One brand page with section components, Framer Motion animations, SEO metadata, mission/story content, parent/school benefits, process, values, FAQ, and closing CTA.
+- Brand-facing copy now uses Lakshya One; older references may still exist where they describe legacy keys, existing routes, or previous implementation names.
+
 
 ---
 
@@ -116,7 +129,7 @@ frontend/
     ├── instrumentation.ts               # Runtime-based Sentry registration
     ├── app/
     │   ├── about/
-    │   │   └── page.tsx                 # Static About page
+    │   │   └── page.tsx                 # Composed About page with SEO metadata and public/about sections
     │   ├── admin/
     │   │   ├── add-admin/
     │   │   │   └── page.tsx
@@ -302,10 +315,33 @@ frontend/
     │   │
     │   ├── public/                        # No-auth pages
     │   │   ├── home/
-    │   │   │   ├── FeaturedSchools.tsx     # Real featured schools API data
+    │   │   │   ├── FeaturedSchools.tsx         # Real featured schools API data
     │   │   │   ├── FeaturedSchoolsSkeleton.tsx
-    │   │   │   ├── HomeHero.tsx
-    │   │   │   └── HomeStats.tsx
+    │   │   │   ├── HomeHero.tsx                # Brand hero with CTAs
+    │   │   │   ├── HomeSearch.tsx              # Homepage search entry point
+    │   │   │   ├── HomeStats.tsx               # Homepage stats band
+    │   │   │   ├── HomeBrowse.tsx              # Server wrapper for dynamic browse data
+    │   │   │   ├── HomeBrowseClient.tsx        # State/city/board/management filters + View More
+    │   │   │   ├── HomeWhyLakshya.tsx
+    │   │   │   ├── HomeHowItWorks.tsx
+    │   │   │   ├── HomePlatformPreview.tsx
+    │   │   │   ├── HomeAvailableCity.tsx
+    │   │   │   ├── HomeParentsSection.tsx
+    │   │   │   ├── HomeSchoolsSection.tsx
+    │   │   │   ├── HomeTestimonials.tsx
+    │   │   │   ├── HomeFAQ.tsx
+    │   │   │   ├── HomeBlogPreview.tsx         # Static preview cards, no blog route dependency yet
+    │   │   │   ├── HomeFinalCTA.tsx
+    │   │   │   └── home-data.ts                # Static homepage content/data arrays
+    │   │   ├── about/
+    │   │   │   ├── AboutHero.tsx               # Animated About hero
+    │   │   │   ├── AboutStory.tsx              # Story/problem statement section
+    │   │   │   ├── AboutStats.tsx              # Animated hardcoded impact stats
+    │   │   │   ├── AboutForWhom.tsx            # Parents / Schools tabs
+    │   │   │   ├── AboutHowItWorks.tsx         # Stepper/process section
+    │   │   │   ├── AboutValues.tsx             # Core values grid
+    │   │   │   ├── AboutFAQ.tsx                # Custom FAQ accordion
+    │   │   │   └── AboutClosingCTA.tsx         # Parent/school CTA cards
     │   │   └── schools/
     │   │       ├── FavouriteButton.tsx
     │   │       ├── InquiryModal.tsx
@@ -433,8 +469,8 @@ frontend/
 
 | Route | Purpose |
 |---|---|
-| `/` | Homepage with hero, stats, featured schools |
-| `/about` | About page |
+| `/` | Redesigned Lakshya One homepage with hero, search, stats, dynamic browse filters, featured schools, value sections, FAQs, and CTA |
+| `/about` | Animated About page explaining mission, story, parent/school benefits, process, values, FAQs, and CTA |
 | `/contact` | Contact page with DB save + EmailJS + Google Sheets webhook |
 | `/schools` | School listing with filters |
 | `/schools/[slug]` | Public school detail page with inquiry, favourites, map, nearby schools |
@@ -524,7 +560,34 @@ components/
 │   ├── seo/JsonLd.tsx
 │   └── upload/ImageUploadField.tsx
 ├── public/
-│   ├── home/FeaturedSchools.tsx
+│   ├── home/
+│   │   ├── HomeHero.tsx
+│   │   ├── HomeSearch.tsx
+│   │   ├── HomeStats.tsx
+│   │   ├── HomeBrowse.tsx
+│   │   ├── HomeBrowseClient.tsx
+│   │   ├── FeaturedSchools.tsx
+│   │   ├── FeaturedSchoolsSkeleton.tsx
+│   │   ├── HomeWhyLakshya.tsx
+│   │   ├── HomeHowItWorks.tsx
+│   │   ├── HomePlatformPreview.tsx
+│   │   ├── HomeAvailableCity.tsx
+│   │   ├── HomeParentsSection.tsx
+│   │   ├── HomeSchoolsSection.tsx
+│   │   ├── HomeTestimonials.tsx
+│   │   ├── HomeFAQ.tsx
+│   │   ├── HomeBlogPreview.tsx
+│   │   ├── HomeFinalCTA.tsx
+│   │   └── home-data.ts
+│   ├── about/
+│   │   ├── AboutHero.tsx
+│   │   ├── AboutStory.tsx
+│   │   ├── AboutStats.tsx
+│   │   ├── AboutForWhom.tsx
+│   │   ├── AboutHowItWorks.tsx
+│   │   ├── AboutValues.tsx
+│   │   ├── AboutFAQ.tsx
+│   │   └── AboutClosingCTA.tsx
 │   └── schools/
 │       ├── SchoolCard.tsx
 │       ├── SchoolFilters.tsx
@@ -547,6 +610,63 @@ components/
     ├── search-pagination/
     └── users/
 ```
+
+### Homepage component flow
+
+The homepage is composed in `src/app/page.tsx` and uses the public home components in this order:
+
+```txt
+HomeHero
+HomeSearch
+HomeStats
+HomeBrowse
+FeaturedSchools
+HomeWhyLakshya
+HomeHowItWorks
+HomePlatformPreview
+HomeAvailableCity
+HomeParentsSection
+HomeSchoolsSection
+HomeTestimonials
+HomeFAQ
+HomeBlogPreview
+HomeFinalCTA
+```
+
+`HomeBrowse` is a Server Component wrapper that fetches approved and visible school list data through `src/lib/data/schools-public.ts`. `HomeBrowseClient` receives the data and handles client-side filtering.
+
+Homepage browse behaviour:
+
+- Dropdown filters: State, City, Board, Management Type.
+- State and City options are derived from live approved/visible schools.
+- Board options are derived from school list response values, including State Board display via `stateBoardName` where applicable.
+- Management Type options are derived from `managementType` returned by the backend public list API.
+- Initial visible cards: 6.
+- Each `View More Schools` click reveals 6 additional cards.
+- Card grid uses equal-height rows so school cards remain visually aligned.
+- Blog preview cards are static homepage content for now and do not require a live `/blog` route.
+
+### About page component flow
+
+The About page is composed in `src/app/about/page.tsx` and uses `src/components/public/about/` components.
+
+```txt
+AboutHero
+AboutStory
+AboutStats
+AboutForWhom
+AboutHowItWorks
+AboutValues
+AboutFAQ
+AboutClosingCTA
+```
+
+About page behaviour:
+
+- Frontend-only static brand/content page.
+- No backend API is required.
+- Uses Tailwind design tokens, existing button/card utilities, Lucide icons, and Framer Motion animations.
+- Explains Lakshya One's story, mission, parents/schools value proposition, workflow, values, FAQs, and final CTAs.
 
 ---
 
@@ -611,6 +731,7 @@ frontend/src/lib/school/data.ts
 | Data | Revalidation |
 |---|---:|
 | School listing | 60 seconds |
+| Homepage browse schools | 3600 seconds |
 | City/state/board pages | 60 seconds |
 | School detail | 3600 seconds |
 | Featured schools | 3600 seconds |
@@ -829,6 +950,8 @@ frontend/src/lib/upload/upload-security.ts
 Implemented SEO features:
 
 - Root metadata.
+- Homepage metadata for Lakshya One landing page.
+- About page metadata for Lakshya One mission/story page.
 - Dynamic school metadata.
 - City/state/board SEO pages.
 - Dynamic sitemap.
@@ -865,6 +988,8 @@ Main files:
 
 ```txt
 frontend/src/components/public/home/FeaturedSchools.tsx
+frontend/src/components/public/home/HomeBrowse.tsx
+frontend/src/components/public/home/HomeBrowseClient.tsx
 frontend/src/components/public/schools/SchoolCard.tsx
 frontend/src/components/admin/moderation/SchoolModerationActions.tsx
 frontend/src/components/admin/moderation/SchoolStatusBadge.tsx
@@ -1072,8 +1197,9 @@ https://your-domain.com/api/auth/callback/google
 
 ### Public users
 
-- Homepage.
-- About page.
+- Redesigned Lakshya One homepage with hero, search, stats, dynamic browse filters, featured schools, why/how sections, city availability, parent/school sections, testimonials, FAQ, blog preview, and final CTA.
+- Homepage browse filters for State, City, Board, and Management Type with 6-card initial render and 6-card View More increments.
+- Animated Lakshya One About page with hero, story, stats, parent/school tabs, how-it-works, values, FAQ, and closing CTA.
 - Contact page.
 - School listing.
 - School filters.
@@ -1158,6 +1284,10 @@ https://your-domain.com/api/auth/callback/google
 | API proxy | `src/lib/api/proxy.ts` |
 | Public data | `src/lib/data/schools-public.ts` |
 | Upload route | `src/app/api/upload/route.ts` |
+| Home page | `src/app/page.tsx` |
+| Home components | `src/components/public/home/` |
+| About page | `src/app/about/page.tsx` |
+| About components | `src/components/public/about/` |
 | Contact page | `src/app/contact/page.tsx` |
 | Compare page | `src/app/compare/page.tsx` |
 | School detail | `src/app/schools/[slug]/page.tsx` |
