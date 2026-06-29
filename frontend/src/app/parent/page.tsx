@@ -10,7 +10,12 @@ import {
 import { getParentDashboardData } from "@/lib/parent/data";
 import RecentViewedSchools from "@/components/parent/RecentViewedSchools";
 import SchoolCard from "@/components/public/schools/SchoolCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/shared/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/shared/ui/card";
 import { Button } from "@/components/shared/ui/button";
 
 export default async function ParentDashboardPage() {
@@ -37,20 +42,28 @@ export default async function ParentDashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-heading text-3xl font-bold text-blue-800">{favouritesCount}</p>
+            <p className="font-heading text-3xl font-bold text-blue-800">
+              {favouritesCount}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="border-gray-100 shadow-card rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 text-white sm:col-span-2 lg:col-span-3">
           <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <p className="font-heading font-semibold text-lg">Quick actions</p>
+              <p className="font-heading font-semibold text-lg">
+                Quick actions
+              </p>
               <p className="font-body text-sm text-blue-100 mt-1">
                 Browse listings, review favourites, or update your profile.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm" className="bg-white text-blue-800 hover:bg-blue-50">
+              <Button
+                asChild
+                size="sm"
+                className="bg-white text-blue-800 hover:bg-blue-50"
+              >
                 <Link href="/schools">
                   <Search className="w-4 h-4 mr-1" />
                   Browse schools
@@ -103,8 +116,8 @@ export default async function ParentDashboardPage() {
           <CardContent>
             {recentSaved.length === 0 ? (
               <p className="font-body text-body text-gray-500">
-                You have not saved any schools yet. Open a school profile and tap the heart icon
-                to save it here.
+                You have not saved any schools yet. Open a school profile and
+                tap the heart icon to save it here.
               </p>
             ) : (
               <div className="space-y-4">
@@ -116,9 +129,20 @@ export default async function ParentDashboardPage() {
                     slug={school.slug}
                     city={school.city}
                     state={school.state}
-                    board={school.board as "CBSE" | "ICSE" | "UP_BOARD" | "OTHER"}
+                    board={
+                      school.board as
+                        | "CBSE"
+                        | "ICSE"
+                        | "IB"
+                        | "IGCSE"
+                        | "NIOS"
+                        | "STATE_BOARD"
+                        | "OTHER"
+                    }
                     schoolType={school.schoolType as "BOYS" | "GIRLS" | "CO_ED"}
-                    medium={school.medium as "HINDI" | "ENGLISH" | "BOTH"}
+                    medium={
+                      school.medium as "HINDI" | "ENGLISH" | "BOTH" | "OTHER"
+                    }
                     classesFrom={school.classesFrom}
                     classesTo={school.classesTo}
                     tuitionFeeMonthly={school.tuitionFeeMonthly}
@@ -138,12 +162,17 @@ export default async function ParentDashboardPage() {
         <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <MessageSquare className="w-8 h-8 text-amber-700 shrink-0" />
           <div className="flex-1">
-            <p className="font-heading font-semibold text-amber-900">Need help choosing?</p>
+            <p className="font-heading font-semibold text-amber-900">
+              Need help choosing?
+            </p>
             <p className="font-body text-sm text-amber-800/80 mt-1">
               Compare fees, boards, and facilities across schools in your city.
             </p>
           </div>
-          <Button asChild className="bg-amber-500 hover:bg-amber-600 text-amber-950 shrink-0">
+          <Button
+            asChild
+            className="bg-amber-500 hover:bg-amber-600 text-amber-950 shrink-0"
+          >
             <Link href="/schools">Explore schools</Link>
           </Button>
         </CardContent>

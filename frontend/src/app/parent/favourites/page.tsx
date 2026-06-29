@@ -13,7 +13,10 @@ type Props = {
 
 export default async function ParentFavouritesPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
-  const { schools, total, totalPages } = await getParentFavourites(page, PAGE_SIZE);
+  const { schools, total, totalPages } = await getParentFavourites(
+    page,
+    PAGE_SIZE,
+  );
   const currentPage = Math.min(page, totalPages);
 
   return (
@@ -23,7 +26,9 @@ export default async function ParentFavouritesPage({ searchParams }: Props) {
           <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
             <Heart className="w-5 h-5 text-blue-600" />
           </div>
-          <h1 className="font-heading text-h1 font-bold text-blue-800">Saved schools</h1>
+          <h1 className="font-heading text-h1 font-bold text-blue-800">
+            Saved schools
+          </h1>
         </div>
         <p className="font-body text-body text-gray-500 ml-[52px]">
           {total > 0
@@ -43,16 +48,30 @@ export default async function ParentFavouritesPage({ searchParams }: Props) {
                   slug={school.slug}
                   city={school.city}
                   state={school.state}
-                  board={school.board as "CBSE" | "ICSE" | "UP_BOARD" | "OTHER"}
+                  board={
+                    school.board as
+                      | "CBSE"
+                      | "ICSE"
+                      | "IB"
+                      | "IGCSE"
+                      | "NIOS"
+                      | "STATE_BOARD"
+                      | "OTHER"
+                  }
                   schoolType={school.schoolType as "BOYS" | "GIRLS" | "CO_ED"}
-                  medium={school.medium as "HINDI" | "ENGLISH" | "BOTH"}
+                  medium={
+                    school.medium as "HINDI" | "ENGLISH" | "BOTH" | "OTHER"
+                  }
                   classesFrom={school.classesFrom}
                   classesTo={school.classesTo}
                   tuitionFeeMonthly={school.tuitionFeeMonthly}
                   logoUrl={school.logoUrl}
                   facilitiesCount={school.facilitiesCount}
                 />
-                <RemoveFavouriteButton schoolId={school.id} schoolName={school.name} />
+                <RemoveFavouriteButton
+                  schoolId={school.id}
+                  schoolName={school.name}
+                />
               </div>
             ))}
           </div>
@@ -60,7 +79,9 @@ export default async function ParentFavouritesPage({ searchParams }: Props) {
           <FavouritesPagination page={currentPage} totalPages={totalPages} />
 
           <div className="mt-10 text-center">
-            <p className="font-body text-body text-gray-500 mb-3">Looking for more options?</p>
+            <p className="font-body text-body text-gray-500 mb-3">
+              Looking for more options?
+            </p>
             <Link
               href="/schools"
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-heading font-semibold text-btn px-6 py-3 rounded-xl shadow-btn transition-colors"
@@ -79,8 +100,8 @@ export default async function ParentFavouritesPage({ searchParams }: Props) {
             No saved schools yet
           </h2>
           <p className="font-body text-body text-gray-500 max-w-md mb-8">
-            Visit a school profile and use the save button to add schools to your list. They will
-            appear here for easy comparison.
+            Visit a school profile and use the save button to add schools to
+            your list. They will appear here for easy comparison.
           </p>
           <Link
             href="/schools"
