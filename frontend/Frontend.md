@@ -6,7 +6,7 @@
 > Repository path: `frontend/`  
 > Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
-The frontend is a role-separated Next.js application for public school discovery, redesigned Lakshya One homepage, animated About page, parent dashboard, school dashboard, admin panel, contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
+The frontend is a role-separated Next.js application for public school discovery, redesigned Lakshya One homepage, animated About page, parent dashboard, school dashboard, admin panel (including admin user-account credential editing), contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
 
@@ -21,6 +21,14 @@ This documentation now includes the latest public marketing-page updates:
 - `SchoolCard` layout is expected to use equal-height card styling when used inside homepage grids.
 - The About page is now a composed Lakshya One brand page with section components, Framer Motion animations, SEO metadata, mission/story content, parent/school benefits, process, values, FAQ, and closing CTA.
 - Brand-facing copy now uses Lakshya One; older references may still exist where they describe legacy keys, existing routes, or previous implementation names.
+
+### Recent documentation update — Admin Edit User Account feature
+
+- FULL_ACCESS admins can edit a School Admin's or Parent's account credentials (name, email, phone, password) from `/admin/users` via a new "Edit" button → modal.
+- New component `EditUserModal.tsx` (React Hook Form + Zod) with a "Reset password" checkbox that reveals the new password field only when checked.
+- A second confirmation dialog warns the admin before changing login credentials, since this force-logs-out the user on every device.
+- New BFF proxy route `frontend/src/app/api/admin/users/[id]/account/route.ts` (PATCH), mirroring the existing `role/route.ts` pattern.
+- `UserManagementActions.tsx` now also gates an "Edit" button on `!isSuperAdmin && viewerAccessLevel === "FULL_ACCESS"`.
 
 
 ---
@@ -47,6 +55,7 @@ This documentation now includes the latest public marketing-page updates:
 18. [Build and Deployment](#18-build-and-deployment)
 19. [Current Features](#19-current-features)
 20. [Quick Reference](#20-quick-reference)
+21. [Admin Edit User Account (Name, Email, Phone, Password)](#21-admin-edit-user-account-name-email-phone-password)
 
 ---
 
@@ -179,6 +188,8 @@ frontend/
     │   │   │   │   └── route.ts
     │   │   │   └── users/
     │   │   │       └── [id]/
+    │   │   │           ├── account/
+    │   │   │           │   └── route.ts    # PATCH — edit name/email/phone/password
     │   │   │           ├── role/
     │   │   │           │   └── route.ts
     │   │   │           ├── status/
@@ -415,8 +426,9 @@ frontend/
     │       │   └── AdminSearchBar.tsx           # State + City dependent selects
     │       └── users/
     │           ├── AdminAccessBadge.tsx
+    │           ├── EditUserModal.tsx            # Edit name/email/phone/password + reset-password checkbox + confirm dialog
     │           ├── RoleBadge.tsx                # Super Admin tag
-    │           └── UserManagementActions.tsx    # Delete/status/role actions gated
+    │           └── UserManagementActions.tsx    # Delete/status/role/edit actions gated
     │
     └── lib/
         ├── admin/
@@ -510,7 +522,7 @@ frontend/
 | `/admin` | Admin stats dashboard |
 | `/admin/schools` | Moderation, filters, approve/reject/edit/delete, list/unlist, featured toggle |
 | `/admin/schools/[id]/edit` | Admin full school profile edit |
-| `/admin/users` | School admins, parents, admins management |
+| `/admin/users` | School admins, parents, admins management, including credential editing |
 | `/admin/inquiries` | Cross-school inquiry monitoring |
 | `/admin/add-school` | Admin creates approved school |
 | `/admin/add-parent` | Admin creates parent |
@@ -534,6 +546,7 @@ frontend/
 | `/api/admin/users/[id]` | DELETE | Delete user |
 | `/api/admin/users/[id]/role` | PATCH | Update user role |
 | `/api/admin/users/[id]/status` | PATCH | Enable/disable user |
+| `/api/admin/users/[id]/account` | PATCH | Edit user's name/email/phone/password |
 | `/api/admin/add-school` | POST | Create approved school |
 | `/api/admin/add-parent` | POST | Create parent |
 | `/api/admin/add-admin` | POST | Create admin |
@@ -609,6 +622,10 @@ components/
     ├── moderation/SchoolStatusBadge.tsx
     ├── search-pagination/
     └── users/
+        ├── AdminAccessBadge.tsx
+        ├── EditUserModal.tsx
+        ├── RoleBadge.tsx
+        └── UserManagementActions.tsx
 ```
 
 ### Homepage component flow
@@ -696,6 +713,7 @@ About page behaviour:
   - `READ_WRITE`
   - `FULL_ACCESS`
 - Super admin row actions are hidden in user management.
+- Note: if a FULL_ACCESS admin changes a user's email or password via the Edit User modal, that user's session(s) are force-invalidated backend-side (`tokenVersion` increment) — the next request from any of their old sessions will fail auth and require re-login.
 
 ---
 
@@ -765,6 +783,7 @@ frontend/src/lib/school/data.ts
 | Admin add-school | Multi-step validation + duplicate checks |
 | Admin add-parent | Email duplicate check |
 | Admin add-admin | Access-level validation |
+| Admin edit user account | React Hook Form + Zod (`editUserSchema` mirrors backend `adminUpdateUserSchema`), diff-only payload, second confirmation dialog before submit |
 | Contact form | Client validation + backend validation |
 | Inquiry modal | Client validation + spam protection fields |
 
@@ -1267,6 +1286,7 @@ https://your-domain.com/api/auth/callback/google
 - Add parent.
 - Add admin with access level.
 - User management.
+- Edit a user's name, email, phone, and password via a confirm-gated modal, with automatic forced re-login across all of that user's devices when email or password changes.
 - Super admin protection UI.
 - Cross-school inquiry monitoring.
 
@@ -1293,4 +1313,79 @@ https://your-domain.com/api/auth/callback/google
 | School detail | `src/app/schools/[slug]/page.tsx` |
 | School profile form | `src/components/school/profile/SchoolProfileForm.tsx` |
 | School profile sections | `src/components/school/profile/formSections/` |
+| Admin Edit User modal | `src/components/admin/users/EditUserModal.tsx` |
 | Sentry configs | `sentry.*.config.ts` |
+
+---
+
+## 21. Admin Edit User Account (Name, Email, Phone, Password)
+
+> Status: Implemented.
+
+### Summary
+
+FULL_ACCESS admins can edit a School Admin's or Parent's account credentials
+(name, email, phone, password) from `/admin/users` via a new "Edit" button →
+modal. Changing email or password force-invalidates all of that user's
+existing sessions across every device, via the backend's `User.tokenVersion`
+mechanism (see `Backend.md` Section 23).
+
+### BFF proxy route — `frontend/src/app/api/admin/users/[id]/account/route.ts`
+
+- `PATCH` handler, mirrors the existing `role/route.ts` pattern exactly.
+- Proxies to backend `PATCH /api/admin/users/:id/account` via
+  `proxyToBackend()`.
+
+### Admin users list page — `frontend/src/app/admin/users/page.tsx`
+
+`UserManagementActions` now also receives:
+
+```txt
+currentName={user.name}
+currentEmail={user.email}
+currentPhone={user.phone ?? null}
+```
+
+### New component — `frontend/src/components/admin/users/EditUserModal.tsx`
+
+- React Hook Form + Zod (`editUserSchema` mirrors backend
+  `adminUpdateUserSchema`).
+- Fields: Name, Email, Phone, and a "Reset password" checkbox that reveals
+  a New Password field when checked (avoids accidental resets).
+- On submit: builds a diff payload (only changed/filled fields are sent),
+  then shows a **second confirmation dialog** ("This will change the
+  user's login credentials...") before actually calling the API.
+- Calls `fetch("/api/admin/users/${id}/account", { method: "PATCH" })`
+  directly (NOT via `lib/admin/data.ts` / `adminFetch` — that's a
+  server-only helper using `next/headers`, can't run in a client
+  component). This matches the existing pattern already used in
+  `UserManagementActions.tsx` and `SchoolModerationActions.tsx`.
+- On success: `router.refresh()` + closes modal.
+
+### Wired into Actions column — `frontend/src/components/admin/users/UserManagementActions.tsx`
+
+- New props: `currentName`, `currentEmail`, `currentPhone`.
+- New state: `const [editOpen, setEditOpen] = useState(false);`
+- New `canEdit` gate: `!isSuperAdmin && viewerAccessLevel === "FULL_ACCESS"`.
+- New "Edit" button (pencil icon, `lucide-react`) next to
+  Disable/Enable and Delete buttons — only rendered when `canEdit`.
+- `<EditUserModal>` mounted at the end of the component's JSX (after the
+  existing `disableOpen` and `deleteOpen` `<Dialog>` blocks), controlled
+  by `editOpen` / `setEditOpen`.
+- Single implementation — reused across all 3 tabs (School Admins,
+  Parents, Admins) since fields live on the common `User` model.
+
+### Known follow-ups / things to double check
+
+- **Disabled-account phone sentinel collision**: if a user's `phone` is
+  currently set to the disabled-account sentinel value (used by
+  `updateUserStatus` / `isAccountDisabled()` on the backend), the edit
+  modal will currently show/allow saving that raw sentinel string.
+  Recommended fix: pass
+  `currentPhone={isAccountDisabled(user.phone) ? "" : user.phone}` (or
+  equivalent) into `UserManagementActions` so the modal doesn't display or
+  resubmit the sentinel value.
+- **Session invalidation UX**: there is currently no toast/banner telling
+  the admin "this user will be logged out everywhere" beyond the
+  confirmation dialog copy — consider surfacing this more clearly if
+  support tickets come in about unexpected logouts.
