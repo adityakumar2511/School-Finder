@@ -17,6 +17,7 @@ import {
   getAdminInquiries,
   updateUserRole,
   updateUserStatus,
+  updateUserAccount,
   checkOwnerEmail,
   getAdminSchoolById,
   setSchoolFeatured,
@@ -26,7 +27,7 @@ import { auth } from "../middleware/auth";
 import { requireRole, requireAdminLevel, blockIfSuperAdminTarget  } from "../middleware/roleCheck";
 import { validate } from "../middleware/validate";
 import { asyncHandler } from "../utils/asyncHandler";
-import { addParentSchema, addAdminSchema } from "../validators/auth.validator";
+import { addParentSchema, addAdminSchema, adminUpdateUserSchema } from "../validators/auth.validator";
 import { authenticatedRateLimiter } from "../middleware/security";
 
 const router = Router();
@@ -156,6 +157,14 @@ router.patch(
   asyncHandler(updateUserStatus),
 );
 
+router.patch(
+  "/users/:id/account",
+  requireAdminLevel("FULL_ACCESS"),
+  blockIfSuperAdminTarget,
+  validate(adminUpdateUserSchema),
+  asyncHandler(updateUserAccount),
+);
+
 router.post(
   "/add-admin",
   requireAdminLevel("FULL_ACCESS"),
@@ -170,5 +179,7 @@ router.delete(
   blockIfSuperAdminTarget,
   asyncHandler(deleteUserDirect),
 );
+
+
 
 export default router;

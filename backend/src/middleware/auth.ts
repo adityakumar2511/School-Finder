@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { tokenBlacklist } from "../lib/tokenBlacklist";
 import { AppError, Errors } from "../utils/AppError";
+import { getUserTokenVersion } from "../lib/auth-helpers";
 
 export const JWT_ISSUER = "schoolfinder-api";
 const JWT_ALGORITHM = "HS256" as const;
@@ -23,6 +24,7 @@ type AccessTokenPayload = {
   role: string;
   email: string;
   adminAccessLevel?: string | null; // Phase E
+  tokenVersion?: number; // forces re-login when incremented server-side
   jti?: string;
 };
 
@@ -39,6 +41,7 @@ export function signAccessToken(payload: {
   role: string;
   email: string;
   adminAccessLevel?: string | null; // Phase E — pass only for ADMIN
+  tokenVersion?: number; // pass current User.tokenVersion at issue time
 }): string {
   return jwt.sign(
     {
@@ -54,7 +57,11 @@ export function signAccessToken(payload: {
   );
 }
 
-export const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const auth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -91,6 +98,21 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction): void 
     }
 
     if (!decoded.id || !decoded.role || !decoded.email) {
+      next(Errors.InvalidToken());
+      return;
+    }
+
+    // tokenVersion check — DB source of truth. If an admin changes this
+    // user's email/password, tokenVersion is bumped and every existing
+    // token (regardless of device/session) becomes invalid immediately.
+    const currentTokenVersion = await getUserTokenVersion(decoded.id);
+
+    if (currentTokenVersion === null) {
+      next(Errors.InvalidToken());
+      return;
+    }
+
+    if ((decoded.tokenVersion ?? 0) !== currentTokenVersion) {
       next(Errors.InvalidToken());
       return;
     }

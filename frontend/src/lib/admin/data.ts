@@ -319,4 +319,27 @@ export async function getAdminSchoolById(
   return data.school ?? data.data ?? null;
 }
 
+
+export type UpdateUserAccountPayload = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+};
+
+export async function updateUserAccount(
+  id: string,
+  payload: UpdateUserAccountPayload
+): Promise<{ ok: boolean; message?: string }> {
+  const { ok, data } = await adminFetch<{ message?: string }>(
+    `/api/admin/users/${id}/account`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+
+  return { ok, message: data?.message };
+}
+
 export { ACCOUNT_DISABLED_PHONE };

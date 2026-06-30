@@ -26,7 +26,7 @@ import {
   buildAdminSchoolWhere,
   schoolDetailSelect,
 } from "../lib/queries/schools";
-import type { AddAdminInput } from "../validators/auth.validator";
+import type { AddAdminInput, AdminUpdateUserInput } from "../validators/auth.validator";
 
 // ── Audit log helper ───────────────────────────────────────────────────────────
 // Add this after imports, before any exported function
@@ -512,6 +512,126 @@ export const updateUserStatus = async (req: AuthRequest, res: Response) => {
     },
   });
 };
+
+
+// PATCH /api/admin/users/:id/account
+// FULL_ACCESS only. Updates name/email/phone/password on the User model.
+// Bumps tokenVersion when email or password changes — this invalidates
+// every existing JWT for that user across all devices/sessions immediately
+// (see middleware/auth.ts tokenVersion check).
+export const updateUserAccount = async (req: AuthRequest, res: Response) => {
+  const targetId = String(req.params.id).trim();
+  const { name, email, phone, password } = req.body as AdminUpdateUserInput;
+
+  const target = await prisma.user.findUnique({
+    where: { id: targetId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      isSuperAdmin: true,
+    },
+  });
+
+  if (!target) {
+    throw Errors.NotFound("User");
+  }
+
+  // §0 — super admin immune (middleware also blocks; defense in depth)
+  if (target.isSuperAdmin) {
+    throw Errors.Forbidden("Super admin account cannot be modified");
+  }
+
+  const normalizedEmail = email?.toLowerCase().trim();
+  const isEmailChanging =
+    normalizedEmail !== undefined && normalizedEmail !== target.email;
+  const isPasswordChanging = password !== undefined;
+
+  // Email duplicate check — mandatory before update
+  if (isEmailChanging) {
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+    if (existing && existing.id !== targetId) {
+      throw Errors.Conflict("A user with this email already exists");
+    }
+  }
+
+  // Build dynamic update payload — only fields actually sent get updated
+  const data: Record<string, unknown> = {};
+  const changedFields: string[] = [];
+
+  if (name !== undefined && name !== target.name) {
+    data.name = name;
+    changedFields.push("name");
+  }
+
+  if (isEmailChanging) {
+    data.email = normalizedEmail;
+    changedFields.push("email");
+  }
+
+  if (phone !== undefined && phone !== target.phone) {
+    data.phone = phone;
+    changedFields.push("phone");
+  }
+
+  if (isPasswordChanging) {
+    data.password = await bcrypt.hash(
+      password,
+      parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
+    );
+    changedFields.push("password");
+  }
+
+  if (changedFields.length === 0) {
+    throw Errors.BadRequest("No changes detected");
+  }
+
+  // Force re-login everywhere if credentials changed
+  if (isEmailChanging || isPasswordChanging) {
+    data.tokenVersion = { increment: 1 };
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: targetId },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      phone: true,
+      createdAt: true,
+    },
+  });
+
+  await writeAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "USER_ACCOUNT_UPDATED",
+    targetType: "USER",
+    targetId: targetId,
+    metadata: {
+      changedFields: changedFields.map((f) =>
+        f === "password" ? "password changed" : f,
+      ),
+      targetEmail: updated.email,
+    },
+  });
+
+  res.json({
+    message: "User account updated successfully",
+    user: {
+      ...updated,
+      accountStatus: isAccountDisabled(updated.phone) ? "disabled" : "active",
+    },
+  });
+};
+
 
 // DELETE /api/admin/users/:id  — §2
 // PARENT: delete user (Inquiry + Favourite cascade via schema)

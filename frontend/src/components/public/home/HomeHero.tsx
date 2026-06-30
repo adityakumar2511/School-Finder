@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, Building2, GraduationCap, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  GraduationCap,
+  Search,
+  Sparkles,
+} from "lucide-react";
+
+const QUICK_SEARCHES = [
+  { label: "CBSE", href: "/schools?board=CBSE" },
+  { label: "ICSE", href: "/schools?board=ICSE" },
+  { label: "State Board", href: "/schools?board=STATE_BOARD" },
+  { label: "Prayagraj", href: "/schools?city=Prayagraj" },
+];
 
 export default function HomeHero() {
   return (
@@ -17,7 +30,7 @@ export default function HomeHero() {
         aria-hidden
       />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 lg:py-28">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28">
         <div className="mx-auto max-w-4xl text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/20 px-3 py-1.5 font-heading text-xs font-semibold text-amber-200">
             <Sparkles className="h-3.5 w-3.5" aria-hidden />
@@ -56,6 +69,55 @@ export default function HomeHero() {
               <Building2 className="mr-2 h-4 w-4" aria-hidden />
               Get Your School Listed
             </Link>
+          </div>
+
+          {/* Search bar */}
+          {/* Search bar */}
+          <div className="mx-auto mt-12 max-w-2xl">
+            <form
+              action="/schools"
+              method="GET"
+              role="search"
+              aria-label="Search schools"
+              className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg shadow-blue-950/20 sm:flex-row"
+            >
+              <div className="flex flex-1 items-center gap-3 px-4">
+                <Search
+                  className="h-5 w-5 shrink-0 text-blue-500"
+                  aria-hidden
+                />
+                <label htmlFor="hero-search" className="sr-only">
+                  Search schools
+                </label>
+                <input
+                  id="hero-search"
+                  name="search"
+                  type="search"
+                  placeholder="Search schools by name, city, board or locality..."
+                  className="h-14 w-full bg-transparent font-body text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="group flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 px-6 py-3 font-heading text-sm font-semibold text-blue-950 transition-all hover:from-amber-300 hover:to-amber-400 focus:outline-none sm:min-h-14"
+              >
+                Search
+                <Search className="h-4 w-4 transition-transform group-hover:scale-110" />
+              </button>
+            </form>
+
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {QUICK_SEARCHES.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 font-heading text-xs font-semibold text-blue-100 backdrop-blur-sm transition-all hover:border-amber-300/60 hover:bg-amber-400/20 hover:text-amber-200"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </div>

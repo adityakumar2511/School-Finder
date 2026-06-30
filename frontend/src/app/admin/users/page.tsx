@@ -168,6 +168,9 @@ async function UsersTable({
                         isSuperAdmin={user.isSuperAdmin ?? false} // ← add karo
                         viewerAccessLevel={viewerAccessLevel}
                         activeRole={activeRole}
+                        currentName={user.name}
+                        currentEmail={user.email}
+                        currentPhone={user.phone ?? null}
                       />
                     </TableCell>
                   </TableRow>

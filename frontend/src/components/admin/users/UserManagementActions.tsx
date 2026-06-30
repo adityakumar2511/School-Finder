@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Role, AdminAccessLevel } from "@/lib/types/database";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/shared/ui/button";
 import {
   Select,
@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/shared/ui/dialog";
+import EditUserModal from "./EditUserModal";
 
 type Props = {
   userId: string;
@@ -29,6 +30,9 @@ type Props = {
   isSuperAdmin?: boolean;
   viewerAccessLevel: AdminAccessLevel | null;
   activeRole: Role; // which tab is currently active
+  currentName: string | null; // ← ADD
+  currentEmail: string; // ← ADD
+  currentPhone: string | null; // ← ADD
 };
 
 /**
@@ -58,12 +62,16 @@ export default function UserManagementActions({
   isSelf,
   isSuperAdmin = false,
   viewerAccessLevel,
+  currentName, // ← ADD
+  currentEmail, // ← ADD
+  currentPhone, // ← ADD
 }: Props) {
   const router = useRouter();
   const [role, setRole] = useState(currentRole);
   const [loading, setLoading] = useState<string | null>(null);
   const [disableOpen, setDisableOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false)
   const [error, setError] = useState<string | null>(null);
 
   const allowedRoles = getAllowedRoles(currentRole);
@@ -72,6 +80,7 @@ export default function UserManagementActions({
     !isSelf &&
     !isSuperAdmin &&
     viewerAccessLevel === "FULL_ACCESS";
+  const canEdit = !isSuperAdmin && viewerAccessLevel === "FULL_ACCESS"; // ← ADD
   const canToggleStatus =
     !isSelf && !isSuperAdmin && viewerAccessLevel === "FULL_ACCESS";
   const canDelete =
@@ -185,6 +194,20 @@ export default function UserManagementActions({
         </Button>
       )}
 
+      {/* Edit account — FULL_ACCESS only */}
+      {canEdit && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9"
+          disabled={loading !== null}
+          onClick={() => setEditOpen(true)}
+        >
+          <Pencil className="mr-1 h-4 w-4" />
+          Edit
+        </Button>
+      )}
+
       {/* Delete — §2, FULL_ACCESS only, not self */}
       {canDelete && (
         <Button
@@ -271,6 +294,15 @@ export default function UserManagementActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditUserModal
+        userId={userId}
+        currentName={currentName}
+        currentEmail={currentEmail}
+        currentPhone={currentPhone}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
     </div>
   );
 }

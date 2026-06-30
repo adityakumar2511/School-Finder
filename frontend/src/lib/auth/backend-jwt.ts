@@ -8,6 +8,7 @@ export type BackendJwtPayload = {
   id: string;
   role: string;
   email: string;
+  tokenVersion?: number;
 };
 
 /**
@@ -25,6 +26,7 @@ export function mintBackendJwt(
       id: payload.id,
       role: payload.role,
       email: payload.email,
+      tokenVersion: payload.tokenVersion ?? 0,
       jti: crypto.randomUUID(),
     },
     secret,

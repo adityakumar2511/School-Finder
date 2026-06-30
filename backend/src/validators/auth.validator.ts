@@ -216,6 +216,29 @@ export const addAdminSchema = z
   })
   .strict(); // rejects any extra keys including isSuperAdmin injection attempts
 
+export const adminUpdateUserSchema = z
+  .object({
+    name: z.preprocess(
+      preprocessTrim,
+      z.string().min(2, "Name must be at least 2 characters").optional(),
+    ),
+    email: z.preprocess(
+      preprocessEmail,
+      z.string().email("Enter a valid email address").optional(),
+    ),
+    phone: z.preprocess(
+      preprocessOptionalString,
+      z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number").optional(),
+    ),
+    password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field is required",
+  });
+
+
+
 export type RegisterParentInput = z.infer<typeof registerParentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterSchoolInput = z.infer<typeof registerSchoolSchema>;
@@ -228,3 +251,4 @@ export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
 export type AddParentInput = z.infer<typeof addParentSchema>;
 export type AddAdminInput = z.infer<typeof addAdminSchema>;
 export type AdminAccessLevelValue = z.infer<typeof adminAccessLevelSchema>;
+export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;

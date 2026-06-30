@@ -89,6 +89,7 @@ export const registerParent = async (req: Request, res: Response) => {
     id: user.id,
     role: user.role,
     email: user.email,
+    tokenVersion: user.tokenVersion, 
   });
 
   res.status(201).json({
@@ -182,6 +183,7 @@ export const registerSchool = async (req: Request, res: Response) => {
     id: result.user.id,
     role: result.user.role,
     email: result.user.email,
+    tokenVersion: result.user.tokenVersion,
   });
 
   res.status(201).json({
@@ -219,6 +221,7 @@ export const login = async (req: Request, res: Response) => {
       phone: true,
       password: true,
       adminAccessLevel: true, // Phase E
+      tokenVersion: true,     // ← ADD
     },
   });
  
@@ -262,6 +265,7 @@ export const login = async (req: Request, res: Response) => {
     role: user.role,
     email: user.email,
     adminAccessLevel: user.role === "ADMIN" ? user.adminAccessLevel : undefined,
+    tokenVersion: user.tokenVersion,  
   });
  
   res.json({
@@ -274,6 +278,7 @@ export const login = async (req: Request, res: Response) => {
       image: user.image,
       // Phase E: expose to frontend so session can surface it
       adminAccessLevel: user.role === "ADMIN" ? user.adminAccessLevel : undefined,
+      tokenVersion: user.tokenVersion,
     },
   });
 };
@@ -479,6 +484,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     id: user.id,
     role: user.role,
     email: user.email,
+    tokenVersion: user.tokenVersion, 
   });
 
   res.json({
@@ -652,6 +658,7 @@ export const syncGoogleUser = async (req: Request, res: Response) => {
           image: true,
           phone: true,
           createdAt: true,
+          tokenVersion: true,   // ← ADD
         },
       })
     : await prisma.user.create({
@@ -670,6 +677,7 @@ export const syncGoogleUser = async (req: Request, res: Response) => {
           image: true,
           phone: true,
           createdAt: true,
+          tokenVersion: true,   // ← ADD
         },
       });
 
@@ -677,6 +685,7 @@ export const syncGoogleUser = async (req: Request, res: Response) => {
     id: user.id,
     role: user.role,
     email: user.email,
+    tokenVersion: user.tokenVersion,   
   });
 
   res.json({ user, token });

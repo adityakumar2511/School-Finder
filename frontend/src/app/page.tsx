@@ -31,9 +31,10 @@ export default function HomePage() {
       <JsonLd data={buildWebsiteJsonLd()} />
 
       <HomeHero />
-      <HomeSearch />
-      <HomeStats />
+      {/* <HomeSearch /> */}
       <HomeBrowse />
+      <HomeStats />
+      
 
       <Suspense fallback={<FeaturedSchoolsSkeleton />}>
         <FeaturedSchools />

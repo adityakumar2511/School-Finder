@@ -58,6 +58,7 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
   role             Role              @default(PARENT)
+  tokenVersion     Int               @default(0)   // ← ADD THIS LINE — forces re-login when incremented
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   adminAccessLevel AdminAccessLevel?

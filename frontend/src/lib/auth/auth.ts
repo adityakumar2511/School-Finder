@@ -24,6 +24,7 @@ type AuthUserWithBackendToken = {
   role?: Role;
   adminAccessLevel?: AdminAccessLevel | null;
   backendToken?: string;
+  tokenVersion?: number;
 };
 
 type BackendLoginResponse = {
@@ -35,6 +36,7 @@ type BackendLoginResponse = {
     image?: string | null;
     role: Role;
     adminAccessLevel?: AdminAccessLevel | null;
+    tokenVersion?: number;
   };
   message?: string;
 };
@@ -66,6 +68,7 @@ async function loginViaBackend(
     role: body.user.role,
     adminAccessLevel: body.user.adminAccessLevel ?? null,
     backendToken: body.token,
+    tokenVersion: body.user.tokenVersion ?? 0,
   };
 }
 
@@ -231,7 +234,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as AuthUserWithBackendToken).role ?? "PARENT";
         token.adminAccessLevel =
           (user as AuthUserWithBackendToken).adminAccessLevel ?? null;
-
+         token.tokenVersion = (user as AuthUserWithBackendToken).tokenVersion ?? 0;
         if ((user as AuthUserWithBackendToken).backendToken) {
           token.backendAccessToken = (
             user as AuthUserWithBackendToken
@@ -266,6 +269,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 id: token.id as string,
                 role: token.role as string,
                 email: token.email as string,
+                tokenVersion: token.tokenVersion as number | undefined,
               });
 
         if (revalidationToken) {
@@ -305,6 +309,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as Role;
         session.user.adminAccessLevel =
           (token.adminAccessLevel as AdminAccessLevel) ?? null;
+        session.user.tokenVersion = (token.tokenVersion as number) ?? 0;
       }
 
       if (typeof token.backendAccessToken === "string") {
@@ -328,6 +333,7 @@ declare module "next-auth" {
       id: string;
       role: Role;
       adminAccessLevel?: AdminAccessLevel | null;
+      tokenVersion?: number;
       name?: string | null;
       email?: string | null;
       image?: string | null;

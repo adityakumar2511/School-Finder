@@ -46,7 +46,7 @@ export async function resolveBackendToken(
 
     // Fallback: mint a short-lived HS256 token using shared JWT_SECRET
     // This covers SSR calls where backendAccessToken isn't in session
-    return mintBackendJwt({ id, role, email });
+    return mintBackendJwt({ id, role, email, tokenVersion: session.user.tokenVersion, });
   }
 
   return null;
