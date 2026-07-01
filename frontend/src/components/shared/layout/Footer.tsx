@@ -9,12 +9,18 @@ const FOOTER_LINKS = [
   { href: "/contact", label: "Contact" },
 ];
 
+const LEGAL_LINKS = [
+  { href: "/terms", label: "Terms of Service" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/disclaimer", label: "Data Disclaimer" },
+];
+
 export default function Footer() {
   return (
     <footer className="border-t border-blue-800 bg-blue-900 text-blue-200">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
-          <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-4">
+          <div className="space-y-4 md:col-span-1">
             <Link href="/" className="inline-flex items-center gap-2">
               <span className="rounded-xl bg-amber-400 p-2 shadow-amber">
                 <GraduationCap className="h-5 w-5 text-white" aria-hidden />
@@ -38,6 +44,25 @@ export default function Footer() {
 
             <ul className="space-y-3">
               {FOOTER_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="font-body text-sm text-blue-200 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <nav aria-label="Legal navigation">
+            <p className="mb-4 font-heading text-sm font-semibold text-white">
+              Legal
+            </p>
+
+            <ul className="space-y-3">
+              {LEGAL_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}

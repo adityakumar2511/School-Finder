@@ -1920,6 +1920,18 @@ export default async function SchoolDetailPage({
           </Link>
         </div>
       </div>
+      {/* Data disclaimer note */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-10">
+        <p className="text-center font-body text-meta text-gray-400">
+          Data sourced from public records.{" "}
+          <Link
+            href="/disclaimer"
+            className="font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+          >
+            Learn more
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

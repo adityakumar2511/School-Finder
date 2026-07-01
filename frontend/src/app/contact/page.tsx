@@ -1,11 +1,24 @@
 import type { Metadata } from "next";
 import ContactForm from "./ContactForm";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Facebook, Instagram } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Contact Us | SchoolFinder",
   description: "Get in touch with the SchoolFinder team. We'd love to hear from you.",
 };
+
+const SOCIAL_LINKS = [
+  {
+    icon: Facebook,
+    label: "Facebook",
+    href: "https://facebook.com/lakshyaone", 
+  },
+  {
+    icon: Instagram,
+    label: "Instagram",
+    href: "https://instagram.com/lakshyaone_"
+  },
+];
 
 export default function ContactPage() {
   return (
@@ -28,21 +41,40 @@ export default function ContactPage() {
             <Mail className="w-4 h-4 mt-0.5 text-blue-600 shrink-0" />
             <div>
               <p className="font-medium text-gray-800">Email</p>
-              <p>hello@schoolfinder.in</p>
+              <p>info.lakshyaone@gmail.com</p>
             </div>
           </div>
-          <div className="flex items-start gap-3 text-sm text-gray-600">
+          {/* <div className="flex items-start gap-3 text-sm text-gray-600">
             <Phone className="w-4 h-4 mt-0.5 text-blue-600 shrink-0" />
             <div>
               <p className="font-medium text-gray-800">Phone</p>
               <p>+91 00000 00000</p>
             </div>
-          </div>
+          </div> */}
           <div className="flex items-start gap-3 text-sm text-gray-600">
             <MapPin className="w-4 h-4 mt-0.5 text-blue-600 shrink-0" />
             <div>
               <p className="font-medium text-gray-800">Based in</p>
               <p>Prayagraj, Uttar Pradesh</p>
+            </div>  
+          </div>
+
+          {/* Social links */}
+          <div className="pt-2">
+            <p className="font-medium text-gray-800 text-sm mb-3">Follow Us</p>
+            <div className="flex items-center gap-3">
+              {SOCIAL_LINKS.map((social) => (
+                <a
+                  key={social.label}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={social.label}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-200 text-black text-blue-600 transition-colors hover:bg-blue-600 hover:text-white"
+                >
+                  <social.icon className="w-6 h-6" />
+                </a>
+              ))}
             </div>
           </div>
         </div>

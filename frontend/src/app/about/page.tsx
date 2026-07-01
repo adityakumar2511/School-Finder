@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { AboutHero } from "@/components/public/about/AboutHero";
 import { AboutStory } from "@/components/public/about/AboutStory";
 import { AboutStats } from "@/components/public/about/AboutStats";
@@ -30,6 +31,23 @@ export default function AboutPage() {
       <AboutHowItWorks />
       <AboutValues />
       <AboutFAQ />
+
+      {/* Data sourcing transparency note */}
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-center">
+        <p className="font-body text-body-sm text-gray-500">
+          Some school listings on Lakshya One are compiled from publicly
+          available information, including school websites, third-party
+          sources, and Google.{" "}
+          <Link
+            href="/disclaimer"
+            className="font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+          >
+            Learn how we source our data
+          </Link>
+          .
+        </p>
+      </section>
+
       <AboutClosingCTA />
     </main>
   );

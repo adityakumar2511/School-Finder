@@ -23,6 +23,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: siteUrl, lastModified: now, changeFrequency: "daily", priority: 1 },
     { url: `${siteUrl}/schools`, lastModified: now, changeFrequency: "daily", priority: 0.9 },
     { url: `${siteUrl}/school-register`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    // Legal & trust pages
+    { url: `${siteUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${siteUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${siteUrl}/disclaimer`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const stateRoutes: MetadataRoute.Sitemap = INDIAN_STATES.map((state) => ({

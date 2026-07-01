@@ -41,10 +41,45 @@ export default function HomeHowItWorks() {
 
               {index < HOW_IT_WORKS_STEPS.length - 1 ? (
                 <div
-                  className="absolute -right-3 top-1/2 hidden -translate-y-1/2 text-blue-200 md:block"
+                  className="absolute -right-5 top-1/2 z-10 hidden -translate-y-1/2 md:block"
                   aria-hidden
                 >
-                  →
+                  <svg
+                    width="40"
+                    height="24"
+                    viewBox="0 0 40 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <defs>
+                      <linearGradient
+                        id={`arrowGradient-${index}`}
+                        x1="0"
+                        y1="0"
+                        x2="40"
+                        y2="0"
+                        gradientUnits="userSpaceOnUse"
+                      >
+                        <stop offset="0%" stopColor="#93C5FD" />
+                        <stop offset="100%" stopColor="#FBBF24" />
+                      </linearGradient>
+                    </defs>
+                    <path
+                      d="M2 12C10 12 12 6 20 6C28 6 30 12 38 12"
+                      stroke={`url(#arrowGradient-${index})`}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeDasharray="4 4"
+                    />
+                    <path
+                      d="M33 7L38 12L33 17"
+                      stroke="#FBBF24"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </svg>
                 </div>
               ) : null}
             </div>
