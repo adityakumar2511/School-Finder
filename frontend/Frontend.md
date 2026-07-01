@@ -6,6 +6,7 @@
 > Repository path: `frontend/`  
 > Database: None — all data comes from Express REST API using `NEXT_PUBLIC_API_URL`
 
+
 The frontend is a role-separated Next.js application for public school discovery, redesigned Lakshya One homepage, animated About page, parent dashboard, school dashboard, admin panel (including admin user-account credential editing), contact form, compare flow, featured listings, SEO pages, maps/nearby discovery, advanced 22-section school profile editing, backend-synced school profile fields, and error monitoring.
 
 Future-only modules such as Blog CMS, Razorpay, real AI recommendations, reviews, and direct WhatsApp routing are documented separately in `Future-Features.md`.
